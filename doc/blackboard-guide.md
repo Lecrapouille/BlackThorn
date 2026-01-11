@@ -1,0 +1,124 @@
+# 🧠 Blackboard Guide
+
+The blackboard is a shared data store accessible by all nodes in the tree. It supports primitives (int, bool, string, double) and complex nested structures (maps, arrays).
+
+---
+
+## 🙊 Basic Usage
+
+### 📝 YAML Syntax
+
+```yaml
+Blackboard:
+  battery: 75
+  target: "Drone-A"
+  speed: 1.5
+```
+
+### ✍️ Setting Values
+
+```cpp
+auto blackboard = std::make_shared<bt::Blackboard>();
+blackboard->set<int>("battery", 75);                // 🔋 Battery
+blackboard->set<std::string>("target", "Drone-A");  // 🎯 Target
+blackboard->set<double>("speed", 1.5);              // ⚡ Speed
+```
+
+### 🔍 Getting Values
+
+```cpp
+// battery is a std::any
+auto battery = blackboard->get<int>("battery");
+if (battery && *battery > 20) {
+    std::cout << "✅ battery voltage: " << *battery << std::endl;
+}
+
+// 🛡️ Fallback with default value (100), battery_level is an integer.
+int battery_level = blackboard->getOrDefault<int>("battery", 100);
+```
+
+---
+
+## 🙈 Complex Structures
+
+You can store your complex C++ structures in the blackboard. In this example, you have an array of two drones as enemies at different position and health.
+
+### 📝 YAML Syntax
+
+```yaml
+Blackboard:
+  game_state:
+    score: 1280
+    time: 42.5
+    enemies:
+      - name: "Drone-A"
+        health: 35
+        position: { x: 0.0, y: 5.0, z: 1.5 }
+      - name: "Drone-B"
+        health: 20
+        position: { x: -3.5, y: 2.25, z: 0.0 }
+```
+
+### 🔍 Accessing in C++
+
+```cpp
+using AnyMap = std::unordered_map<std::string, std::any>;
+using AnyList = std::vector<std::any>;
+using NumericList = std::vector<double>;
+
+// snapshot is a dictionary of std::any
+auto snapshot = blackboard->get<AnyMap>("game_state");
+if (snapshot) {
+    auto enemies = (*snapshot)["enemies"];
+}
+```
+
+---
+
+## 🔗 Variable References
+
+Use `${key}` to reference existing data in YAML:
+
+```yaml
+Blackboard:
+  primary_enemy:
+    name: "Drone-A"
+    health: 35
+  selected_target: ${primary_enemy}  # Copy entire structure
+```
+
+---
+
+## 🧩 Scoped Blackboards
+
+Subtrees create child blackboards with `parameters:` that inherit from the parent:
+
+```yaml
+BehaviorTree:
+  SubTree:
+    name: ProcessEnemy
+    reference: EngageEnemy
+    parameters:
+      target: ${primary_enemy}  # Passed to child blackboard
+
+SubTrees:
+  EngageEnemy:
+    Sequence:
+      children:
+        - Action:
+            name: AimWeapon
+            parameters:
+              enemy: ${target}  # Reads from child scope, not parent
+```
+
+---
+
+## 👍 Best Practices
+
+1. **Use descriptive keys**: `battery_level` instead of `b1`
+2. **Type safety**: Always use the template parameter when getting values
+3. **Check for existence**: Use optional return values or `has()` method
+4. **Scoped access**: Use subtree parameters to explicitly pass data
+5. **Avoid global state**: Prefer passing data through subtree parameters
+
+For more examples, see [examples](examples/examples-guide.md).

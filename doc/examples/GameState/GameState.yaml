@@ -1,0 +1,64 @@
+# Demonstration YAML: uses SubTree nodes with a complex GameState structure.
+# The Builder will load nested maps and sequences into the blackboard, making
+# them available to all nodes or to the referenced subtree scope.
+
+Blackboard:
+  # High level snapshot similar to bt::GameState
+  game_state:
+    score: 1280
+    time: 42.5
+    enemies:
+      - name: "Drone-A"
+        health: 35
+        position:
+          x: 0.0
+          y: 5.0
+          z: 1.5
+      - name: "Drone-B"
+        health: 20
+        position:
+          x: -3.5
+          y: 2.25
+          z: 0.0
+
+  # Individual bt::Enemy entry reused by several actions
+  primary_enemy:
+    name: "Drone-A"
+    health: 35
+    position:
+      x: 0.0
+      y: 5.0
+      z: 1.5
+
+  # Copy the full enemy struct via ${var} resolution
+  selected_enemy: ${primary_enemy}
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: MissionRoot
+    children:
+      - SubTree:
+          _id: 2
+          name: EvaluateEnemies
+          reference: EvaluateEnemies
+      - Success:
+          _id: 3
+          name: MissionComplete
+
+SubTrees:
+  EvaluateEnemies:
+    Sequence:
+      _id: 4
+      name: EvaluateEnemies
+      children:
+        - Action:
+            _id: 5
+            name: LoadGameState
+            parameters:
+              snapshot: ${game_state}
+        - Action:
+            _id: 6
+            name: ChoosePrimaryEnemy
+            parameters:
+              candidate: ${selected_enemy}

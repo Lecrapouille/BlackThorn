@@ -1,0 +1,34 @@
+# Minimal YAML illustrating how to reference a reusable subtree
+# and how parameters are pushed into child blackboards.
+
+Blackboard:
+  greetings:
+    text: "Hello from parent scope"
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: Root
+    children:
+      - SubTree:
+          _id: 2
+          name: GreetAndReport
+          reference: GreetingSubTree
+      - Success:
+          _id: 3
+          name: Done
+
+SubTrees:
+  GreetingSubTree:
+    Sequence:
+      _id: 4
+      name: GreetingSubTree
+      children:
+        - Action:
+            _id: 5
+            name: PrintGreeting
+            parameters:
+              message: ${greetings}
+        - Action:
+            _id: 6
+            name: ReportCompletion

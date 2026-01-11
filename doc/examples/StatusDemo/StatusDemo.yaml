@@ -1,0 +1,76 @@
+# Demonstration YAML: shows different node statuses with Selectors
+# Run with Oakular in Visualizer mode to see green/yellow/red/gray nodes
+
+Blackboard:
+  attempt_count: 0
+  max_attempts: 3
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: MainLoop
+    children:
+      # This selector will try each child until one succeeds
+      - Selector:
+          _id: 2
+          name: TryDifferentApproaches
+          children:
+            # First approach: will fail (red)
+            - Sequence:
+                _id: 3
+                name: ApproachA_WillFail
+                children:
+                  - Action:
+                      _id: 4
+                      name: CheckConditionA
+                  - Action:
+                      _id: 5
+                      name: ExecuteA
+            # Second approach: will succeed after delay (yellow then green)
+            - Sequence:
+                _id: 6
+                name: ApproachB_WillSucceed
+                children:
+                  - Wait:
+                      _id: 7
+                      name: ThinkingDelay
+                      milliseconds: 500
+                  - Action:
+                      _id: 8
+                      name: ExecuteB
+
+      # Parallel: multiple children running simultaneously
+      - Parallel:
+          _id: 9
+          name: ParallelTasks
+          success_threshold: 2
+          children:
+            - Wait:
+                _id: 10
+                name: Task1_Quick
+                milliseconds: 200
+            - Wait:
+                _id: 11
+                name: Task2_Medium
+                milliseconds: 400
+            - Wait:
+                _id: 12
+                name: Task3_Slow
+                milliseconds: 800
+
+      # Repeat with different outcomes
+      - Repeat:
+          _id: 13
+          name: RepeatThreeTimes
+          times: 3
+          child:
+            - Selector:
+                _id: 14
+                name: RandomOutcome
+                children:
+                  - Action:
+                      _id: 15
+                      name: TryAction
+                  - Success:
+                      _id: 16
+                      name: FallbackSuccess
