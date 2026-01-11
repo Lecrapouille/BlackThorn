@@ -1,0 +1,77 @@
+# Demonstration YAML: combines patrol planning and enemy engagement subtrees
+# while sharing structured Position / Enemy data through the blackboard.
+
+Blackboard:
+  # Reusable bt::Position entries
+  patrol_route:
+    waypoints:
+      - { x: 0.0, y: 0.0, z: 0.0 }
+      - { x: 5.0, y: 0.0, z: 1.0 }
+      - { x: 5.0, y: 5.0, z: 1.0 }
+      - { x: 0.0, y: 5.0, z: 0.0 }
+
+  extraction_point:
+    x: -3.0
+    y: 8.0
+    z: 0.0
+
+  # Enemy contact structure identical to bt::Enemy
+  enemy_contact:
+    name: "Intruder-17"
+    health: 50
+    position:
+      x: 2.0
+      y: 1.0
+      z: 0.5
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: PatrolAndEngage
+    children:
+      - SubTree:
+          _id: 2
+          name: PatrolRoute
+          reference: PatrolRoute
+      - SubTree:
+          _id: 3
+          name: EngageEnemy
+          reference: EngageEnemy
+      - Action:
+          _id: 4
+          name: ExtractTeam
+          parameters:
+            destination: ${extraction_point}
+
+SubTrees:
+  PatrolRoute:
+    Sequence:
+      _id: 5
+      name: PatrolRoute
+      children:
+        - Action:
+            _id: 6
+            name: LoadRoute
+            parameters:
+              route: ${patrol_route}
+        - Action:
+            _id: 7
+            name: FollowWaypoints
+            parameters:
+              path: ${patrol_route}
+
+  EngageEnemy:
+    Selector:
+      _id: 8
+      name: EngageEnemy
+      children:
+        - Action:
+            _id: 9
+            name: AttemptNonLethal
+            parameters:
+              contact: ${enemy_contact}
+        - Action:
+            _id: 10
+            name: NeutralizeThreat
+            parameters:
+              target: ${enemy_contact}

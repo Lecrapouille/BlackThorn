@@ -1,0 +1,7 @@
+### Dear ImGui: Bloat-free Graphical User interface for C++ with minimal dependencies
+### License: MIT
+ocornut/imgui@docking
+
+### File Dialog for Dear ImGui
+### License: MIT
+aiekick/ImGuiFileDialog
