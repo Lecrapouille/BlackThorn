@@ -46,7 +46,10 @@ public:
     //! \brief Constructor taking a function to evaluate.
     //! \param[in] p_func The function to evaluate when the condition runs.
     // ------------------------------------------------------------------------
-    explicit Condition(Function p_func) : m_func(std::move(p_func)) {}
+    explicit Condition(Function p_func) : m_func(std::move(p_func))
+    {
+        m_type = toString();
+    }
 
     // ------------------------------------------------------------------------
     //! \brief Constructor taking a function and blackboard.
@@ -54,8 +57,10 @@ public:
     //! \param[in] p_blackboard The blackboard to use.
     // ------------------------------------------------------------------------
     Condition(Function p_func, Blackboard::Ptr p_blackboard)
-        : Leaf(p_blackboard), m_func(std::move(p_func))
+        : m_func(std::move(p_func))
     {
+        m_type = toString();
+        setBlackboard(p_blackboard);
     }
 
     // ------------------------------------------------------------------------

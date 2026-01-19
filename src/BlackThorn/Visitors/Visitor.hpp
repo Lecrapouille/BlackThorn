@@ -28,7 +28,8 @@ class SelectorWithMemory;
 class Parallel;
 class ParallelAll;
 class Inverter;
-class Repeat;
+class Repeater;
+using Repeat = Repeater; // Backward compatibility
 class UntilSuccess;
 class UntilFailure;
 class ForceSuccess;
@@ -81,7 +82,7 @@ public:
 
     // Decorator nodes
     virtual void visitInverter(Inverter const& p_node) = 0;
-    virtual void visitRepeat(Repeat const& p_node) = 0;
+    virtual void visitRepeater(Repeater const& p_node) = 0;
     virtual void visitUntilSuccess(UntilSuccess const& p_node) = 0;
     virtual void visitUntilFailure(UntilFailure const& p_node) = 0;
     virtual void visitForceSuccess(ForceSuccess const& p_node) = 0;
@@ -141,7 +142,7 @@ public:
 
     // Decorator nodes
     virtual void visitInverter(Inverter& p_node) = 0;
-    virtual void visitRepeat(Repeat& p_node) = 0;
+    virtual void visitRepeater(Repeater& p_node) = 0;
     virtual void visitUntilSuccess(UntilSuccess& p_node) = 0;
     virtual void visitUntilFailure(UntilFailure& p_node) = 0;
     virtual void visitForceSuccess(ForceSuccess& p_node) = 0;

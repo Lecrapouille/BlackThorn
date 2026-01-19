@@ -113,6 +113,41 @@ SubTrees:
 
 ---
 
+## 🔄 Comparison with BehaviorTree.CPP
+
+BlackThorn is inspired by [BehaviorTree.CPP](https://github.com/BehaviorTree/BehaviorTree.CPP) but uses a simpler, YAML-based approach.
+
+| Aspect | BehaviorTree.CPP | BlackThorn |
+|--------|------------------|------------|
+| Tree definition format | XML | YAML |
+| Variable reference syntax | `{key}` | `${key}` |
+| Blackboard location | TreeNode (base) | Node (base) |
+| getInput signature | `getInput<T>("port")` | `getInput<T>("port")` |
+| setOutput signature | `setOutput("port", val)` | `setOutput("port", val)` |
+| Port configuration | Via NodeConfig constructor | Via `setPortRemapping()` |
+| Decorators with ports | Yes | Yes (Repeater, Timeout) |
+| Thread-safe | Yes (mutex) | No |
+| Scripting integration | Yes (Lua, custom) | No |
+| SubTree port remapping | Yes | Yes |
+
+### SubTree Port Remapping Example
+
+BehaviorTree.CPP (XML):
+```xml
+<SubTree ID="MoveRobot" target="{move_goal}" result="{move_result}"/>
+```
+
+BlackThorn (YAML):
+```yaml
+SubTree:
+  reference: MoveRobot
+  parameters:
+    target: ${move_goal}
+    result: ${move_result}
+```
+
+---
+
 ## 👍 Best Practices
 
 1. **Use descriptive keys**: `battery_level` instead of `b1`

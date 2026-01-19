@@ -220,9 +220,9 @@ public:
         writeNodeEnd();
     }
 
-    void visitRepeat(Repeat const& p_node) override
+    void visitRepeater(Repeater const& p_node) override
     {
-        writeNodeStart("Repeat", p_node);
+        writeNodeStart("Repeater", p_node);
         yaml << indent() << "times: " << p_node.getRepetitions() << "\n";
         if (p_node.hasChild())
         {
@@ -505,9 +505,9 @@ public:
     {
         visitDecorator("Inverter", p_node);
     }
-    void visitRepeat(Repeat const& p_node) override
+    void visitRepeater(Repeater const& p_node) override
     {
-        visitDecorator("Repeat", p_node);
+        visitDecorator("Repeater", p_node);
     }
     void visitUntilSuccess(UntilSuccess const& p_node) override
     {

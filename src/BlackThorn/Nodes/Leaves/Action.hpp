@@ -71,7 +71,10 @@ public:
     //! \brief Constructor taking a function to execute.
     //! \param[in] func The function to execute when the action runs.
     // ------------------------------------------------------------------------
-    explicit SugarAction(Function func) : m_func(std::move(func)) {}
+    explicit SugarAction(Function func) : m_func(std::move(func))
+    {
+        m_type = "SugarAction";
+    }
 
     // ------------------------------------------------------------------------
     //! \brief Constructor taking a function and blackboard.
@@ -79,8 +82,10 @@ public:
     //! \param[in] blackboard The blackboard to use.
     // ------------------------------------------------------------------------
     SugarAction(Function func, Blackboard::Ptr blackboard)
-        : Leaf(blackboard), m_func(std::move(func))
+        : m_func(std::move(func))
     {
+        m_type = "SugarAction";
+        setBlackboard(blackboard);
     }
 
     // ------------------------------------------------------------------------

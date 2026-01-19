@@ -199,9 +199,9 @@ public:
         writeNodeEnd();
     }
 
-    void visitRepeat(Repeat const& p_node) override
+    void visitRepeater(Repeater const& p_node) override
     {
-        writeNodeStart("Repeat", p_node);
+        writeNodeStart("Repeater", p_node);
         if (p_node.hasChild())
         {
             writeChildrenStart();
@@ -574,7 +574,7 @@ public:
     {
         visitDecorator(p_node);
     }
-    void visitRepeat(Repeat const& p_node) override
+    void visitRepeater(Repeater const& p_node) override
     {
         visitDecorator(p_node);
     }
