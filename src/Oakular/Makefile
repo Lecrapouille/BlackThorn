@@ -5,7 +5,7 @@
 # for users who cannot use the GPL, under a commercial license.
 # See LICENSING.md for details.
 
-## Oakular: Behavior tree editor and visualizer for BlackThorn.
+## Oakular: Behavior tree editor library for BlackThorn.
 
 ###############################################################################
 # Location of the project directory and Makefiles
@@ -17,8 +17,8 @@ M := $(P)/.makefile
 # Project definition
 #
 include $(P)/Makefile.common
-TARGET_NAME := Oakular
-TARGET_DESCRIPTION := Oakular - Behavior tree editor and real-time visualizer
+TARGET_NAME := oakular
+TARGET_DESCRIPTION := Oakular - Behavior tree editor library
 include $(M)/project/Makefile
 
 ###############################################################################
@@ -42,9 +42,13 @@ VPATH += $(CURRENT_DIR) $(LIBRARY_DIR)
 INTERNAL_LIBS += $(call internal-lib,blackthorn)
 
 ###############################################################################
-# Make the list of files to compile
+# Make the list of library files to compile (no main.cpp)
 #
-SRC_FILES := $(call rwildcard,$(CURRENT_DIR),*.cpp)
+LIB_FILES := $(CURRENT_DIR)/IDE.cpp
+LIB_FILES += $(CURRENT_DIR)/Renderer.cpp
+LIB_FILES += $(CURRENT_DIR)/Server.cpp
+LIB_FILES += $(CURRENT_DIR)/Application/Application.cpp
+LIB_FILES += $(CURRENT_DIR)/Application/DearImGuiApplication.cpp
 
 ###################################################
 # Set third party Dear ImGui
@@ -52,11 +56,11 @@ SRC_FILES := $(call rwildcard,$(CURRENT_DIR),*.cpp)
 IMGUI_DIR := $(THIRD_PARTIES_DIR)/imgui
 INCLUDES += $(IMGUI_DIR) $(IMGUI_DIR)/misc/cpp $(IMGUI_DIR)/backends
 VPATH += $(IMGUI_DIR) $(IMGUI_DIR)/misc/cpp $(IMGUI_DIR)/backends
-SRC_FILES += $(IMGUI_DIR)/imgui_widgets.cpp $(IMGUI_DIR)/imgui_draw.cpp
-SRC_FILES += $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui.cpp
-SRC_FILES += $(IMGUI_DIR)/misc/cpp/imgui_stdlib.cpp
-SRC_FILES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp
-SRC_FILES += $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
+LIB_FILES += $(IMGUI_DIR)/imgui_widgets.cpp $(IMGUI_DIR)/imgui_draw.cpp
+LIB_FILES += $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui.cpp
+LIB_FILES += $(IMGUI_DIR)/misc/cpp/imgui_stdlib.cpp
+LIB_FILES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp
+LIB_FILES += $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 USER_CXXFLAGS += -Wno-conversion -Wno-arith-conversion -Wno-double-promotion -Wno-cast-qual
 USER_CXXFLAGS += -Wno-old-style-cast -Wno-sign-conversion -Wno-duplicated-branches
 USER_CXXFLAGS += -Wno-useless-cast -Wno-ctor-dtor-privacy -Wno-float-equal -Wno-null-dereference
@@ -67,7 +71,7 @@ USER_CXXFLAGS += -Wno-useless-cast -Wno-ctor-dtor-privacy -Wno-float-equal -Wno-
 IMGUIFILEDIALOG_DIR := $(THIRD_PARTIES_DIR)/ImGuiFileDialog
 INCLUDES += $(IMGUIFILEDIALOG_DIR)
 VPATH += $(IMGUIFILEDIALOG_DIR)
-SRC_FILES += $(IMGUIFILEDIALOG_DIR)/ImGuiFileDialog.cpp
+LIB_FILES += $(IMGUIFILEDIALOG_DIR)/ImGuiFileDialog.cpp
 
 ###################################################
 # Set Libraries.

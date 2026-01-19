@@ -1,3 +1,9 @@
-Ajouter le visualisateur
+- Ajouter le visualisateur temps reel
 
-ajouter test unitaire seur les exemples
+- Remplacer un noeud par un autre type doit mettre a jour les liens: les supprimmer
+
+- delete ne fonctionne pas
+
+- ajouter test unitaire seur les exemples
+
+- lioakular: IDE.hpp class IDE: public robotik::renderer::Application supprimmer l'heritage (et surement passer &window dans le constructeur)

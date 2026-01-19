@@ -199,8 +199,7 @@ int main()
     factory.registerNode<NeutralizeThreat>("NeutralizeThreat", blackboard);
     factory.registerNode<ExtractTeam>("ExtractTeam", blackboard);
 
-    auto yamlPath =
-        "/home/qq/MyGithub/BehaviorTree/doc/examples/Patrol/Patrol.yaml";
+    auto yamlPath = "doc/examples/Patrol/Patrol.yaml";
     auto result = Builder::fromFile(factory, yamlPath, blackboard);
     if (!result)
     {

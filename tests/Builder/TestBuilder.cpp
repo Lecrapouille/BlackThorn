@@ -31,7 +31,7 @@ std::filesystem::path resolveExampleFile(std::string const& filename)
 
     for (int i = 0; i < 7; ++i)
     {
-        fs::path candidate = probe / "examples" / filename;
+        fs::path candidate = probe / "doc" / "examples" / filename;
         if (fs::exists(candidate))
         {
             return candidate;
@@ -316,7 +316,7 @@ TEST(TestBuilder, ParseRepeatUntilSuccess)
 {
     std::string yaml = R"(
 BehaviorTree:
-  RepeatUntilSuccess:
+  UntilSuccess:
     name: UntilSuccess
     attempts: 0
     child:
@@ -336,7 +336,7 @@ TEST(TestBuilder, ParseUntilSuccessWithAttempts)
 {
     std::string yaml = R"(
 BehaviorTree:
-  RepeatUntilSuccess:
+  UntilSuccess:
     name: UntilSuccessLimited
     attempts: 3
     child:
@@ -356,7 +356,7 @@ TEST(TestBuilder, ParseRepeatUntilFailure)
 {
     std::string yaml = R"(
 BehaviorTree:
-  RepeatUntilFailure:
+  UntilFailure:
     name: UntilFailure
     attempts: 0
     child:
@@ -376,7 +376,7 @@ TEST(TestBuilder, ParseUntilFailureWithAttempts)
 {
     std::string yaml = R"(
 BehaviorTree:
-  RepeatUntilFailure:
+  UntilFailure:
     name: UntilFailureLimited
     attempts: 2
     child:
@@ -686,7 +686,7 @@ TEST(TestBuilderExamples, GameStateSubTreeFromFile)
     factory.registerNode<TestAction>("LoadGameState");
     factory.registerNode<TestAction>("ChoosePrimaryEnemy");
 
-    auto yaml_path = resolveExampleFile("game_state_subtree.yaml");
+    auto yaml_path = resolveExampleFile("GameState/GameState.yaml");
     ASSERT_FALSE(yaml_path.empty()) << "Unable to locate example file";
 
     auto bb = std::make_shared<bt::Blackboard>();
@@ -707,7 +707,7 @@ TEST(TestBuilderExamples, PatrolAndEngageSubTreesFromFile)
     factory.registerNode<TestAction>("NeutralizeThreat");
     factory.registerNode<TestAction>("ExtractTeam");
 
-    auto yaml_path = resolveExampleFile("patrol_and_engage_subtrees.yaml");
+    auto yaml_path = resolveExampleFile("Patrol/Patrol.yaml");
     ASSERT_FALSE(yaml_path.empty()) << "Unable to locate example file";
 
     auto result = bt::Builder::fromFile(factory, yaml_path.string());
@@ -963,7 +963,7 @@ BehaviorTree:
       - Selector:
           name: TryActions
           children:
-            - RepeatUntilSuccess:
+            - UntilSuccess:
                 name: RetryAction
                 attempts: 3
                 child:
