@@ -99,21 +99,38 @@ virtual void accept(BehaviorTreeVisitor& visitor) = 0
 
 Accept visitors for tree traversal and modification.
 
+### Public Methods (for configuration):
+
+#### 🗃️ Blackboard Access
+
+```cpp
+Blackboard::Ptr blackboard() const
+void setBlackboard(Blackboard::Ptr const& bb)
+```
+
+Get or set the blackboard for the node. The blackboard is automatically set by the Builder when loading from YAML.
+
+#### 🔌 Port Remapping
+
+```cpp
+void setPortRemapping(std::unordered_map<std::string, std::string> const& remapping)
+```
+
+Configure the mapping between port names and blackboard keys. This is typically called by the Builder based on the `parameters:` section in YAML.
+
 ### Protected Methods (for derived classes):
 
-#### 🔌 Port Management
+#### 🔌 Port Access
 
 ```cpp
 template<typename T>
-std::optional<T> getInput(std::string const& port, Blackboard const& bb) const
+std::optional<T> getInput(std::string const& port) const
 
 template<typename T>
-void setOutput(std::string const& port, T&& value, Blackboard& bb)
-
-void configure(std::unordered_map<std::string, std::string> const& config)
+void setOutput(std::string const& port, T&& value)
 ```
 
-Access blackboard values through ports (configured via YAML parameters).
+Access blackboard values through ports. The port name is resolved to a blackboard key using the port remapping configuration.
 
 #### 🕰️ Lifecycle Hooks
 
@@ -269,7 +286,8 @@ All methods from Node class.
 
 - `Inverter` - Flips SUCCESS ↔ FAILURE 🔃
 - `Retry` - Retries child until success or max attempts ♻️
-- `Repeat` - Repeats child N times 🔁
+- `Repeater` - Repeats child N times (can read count from blackboard) 🔁
+- `Timeout` - Fails if child doesn't complete in time (can read duration from blackboard) ⏱️
 - `ForceSuccess` / `ForceFailure` - Always return a fixed status 🎲
 
 ---
@@ -280,18 +298,9 @@ Base class for terminal nodes (no children). Leaf nodes perform actual work - th
 
 **Key Methods:**
 
-- **Blackboard Access 📋:**
-
-```cpp
-Blackboard::Ptr getBlackboard() const
-void setBlackboard(Blackboard::Ptr bb)
-```
-
-Access the blackboard for reading inputs and writing outputs. The blackboard is typically set by the Builder when loading from YAML.
-
 - **Inherited from Node ⬆️:**
 
-All methods from Node class. Leaf nodes must implement `onRunning()` to define their behavior.
+All methods from Node class, including `blackboard()`, `setBlackboard()`, `getInput()`, `setOutput()`. Leaf nodes must implement `onRunning()` to define their behavior.
 
 **Common Derived Classes:**
 

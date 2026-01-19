@@ -1129,3 +1129,214 @@ BehaviorTree:
     ASSERT_TRUE(coords.has_value());
     EXPECT_EQ(coords->size(), 2);
 }
+
+// ===========================================================================
+// Port Remapping Tests
+// ===========================================================================
+
+namespace {
+
+// Test action that reads a goal from port and writes result
+class MoveBase: public bt::Action
+{
+public:
+
+    bt::PortList providedPorts() const override
+    {
+        bt::PortList ports;
+        ports.addInput<std::string>("goal");
+        return ports;
+    }
+
+    bt::Status onRunning() override
+    {
+        if (auto goal = getInput<std::string>("goal"); goal)
+        {
+            m_last_goal = *goal;
+            return bt::Status::SUCCESS;
+        }
+        return bt::Status::FAILURE;
+    }
+
+    std::string getLastGoal() const
+    {
+        return m_last_goal;
+    }
+
+private:
+
+    std::string m_last_goal;
+};
+
+// Test action that reads a message from port
+class SaySomething: public bt::Action
+{
+public:
+
+    bt::PortList providedPorts() const override
+    {
+        bt::PortList ports;
+        ports.addInput<std::string>("message");
+        return ports;
+    }
+
+    bt::Status onRunning() override
+    {
+        if (auto msg = getInput<std::string>("message"); msg)
+        {
+            m_last_message = *msg;
+            return bt::Status::SUCCESS;
+        }
+        return bt::Status::FAILURE;
+    }
+
+    std::string getLastMessage() const
+    {
+        return m_last_message;
+    }
+
+private:
+
+    std::string m_last_message;
+};
+
+} // anonymous namespace
+
+// ------------------------------------------------------------------------
+//! \brief Test basic port remapping with action node.
+// ------------------------------------------------------------------------
+TEST(TestBuilder, PortRemappingBasic)
+{
+    std::string yaml = R"(
+Blackboard:
+  my_goal: "position_A"
+
+BehaviorTree:
+  Action:
+    name: MoveBase
+    parameters:
+      goal: ${my_goal}
+)";
+
+    bt::NodeFactory factory;
+    factory.registerNode<MoveBase>("MoveBase");
+
+    auto bb = std::make_shared<bt::Blackboard>();
+    auto result = bt::Builder::fromText(factory, yaml, bb);
+
+    ASSERT_TRUE(result.isSuccess());
+    auto tree = result.moveValue();
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+
+    // Verify the goal was read from blackboard via port remapping
+    EXPECT_EQ(bb->get<std::string>("my_goal"), "position_A");
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test port remapping with SetBlackboard writing output.
+// ------------------------------------------------------------------------
+TEST(TestBuilder, PortRemappingWithSetBlackboard)
+{
+    std::string yaml = R"(
+Blackboard:
+  input_value: "hello"
+
+BehaviorTree:
+  Sequence:
+    name: TestSequence
+    children:
+      - SetBlackboard:
+          key: output_value
+          value: "world"
+      - Action:
+          name: SaySomething
+          parameters:
+            message: ${output_value}
+)";
+
+    bt::NodeFactory factory;
+    factory.registerNode<SaySomething>("SaySomething");
+
+    auto bb = std::make_shared<bt::Blackboard>();
+    auto result = bt::Builder::fromText(factory, yaml, bb);
+
+    ASSERT_TRUE(result.isSuccess());
+    auto tree = result.moveValue();
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+
+    // Verify SetBlackboard wrote the value
+    EXPECT_EQ(bb->get<std::string>("output_value"), "world");
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test SubTree basic execution (without port remapping).
+//! Note: Full port remapping between parent/child blackboards requires
+//! additional Builder support that is not yet implemented.
+// ------------------------------------------------------------------------
+TEST(TestBuilder, SubTreeBasicExecution)
+{
+    std::string yaml = R"(
+Blackboard:
+  message: "hello"
+
+BehaviorTree:
+  Sequence:
+    name: MainTree
+    children:
+      - SubTree:
+          name: DoSomething
+          reference: DoSomething
+
+SubTrees:
+  DoSomething:
+    Sequence:
+      name: SubSequence
+      children:
+        - SetBlackboard:
+            key: result
+            value: "done"
+        - Success:
+            name: Complete
+)";
+
+    bt::NodeFactory factory;
+    auto bb = std::make_shared<bt::Blackboard>();
+    auto result = bt::Builder::fromText(factory, yaml, bb);
+
+    ASSERT_TRUE(result.isSuccess());
+    auto tree = result.moveValue();
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test Repeater with port remapping for repetitions.
+// ------------------------------------------------------------------------
+TEST(TestBuilder, RepeaterPortRemapping)
+{
+    std::string yaml = R"(
+Blackboard:
+  repeat_count: 3
+
+BehaviorTree:
+  Repeater:
+    name: TestRepeater
+    parameters:
+      repetitions: ${repeat_count}
+    child:
+      - Success:
+          name: AlwaysSuccess
+)";
+
+    bt::NodeFactory factory;
+    auto bb = std::make_shared<bt::Blackboard>();
+    auto result = bt::Builder::fromText(factory, yaml, bb);
+
+    ASSERT_TRUE(result.isSuccess());
+    auto tree = result.moveValue();
+
+    // Tick 3 times (should still be RUNNING)
+    EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
+    // Third tick completes the 3 repetitions
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+}

@@ -12,6 +12,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -69,6 +70,16 @@ public:
     void set(const Key& p_key, T&& p_value)
     {
         m_data[p_key] = std::forward<T>(p_value);
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Set a raw std::any value directly.
+    //! \param[in] p_key The key to set the value.
+    //! \param[in] p_value The std::any value to set.
+    // ------------------------------------------------------------------------
+    void setRaw(const Key& p_key, Value const& p_value)
+    {
+        m_data[p_key] = p_value;
     }
 
     // ------------------------------------------------------------------------
@@ -182,22 +193,66 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Dump the contents of the blackboard and its parent to the
-    //! console.
+    //! \brief Set port remapping info for display purposes.
+    //! \param[in] p_remapping Map of local key -> parent key for remapped
+    //! ports.
     // ------------------------------------------------------------------------
-    void dump() const
+    void setPortRemapping(
+        std::unordered_map<std::string, std::string> const& p_remapping)
     {
-        std::cout << "=== Blackboard Content ===" << std::endl;
+        m_portRemapping = p_remapping;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Dump the contents of the blackboard to a string.
+    //! \param[in] p_title Optional title to display.
+    //! \param[in] p_showParent If true, also dump parent blackboard contents.
+    //! \return String representation of the blackboard contents.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] std::string dump(std::string const& p_title = "Blackboard",
+                                   bool p_showParent = false) const
+    {
+        std::ostringstream oss;
+        oss << "=== " << p_title << " ===" << std::endl;
+
+        // Show local data with values
         for (const auto& [key, value] : m_data)
         {
-            std::cout << "  " << key << " : " << value.type().name()
-                      << std::endl;
+            oss << "  " << key << " = " << anyToString(value);
+
+            // Show remapping info if this key is remapped
+            auto it = m_portRemapping.find(key);
+            if (it != m_portRemapping.end())
+            {
+                oss << "  [remapped to port of parent tree: " << it->second
+                    << "]";
+            }
+            oss << std::endl;
         }
-        if (m_parent)
+
+        // Show remapped ports that don't have local values yet
+        for (const auto& [localKey, parentKey] : m_portRemapping)
         {
-            std::cout << "  (+ parent data)" << std::endl;
-            m_parent->dump();
+            if (m_data.find(localKey) == m_data.end())
+            {
+                oss << "  [" << localKey
+                    << "] remapped to port of parent tree [" << parentKey << "]"
+                    << std::endl;
+            }
         }
+
+        // Optionally show parent data
+        if (p_showParent && m_parent)
+        {
+            oss << "  --- Parent Blackboard ---" << std::endl;
+            for (const auto& [key, value] : m_parent->m_data)
+            {
+                oss << "    " << key << " = " << anyToString(value)
+                    << std::endl;
+            }
+        }
+
+        return oss.str();
     }
 
     // ------------------------------------------------------------------------
@@ -215,12 +270,34 @@ public:
         return result;
     }
 
-    // QQ: AFFICHER lES PARENTS
-
 private:
+
+    // ------------------------------------------------------------------------
+    //! \brief Convert std::any to a readable string.
+    // ------------------------------------------------------------------------
+    static std::string anyToString(Value const& p_value)
+    {
+        // Try common types
+        if (auto* v = std::any_cast<std::string>(&p_value))
+            return "\"" + *v + "\" (string)";
+        if (auto* v = std::any_cast<int>(&p_value))
+            return std::to_string(*v) + " (int)";
+        if (auto* v = std::any_cast<double>(&p_value))
+            return std::to_string(*v) + " (double)";
+        if (auto* v = std::any_cast<float>(&p_value))
+            return std::to_string(*v) + " (float)";
+        if (auto* v = std::any_cast<bool>(&p_value))
+            return (*v ? "true" : "false") + std::string(" (bool)");
+        if (auto* v = std::any_cast<size_t>(&p_value))
+            return std::to_string(*v) + " (size_t)";
+
+        // Fallback to type name
+        return std::string("(") + p_value.type().name() + ")";
+    }
 
     std::unordered_map<Key, Value> m_data;
     std::shared_ptr<Blackboard> m_parent;
+    std::unordered_map<std::string, std::string> m_portRemapping;
 };
 
 } // namespace bt

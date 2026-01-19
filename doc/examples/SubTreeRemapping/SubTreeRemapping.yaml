@@ -1,0 +1,51 @@
+# SubTree Port Remapping Example
+# Demonstrates how to pass data between parent tree and subtrees using port remapping.
+# Equivalent to BehaviorTree.CPP SubTree port mapping.
+
+Blackboard:
+  move_goal: "1;2;3"
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: MainTree
+    children:
+      - SubTree:
+          _id: 2
+          name: MoveRobot
+          reference: MoveRobot
+          parameters:
+            target: ${move_goal}      # Remap: port "target" -> parent key "move_goal"
+            result: ${move_result}    # Remap: port "result" -> parent key "move_result"
+      - Action:
+          _id: 3
+          name: SaySomething
+          parameters:
+            message: ${move_result}
+
+SubTrees:
+  MoveRobot:
+    Selector:
+      _id: 4
+      name: MoveRobotSelector
+      children:
+        - Sequence:
+            _id: 5
+            name: TryMove
+            children:
+              - Action:
+                  _id: 6
+                  name: MoveBase
+                  parameters:
+                    goal: ${target}   # Reads from child blackboard (remapped from parent)
+              - SetBlackboard:
+                  _id: 7
+                  key: result
+                  value: "goal reached"
+        - ForceFailure:
+            _id: 8
+            child:
+              - SetBlackboard:
+                  _id: 9
+                  key: result
+                  value: "error"

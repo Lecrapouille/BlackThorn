@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "BlackThorn/Core/Composite.hpp"
+#include "BlackThorn/Core/Decorator.hpp"
 #include "BlackThorn/Core/Node.hpp"
 
 #include <cassert>
@@ -17,6 +19,7 @@ namespace bt {
 
 // Forward declarations
 class VisualizerClient;
+class SubTreeNode;
 
 // ****************************************************************************
 //! \brief Container for a behavior tree instance.
@@ -117,6 +120,46 @@ public:
     }
 
     // ------------------------------------------------------------------------
+    //! \brief Set the output port remapping for subtrees.
+    //! Maps child blackboard keys to parent blackboard keys.
+    //! \param[in] p_remapping Map of child key -> parent key
+    // ------------------------------------------------------------------------
+    void setOutputRemapping(
+        std::unordered_map<std::string, std::string> const& p_remapping)
+    {
+        m_outputRemapping = p_remapping;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Set the parent blackboard for output propagation.
+    //! \param[in] p_parent The parent blackboard
+    // ------------------------------------------------------------------------
+    void setParentBlackboard(Blackboard::Ptr p_parent)
+    {
+        m_parentBlackboard = std::move(p_parent);
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Propagate output values to parent blackboard.
+    //! Called after subtree execution completes.
+    // ------------------------------------------------------------------------
+    void propagateOutputs()
+    {
+        if (!m_parentBlackboard || m_outputRemapping.empty() || !m_blackboard)
+        {
+            return;
+        }
+
+        for (auto const& [childKey, parentKey] : m_outputRemapping)
+        {
+            if (auto value = m_blackboard->raw(childKey); value)
+            {
+                m_parentBlackboard->setRaw(parentKey, *value);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------------
     //! \brief Check if the tree is valid before starting the tree.
     //! \details The tree is valid if it has a root node and all nodes in the
     //! tree are valid (i.e. if decorators and composites have children).
@@ -213,6 +256,21 @@ public:
         p_visitor.visitTree(*this);
     }
 
+    // ------------------------------------------------------------------------
+    //! \brief Find a SubTree by its name.
+    //! \param[in] p_name The name of the SubTree to find.
+    //! \return Pointer to the SubTreeNode if found, nullptr otherwise.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] SubTreeNode* findSubTree(std::string const& p_name);
+
+    // ------------------------------------------------------------------------
+    //! \brief Find a SubTree by its name (const version).
+    //! \param[in] p_name The name of the SubTree to find.
+    //! \return Pointer to the SubTreeNode if found, nullptr otherwise.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] SubTreeNode const*
+    findSubTree(std::string const& p_name) const;
+
 private:
 
     //! \brief The root node of the behavior tree.
@@ -223,6 +281,10 @@ private:
     Status m_status = Status::INVALID;
     //! \brief Optional visualizer client for real-time monitoring.
     std::shared_ptr<VisualizerClient> m_visualizer = nullptr;
+    //! \brief Output remapping for subtrees (child key -> parent key).
+    std::unordered_map<std::string, std::string> m_outputRemapping;
+    //! \brief Parent blackboard for output propagation (subtrees only).
+    Blackboard::Ptr m_parentBlackboard = nullptr;
 };
 
 // ****************************************************************************
@@ -304,13 +366,20 @@ protected:
         {
             return Status::FAILURE;
         }
-        return m_handle->tree().tick();
+        Status status = m_handle->tree().tick();
+
+        // Propagate outputs from child to parent blackboard after each tick
+        m_handle->tree().propagateOutputs();
+
+        return status;
     }
 
     void onTearDown(Status) override
     {
         if (m_handle)
         {
+            // Final propagation before reset
+            m_handle->tree().propagateOutputs();
             m_handle->tree().reset();
         }
     }
@@ -338,6 +407,15 @@ public:
     [[nodiscard]] SubTreeHandle::Ptr handle() const
     {
         return m_handle;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Get the blackboard of the subtree.
+    //! \return The blackboard of the subtree, or nullptr if no handle.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] Blackboard::Ptr blackboard() const
+    {
+        return m_handle ? m_handle->tree().blackboard() : nullptr;
     }
 
 private:
@@ -378,6 +456,77 @@ inline Status Tree::tick()
     }
 
     return m_status;
+}
+
+// ----------------------------------------------------------------------------
+// Helper to recursively find a SubTreeNode by name
+// ----------------------------------------------------------------------------
+namespace detail {
+
+inline SubTreeNode* findSubTreeRecursive(Node* p_node,
+                                         std::string const& p_name)
+{
+    if (!p_node)
+    {
+        return nullptr;
+    }
+
+    // Check if this node is the SubTree we're looking for
+    if (auto* subtree = dynamic_cast<SubTreeNode*>(p_node))
+    {
+        if (subtree->name == p_name)
+        {
+            return subtree;
+        }
+        // Also search inside the subtree's tree
+        if (auto* found = findSubTreeRecursive(
+                &subtree->handle()->tree().getRoot(), p_name))
+        {
+            return found;
+        }
+    }
+
+    // Check children of Composite nodes
+    if (auto* composite = dynamic_cast<Composite*>(p_node))
+    {
+        for (auto const& child : composite->getChildren())
+        {
+            if (auto* found = findSubTreeRecursive(child.get(), p_name))
+            {
+                return found;
+            }
+        }
+    }
+
+    // Check child of Decorator nodes
+    if (auto* decorator = dynamic_cast<Decorator*>(p_node))
+    {
+        if (decorator->hasChild())
+        {
+            if (auto* found =
+                    findSubTreeRecursive(&decorator->getChild(), p_name))
+            {
+                return found;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+} // namespace detail
+
+// ----------------------------------------------------------------------------
+// Tree::findSubTree() implementations
+// ----------------------------------------------------------------------------
+inline SubTreeNode* Tree::findSubTree(std::string const& p_name)
+{
+    return detail::findSubTreeRecursive(m_root.get(), p_name);
+}
+
+inline SubTreeNode const* Tree::findSubTree(std::string const& p_name) const
+{
+    return detail::findSubTreeRecursive(m_root.get(), p_name);
 }
 
 } // namespace bt

@@ -80,6 +80,8 @@ class PrintMessage: public bt::Leaf
 {
 public:
 
+    PrintMessage() = default;
+
     bt::PortList providedPorts() const override
     {
         bt::PortList ports;
@@ -89,19 +91,12 @@ public:
 
     bt::Status onRunning() override
     {
-        if (!m_blackboard)
-            return bt::Status::FAILURE;
-        if (auto msg = getInput<std::string>("message", *m_blackboard); msg)
+        if (auto msg = getInput<std::string>("message"); msg)
         {
             m_last_message = *msg;
             return bt::Status::SUCCESS;
         }
         return bt::Status::FAILURE;
-    }
-
-    void setConfig(std::unordered_map<std::string, std::string> const& config)
-    {
-        configure(config);
     }
 
     std::string m_last_message;
@@ -118,7 +113,7 @@ class Calculate: public bt::Leaf
 {
 public:
 
-    explicit Calculate(bt::Blackboard::Ptr bb = nullptr) : bt::Leaf(bb) {}
+    Calculate() = default;
 
     bt::PortList providedPorts() const override
     {
@@ -131,24 +126,16 @@ public:
 
     bt::Status onRunning() override
     {
-        if (!m_blackboard)
-            return bt::Status::FAILURE;
-
-        auto a = getInput<int>("a", *m_blackboard);
-        auto b = getInput<int>("b", *m_blackboard);
+        auto a = getInput<int>("a");
+        auto b = getInput<int>("b");
         if (a && b)
         {
             int result = *a + *b;
-            setOutput("result", result, *m_blackboard);
+            setOutput("result", result);
             return bt::Status::SUCCESS;
         }
 
         return bt::Status::FAILURE;
-    }
-
-    void setConfig(std::unordered_map<std::string, std::string> const& config)
-    {
-        configure(config);
     }
 
     void accept(bt::ConstBehaviorTreeVisitor&) const override {}
@@ -163,7 +150,7 @@ class MoveToPosition: public bt::Leaf
 {
 public:
 
-    explicit MoveToPosition(bt::Blackboard::Ptr bb = nullptr) : bt::Leaf(bb) {}
+    MoveToPosition() = default;
 
     bt::PortList providedPorts() const override
     {
@@ -175,25 +162,16 @@ public:
 
     bt::Status onRunning() override
     {
-        if (!m_blackboard)
-            return bt::Status::FAILURE;
-
-        auto target = getInput<Position>("target", *m_blackboard);
+        auto target = getInput<Position>("target");
         if (target)
         {
-            // Simulate movement
-            Position current{
-                target->x * 0.5f, target->y * 0.5f, target->z * 0.5f};
-            setOutput("current_pos", current, *m_blackboard);
+            // Simulate movement (integer division)
+            Position current{target->x / 2, target->y / 2, target->z / 2};
+            setOutput("current_pos", current);
             return bt::Status::SUCCESS;
         }
 
         return bt::Status::FAILURE;
-    }
-
-    void setConfig(std::unordered_map<std::string, std::string> const& config)
-    {
-        configure(config);
     }
 
     void accept(bt::ConstBehaviorTreeVisitor&) const override {}
@@ -208,7 +186,7 @@ class ProcessEnemy: public bt::Leaf
 {
 public:
 
-    explicit ProcessEnemy(bt::Blackboard::Ptr bb = nullptr) : bt::Leaf(bb) {}
+    ProcessEnemy() = default;
 
     bt::PortList providedPorts() const override
     {
@@ -220,23 +198,15 @@ public:
 
     bt::Status onRunning() override
     {
-        if (!m_blackboard)
-            return bt::Status::FAILURE;
-        auto enemy = getInput<Enemy>("enemy", *m_blackboard);
-
+        auto enemy = getInput<Enemy>("enemy");
         if (enemy)
         {
             bool dead = enemy->health <= 0;
-            setOutput("is_dead", dead, *m_blackboard);
+            setOutput("is_dead", dead);
             return bt::Status::SUCCESS;
         }
 
         return bt::Status::FAILURE;
-    }
-
-    void setConfig(std::unordered_map<std::string, std::string> const& config)
-    {
-        configure(config);
     }
 
     void accept(bt::ConstBehaviorTreeVisitor&) const override {}
@@ -343,16 +313,16 @@ TEST(TestBlackboard, CustomStructs)
     auto bb = std::make_shared<bt::Blackboard>();
 
     // WHEN: Setting and retrieving a custom struct
-    Position pos{1.0f, 2.0f, 3.0f};
+    Position pos{1, 2, 3};
     bb->set("position", pos);
 
     auto retrieved = bb->get<Position>("position");
 
     // THEN: EXPECT the struct values are preserved correctly
     ASSERT_TRUE(retrieved.has_value());
-    EXPECT_EQ(retrieved->x, 1.0f);
-    EXPECT_EQ(retrieved->y, 2.0f);
-    EXPECT_EQ(retrieved->z, 3.0f);
+    EXPECT_EQ(retrieved->x, 1);
+    EXPECT_EQ(retrieved->y, 2);
+    EXPECT_EQ(retrieved->z, 3);
 }
 
 // ------------------------------------------------------------------------
@@ -367,7 +337,7 @@ TEST(TestBlackboard, ComplexStructs)
     auto bb = std::make_shared<bt::Blackboard>();
 
     // WHEN: Setting and retrieving a complex struct
-    Enemy enemy{"Goblin", 50, {10.0f, 0.0f, 5.0f}};
+    Enemy enemy{"Goblin", 50, {10, 0, 5}};
     bb->set("enemy", enemy);
 
     auto retrieved = bb->get<Enemy>("enemy");
@@ -376,9 +346,9 @@ TEST(TestBlackboard, ComplexStructs)
     ASSERT_TRUE(retrieved.has_value());
     EXPECT_EQ(retrieved->name, "Goblin");
     EXPECT_EQ(retrieved->health, 50);
-    EXPECT_EQ(retrieved->position.x, 10.0f);
-    EXPECT_EQ(retrieved->position.y, 0.0f);
-    EXPECT_EQ(retrieved->position.z, 5.0f);
+    EXPECT_EQ(retrieved->position.x, 10);
+    EXPECT_EQ(retrieved->position.y, 0);
+    EXPECT_EQ(retrieved->position.z, 5);
 }
 
 // ===========================================================================
@@ -641,12 +611,13 @@ TEST(TestNodeWithBlackboard, PrintMessage)
     auto bb = std::make_shared<bt::Blackboard>();
     bb->set("msg", std::string("Hello from Blackboard"));
 
-    auto node = std::make_unique<PrintMessage>(bb);
+    auto node = std::make_unique<PrintMessage>();
+    node->setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["message"] = "${msg}";
-    node->setConfig(config);
+    node->setPortRemapping(config);
 
     bt::Status status = node->tick();
 
@@ -668,14 +639,15 @@ TEST(TestNodeWithBlackboard, CalculateWithInputs)
     bb->set("value_a", 10);
     bb->set("value_b", 32);
 
-    auto node = std::make_unique<Calculate>(bb);
+    auto node = std::make_unique<Calculate>();
+    node->setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["a"] = "${value_a}";
     config["b"] = "${value_b}";
     config["result"] = "${sum}";
-    node->setConfig(config);
+    node->setPortRemapping(config);
 
     bt::Status status = node->tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);
@@ -696,16 +668,17 @@ TEST(TestNodeWithBlackboard, MoveToPositionStruct)
 {
     // GIVEN: A node with a struct in the blackboard
     auto bb = std::make_shared<bt::Blackboard>();
-    Position target{100.0f, 200.0f, 300.0f};
+    Position target{100, 200, 300};
     bb->set("target_pos", target);
 
-    auto node = std::make_unique<MoveToPosition>(bb);
+    auto node = std::make_unique<MoveToPosition>();
+    node->setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["target"] = "${target_pos}";
     config["current_pos"] = "${current}";
-    node->setConfig(config);
+    node->setPortRemapping(config);
 
     bt::Status status = node->tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);
@@ -713,9 +686,9 @@ TEST(TestNodeWithBlackboard, MoveToPositionStruct)
     // THEN: EXPECT the struct is processed and result is written correctly
     auto current = bb->get<Position>("current");
     ASSERT_TRUE(current.has_value());
-    EXPECT_FLOAT_EQ(current->x, 50.0f);
-    EXPECT_FLOAT_EQ(current->y, 100.0f);
-    EXPECT_FLOAT_EQ(current->z, 150.0f);
+    EXPECT_EQ(current->x, 50);
+    EXPECT_EQ(current->y, 100);
+    EXPECT_EQ(current->z, 150);
 }
 
 // ------------------------------------------------------------------------
@@ -728,16 +701,17 @@ TEST(TestNodeWithBlackboard, ProcessEnemyComplex)
 {
     // GIVEN: A node with a complex struct in the blackboard
     auto bb = std::make_shared<bt::Blackboard>();
-    Enemy enemy{"Orc", 0, {5.0f, 0.0f, 10.0f}};
+    Enemy enemy{"Orc", 0, {5, 0, 10}};
     bb->set("current_enemy", enemy);
 
-    auto node = std::make_unique<ProcessEnemy>(bb);
+    auto node = std::make_unique<ProcessEnemy>();
+    node->setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["enemy"] = "${current_enemy}";
     config["is_dead"] = "${dead}";
-    node->setConfig(config);
+    node->setPortRemapping(config);
 
     bt::Status status = node->tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);
@@ -759,14 +733,15 @@ TEST(TestNodeWithBlackboard, LiteralValues)
     // GIVEN: A node configured with literal values
     auto bb = std::make_shared<bt::Blackboard>();
 
-    auto node = std::make_unique<Calculate>(bb);
+    auto node = std::make_unique<Calculate>();
+    node->setBlackboard(bb);
 
     // WHEN: Configuring with literal values and executing the node
     std::unordered_map<std::string, std::string> config;
     config["a"] = "5";
     config["b"] = "7";
     config["result"] = "${output}";
-    node->setConfig(config);
+    node->setPortRemapping(config);
 
     bt::Status status = node->tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);

@@ -1,6 +1,6 @@
 /**
  * @file Repeat.hpp
- * @brief Repeat decorator nodes: Repeat, UntilSuccess, UntilFailure.
+ * @brief Repeat decorator nodes: Repeater, UntilSuccess, UntilFailure.
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -19,32 +19,63 @@ namespace bt {
 //! allowing proper visualization and reactivity between iterations.
 //! The decorator ignores the child's SUCCESS/FAILURE status and continues
 //! repeating until the limit is reached.
+//! The number of repetitions can be read from the blackboard via port
+//! remapping.
 // ****************************************************************************
-class Repeat final: public Decorator
+class Repeater final: public Decorator
 {
 public:
 
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
-    //! \return The string "Repeat".
+    //! \return The string "Repeater".
     // ------------------------------------------------------------------------
     [[nodiscard]] static constexpr char const* toString()
     {
-        return "Repeat";
+        return "Repeater";
     }
 
     // ------------------------------------------------------------------------
     //! \brief Constructor taking a limit of repetitions.
     //! \param[in] p_repetitions The limit of repetitions (0 = infinite).
     // ------------------------------------------------------------------------
-    explicit Repeat(size_t p_repetitions = 0) : m_repetitions(p_repetitions) {}
+    explicit Repeater(size_t p_repetitions = 0)
+        : m_default_repetitions(p_repetitions)
+    {
+        m_type = toString();
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Get the ports provided by the node.
+    //! \return The ports provided by the node.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] PortList providedPorts() const override
+    {
+        PortList ports;
+        ports.addInput<size_t>("repetitions");
+        return ports;
+    }
 
     // ------------------------------------------------------------------------
     //! \brief Set up the repeater.
+    //! Reads repetitions from blackboard if configured, otherwise uses default.
     //! \return The status of the repeater.
     // ------------------------------------------------------------------------
     [[nodiscard]] Status onSetUp() override
     {
+        // Try to read repetitions from blackboard (try int first, then size_t)
+        if (auto reps = getInput<int>("repetitions"); reps && *reps >= 0)
+        {
+            m_repetitions = static_cast<size_t>(*reps);
+        }
+        else if (auto reps2 = getInput<size_t>("repetitions"); reps2)
+        {
+            m_repetitions = *reps2;
+        }
+        else
+        {
+            m_repetitions = m_default_repetitions;
+        }
         m_count = 0;
         return Status::RUNNING;
     }
@@ -98,18 +129,22 @@ public:
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
     {
-        p_visitor.visitRepeat(*this);
+        p_visitor.visitRepeater(*this);
     }
     void accept(BehaviorTreeVisitor& p_visitor) override
     {
-        p_visitor.visitRepeat(*this);
+        p_visitor.visitRepeater(*this);
     }
 
 private:
 
     size_t m_count = 0;
-    size_t m_repetitions;
+    size_t m_default_repetitions;
+    size_t m_repetitions = 0;
 };
+
+// Backward compatibility alias
+using Repeat = Repeater;
 
 // ****************************************************************************
 //! \brief The UntilSuccess decorator repeats until the child returns success

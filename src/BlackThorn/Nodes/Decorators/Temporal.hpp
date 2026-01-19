@@ -19,6 +19,7 @@ namespace bt {
 //! If the child does not complete within the specified time, it returns
 //! FAILURE and halts the child. This is useful for preventing long-running
 //! actions from blocking the tree.
+//! The timeout duration can be read from the blackboard via port remapping.
 // ****************************************************************************
 class Timeout final: public Decorator
 {
@@ -29,11 +30,11 @@ public:
 
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
-    //! \return The string "⏱️ Timeout".
+    //! \return The string "Timeout".
     // ------------------------------------------------------------------------
     [[nodiscard]] static constexpr char const* toString()
     {
-        return "⏱️ Timeout";
+        return "Timeout";
     }
 
     // ------------------------------------------------------------------------
@@ -41,16 +42,42 @@ public:
     //! \param[in] p_milliseconds The timeout duration in milliseconds.
     // ------------------------------------------------------------------------
     explicit Timeout(size_t p_milliseconds = 1000)
-        : m_timeout(Duration(p_milliseconds))
+        : m_default_timeout(p_milliseconds)
     {
+        m_type = toString();
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Get the ports provided by the node.
+    //! \return The ports provided by the node.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] PortList providedPorts() const override
+    {
+        PortList ports;
+        ports.addInput<size_t>("milliseconds");
+        return ports;
     }
 
     // ------------------------------------------------------------------------
     //! \brief Set up the timeout - records the start time.
+    //! Reads timeout from blackboard if configured, otherwise uses default.
     //! \return RUNNING to continue with onRunning.
     // ------------------------------------------------------------------------
     [[nodiscard]] Status onSetUp() override
     {
+        // Try to read timeout from blackboard (try int first, then size_t)
+        if (auto ms = getInput<int>("milliseconds"); ms && *ms >= 0)
+        {
+            m_timeout = Duration(static_cast<size_t>(*ms));
+        }
+        else if (auto ms2 = getInput<size_t>("milliseconds"); ms2)
+        {
+            m_timeout = Duration(*ms2);
+        }
+        else
+        {
+            m_timeout = Duration(m_default_timeout);
+        }
         m_start_time = Clock::now();
         return Status::RUNNING;
     }
@@ -98,6 +125,7 @@ public:
 
 private:
 
+    size_t m_default_timeout;
     Duration m_timeout;
     Clock::time_point m_start_time;
 };

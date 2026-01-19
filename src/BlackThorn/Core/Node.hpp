@@ -147,57 +147,84 @@ public:
     // ------------------------------------------------------------------------
     virtual void accept(BehaviorTreeVisitor& p_visitor) = 0;
 
+    // ------------------------------------------------------------------------
+    //! \brief Get the blackboard for the node.
+    //! \return The blackboard for the node.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] inline Blackboard::Ptr blackboard() const
+    {
+        return m_blackboard;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Assign a blackboard to the node.
+    //! \param[in] p_blackboard The blackboard to use.
+    // ------------------------------------------------------------------------
+    void setBlackboard(Blackboard::Ptr const& p_blackboard)
+    {
+        m_blackboard = p_blackboard;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Configure the port remapping for this node.
+    //! Maps port names to blackboard keys (e.g., "target" -> "${move_goal}").
+    //! \param[in] p_remapping The port remapping configuration.
+    // ------------------------------------------------------------------------
+    void setPortRemapping(
+        std::unordered_map<std::string, std::string> const& p_remapping)
+    {
+        m_port_remapping = p_remapping;
+    }
+
 protected: // Port management
 
     // ------------------------------------------------------------------------
     //! \brief Get an input from the port.
+    //! Resolves the port name to a blackboard key using port remapping.
     //! \param[in] p_port The port to get the input from.
-    //! \param[in] p_bb The blackboard to get the input from.
-    //! \return The input value.
+    //! \return The input value, or std::nullopt if not found.
     // ------------------------------------------------------------------------
     template <typename T>
-    std::optional<T> getInput(std::string const& p_port,
-                              Blackboard const& p_bb) const
+    std::optional<T> getInput(std::string const& p_port) const
     {
-        auto key = m_port_config.find(p_port) != m_port_config.end()
-                       ? m_port_config.at(p_port)
-                       : p_port;
-        return VariableResolver::resolveValue<T>(key, p_bb);
+        if (!m_blackboard)
+        {
+            return std::nullopt;
+        }
+        auto key = m_port_remapping.count(p_port) ? m_port_remapping.at(p_port)
+                                                  : p_port;
+        return VariableResolver::resolveValue<T>(key, *m_blackboard);
     }
 
     // ------------------------------------------------------------------------
     //! \brief Set an output to the port.
+    //! Resolves the port name to a blackboard key using port remapping.
     //! \param[in] p_port The port to set the output to.
     //! \param[in] p_value The value to set the output to.
-    //! \param[in] p_bb The blackboard to set the output to.
     // ------------------------------------------------------------------------
     template <typename T>
-    void setOutput(std::string const& p_port, T&& p_value, Blackboard& p_bb)
+    void setOutput(std::string const& p_port, T&& p_value)
     {
-        if (m_port_config.find(p_port) != m_port_config.end())
+        if (!m_blackboard)
         {
-            std::string key = m_port_config.at(p_port);
-            // Extract the key from ${key}
-            std::regex pattern(R"(\$\{([^}]+)\})");
-            std::smatch match;
-            if (std::regex_match(key, match, pattern))
-            {
-                p_bb.set(match[1].str(), std::forward<T>(p_value));
-            }
-            else
-            {
-                p_bb.set(key, std::forward<T>(p_value));
-            }
+            return;
         }
-    }
 
-    // ------------------------------------------------------------------------
-    //! \brief Configure the ports of the node.
-    //! \param[in] p_config The configuration to set.
-    // ------------------------------------------------------------------------
-    void configure(std::unordered_map<std::string, std::string> const& p_config)
-    {
-        m_port_config = p_config;
+        std::string key = m_port_remapping.count(p_port)
+                              ? m_port_remapping.at(p_port)
+                              : p_port;
+
+        // Extract the key from ${key} syntax
+        std::regex pattern(R"(\$\{([^}]+)\})");
+        std::smatch match;
+        if (std::regex_match(key, match, pattern))
+        {
+            m_blackboard->set(match[1].str(), std::forward<T>(p_value));
+        }
+        else
+        {
+            m_blackboard->set(key, std::forward<T>(p_value));
+        }
     }
 
 protected: // Lifecycle methods
@@ -277,8 +304,10 @@ protected:
     std::string m_type;
     //! \brief The status of the node.
     Status m_status = Status::INVALID;
-    //! \brief The port configuration for this node (input/output parameters).
-    std::unordered_map<std::string, std::string> m_port_config;
+    //! \brief The blackboard for the node (shared data store).
+    Blackboard::Ptr m_blackboard = nullptr;
+    //! \brief The port remapping for this node (port name -> blackboard key).
+    std::unordered_map<std::string, std::string> m_port_remapping;
 };
 
 } // namespace bt

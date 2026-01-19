@@ -40,6 +40,7 @@ public:
     SetBlackboard(std::string p_key, std::string p_value)
         : m_key(std::move(p_key)), m_value(std::move(p_value))
     {
+        m_type = toString();
     }
 
     // ------------------------------------------------------------------------
@@ -51,10 +52,10 @@ public:
     SetBlackboard(std::string p_key,
                   std::string p_value,
                   Blackboard::Ptr p_blackboard)
-        : Leaf(p_blackboard),
-          m_key(std::move(p_key)),
-          m_value(std::move(p_value))
+        : m_key(std::move(p_key)), m_value(std::move(p_value))
     {
+        m_type = toString();
+        setBlackboard(p_blackboard);
     }
 
     // ------------------------------------------------------------------------

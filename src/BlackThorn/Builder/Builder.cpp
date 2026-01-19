@@ -73,6 +73,61 @@ static std::string getNodeName(YAML::Node const& p_content)
 }
 
 // ----------------------------------------------------------------------------
+//! \brief Extract port remapping from YAML parameters section.
+//! Converts YAML parameters to a map of port name -> blackboard key.
+// ----------------------------------------------------------------------------
+static std::unordered_map<std::string, std::string>
+extractPortRemapping(YAML::Node const& p_parameters)
+{
+    std::unordered_map<std::string, std::string> remapping;
+    if (p_parameters && p_parameters.IsMap())
+    {
+        for (auto const& param : p_parameters)
+        {
+            remapping[param.first.as<std::string>()] =
+                param.second.as<std::string>();
+        }
+    }
+    return remapping;
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Load only literal parameters into blackboard.
+//! Skips ${...} references which are only used for port remapping.
+// ----------------------------------------------------------------------------
+static void loadLiteralParameters(Blackboard& p_bb,
+                                  YAML::Node const& p_parameters)
+{
+    if (!p_parameters || !p_parameters.IsMap())
+    {
+        return;
+    }
+
+    std::regex refPattern(R"(\$\{([^}]+)\})");
+
+    for (auto const& param : p_parameters)
+    {
+        auto const& valueNode = param.second;
+
+        // Skip ${...} references - they're for port remapping only
+        if (valueNode.IsScalar())
+        {
+            std::string value = valueNode.as<std::string>();
+            if (std::regex_match(value, refPattern))
+            {
+                continue; // Skip reference
+            }
+        }
+
+        // Load literal value into blackboard
+        std::string key = param.first.as<std::string>();
+        YAML::Node single;
+        single[key] = valueNode;
+        BlackboardSerializer::load(p_bb, single, &p_bb);
+    }
+}
+
+// ----------------------------------------------------------------------------
 //! \brief Parse children nodes from YAML content
 // ----------------------------------------------------------------------------
 static robotik::Return<std::vector<Node::Ptr>>
@@ -264,15 +319,25 @@ createInverter(ParsingContext const& p_context, YAML::Node const& p_content)
 }
 
 // ----------------------------------------------------------------------------
-//! \brief Create a repeat node
+//! \brief Create a repeater node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createRepeat(ParsingContext const& p_context,
-                                               YAML::Node const& p_content)
+static robotik::Return<Node::Ptr>
+createRepeater(ParsingContext const& p_context, YAML::Node const& p_content)
 {
     size_t times = p_content["times"] ? p_content["times"].as<size_t>() : 0;
-    auto node = Node::create<Repeat>(times);
+    auto node = Node::create<Repeater>(times);
     node->name = getNodeName(p_content);
     assignNodeId(*node, p_context, p_content);
+
+    // Set blackboard for port access
+    node->setBlackboard(p_context.blackboard);
+
+    // Configure port remapping if parameters are present
+    if (p_content["parameters"])
+    {
+        node->setPortRemapping(extractPortRemapping(p_content["parameters"]));
+    }
+
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
         return robotik::Return<Node::Ptr>::error(children.getError());
@@ -390,14 +455,6 @@ static robotik::Return<Node::Ptr> createAction(ParsingContext const& p_context,
 
     std::string name = p_content["name"].as<std::string>();
 
-    // Handle local parameters if present
-    if (p_context.blackboard && p_content["parameters"])
-    {
-        BlackboardSerializer::load(*p_context.blackboard,
-                                   p_content["parameters"],
-                                   p_context.blackboard.get());
-    }
-
     auto node = p_context.factory.createNode(name);
     if (!node)
     {
@@ -406,9 +463,18 @@ static robotik::Return<Node::Ptr> createAction(ParsingContext const& p_context,
             " node: " + name);
     }
 
-    if (auto* leaf = dynamic_cast<Leaf*>(node.get()))
+    // Set the blackboard for the node (now on Node base class)
+    node->setBlackboard(p_context.blackboard);
+
+    // Handle local parameters if present
+    if (p_context.blackboard && p_content["parameters"])
     {
-        leaf->setBlackboard(p_context.blackboard);
+        // Load only literal parameters into blackboard (not ${...} references)
+        // References are only used for port remapping, not stored in BB
+        loadLiteralParameters(*p_context.blackboard, p_content["parameters"]);
+
+        // Configure port remapping for all parameters
+        node->setPortRemapping(extractPortRemapping(p_content["parameters"]));
     }
 
     node->name = name;
@@ -450,6 +516,57 @@ static robotik::Return<Node::Ptr> createFailure(ParsingContext const& p_context,
 }
 
 // ----------------------------------------------------------------------------
+//! \brief Apply port remapping from parent to child blackboard.
+//! For inputs: copies value from parent BB to child BB under remapped key.
+//! For outputs: stores remapping info for later propagation.
+// ----------------------------------------------------------------------------
+static void applySubTreePortRemapping(
+    YAML::Node const& p_parameters,
+    Blackboard::Ptr const& p_parentBB,
+    Blackboard::Ptr const& p_childBB,
+    std::unordered_map<std::string, std::string>& p_outputRemapping)
+{
+    if (!p_parameters || !p_parameters.IsMap())
+    {
+        return;
+    }
+
+    std::regex pattern(R"(\$\{([^}]+)\})");
+
+    for (auto const& param : p_parameters)
+    {
+        std::string childKey = param.first.as<std::string>();
+        std::string value = param.second.as<std::string>();
+
+        std::smatch match;
+        if (std::regex_match(value, match, pattern))
+        {
+            // It's a reference ${parent_key}
+            std::string parentKey = match[1].str();
+
+            // Try to get value from parent blackboard and copy to child
+            if (auto raw = p_parentBB->raw(parentKey); raw)
+            {
+                // Input: copy value from parent to child under childKey
+                p_childBB->setRaw(childKey, *raw);
+            }
+            else
+            {
+                // Output: parent key doesn't exist yet, store remapping
+                // The child will write to childKey, we need to propagate to
+                // parentKey
+                p_outputRemapping[childKey] = parentKey;
+            }
+        }
+        else
+        {
+            // Literal value, set directly in child blackboard
+            p_childBB->set(childKey, value);
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
 //! \brief Create a subtree node referencing another behavior tree
 // ----------------------------------------------------------------------------
 static robotik::Return<Node::Ptr> createSubTree(ParsingContext const& p_context,
@@ -485,6 +602,26 @@ static robotik::Return<Node::Ptr> createSubTree(ParsingContext const& p_context,
         nested.blackboard = std::make_shared<Blackboard>();
     }
 
+    // Apply port remapping from parameters
+    std::unordered_map<std::string, std::string> outputRemapping;
+    std::unordered_map<std::string, std::string> allRemapping;
+    if (p_content["parameters"] && p_context.blackboard)
+    {
+        applySubTreePortRemapping(p_content["parameters"],
+                                  p_context.blackboard,
+                                  nested.blackboard,
+                                  outputRemapping);
+
+        // Extract all remappings for display
+        allRemapping = extractPortRemapping(p_content["parameters"]);
+    }
+
+    // Store port remapping info in the child blackboard for dump()
+    if (!allRemapping.empty())
+    {
+        nested.blackboard->setPortRemapping(allRemapping);
+    }
+
     auto subtreeRoot = parseYAMLNodeInternal(nested, it->second);
     if (!subtreeRoot)
     {
@@ -496,6 +633,13 @@ static robotik::Return<Node::Ptr> createSubTree(ParsingContext const& p_context,
     auto subtree = Tree::create();
     subtree->setBlackboard(nested.blackboard);
     subtree->setRoot(subtreeRoot.moveValue());
+
+    // Store output remapping and parent blackboard for later propagation
+    if (!outputRemapping.empty())
+    {
+        subtree->setOutputRemapping(outputRemapping);
+        subtree->setParentBlackboard(p_context.blackboard);
+    }
 
     auto handle =
         std::make_shared<SubTreeHandle>(reference, std::move(subtree));
@@ -519,6 +663,16 @@ static robotik::Return<Node::Ptr> createTimeout(ParsingContext const& p_context,
     auto node = Node::create<Timeout>(ms);
     node->name = getNodeName(p_content);
     assignNodeId(*node, p_context, p_content);
+
+    // Set blackboard for port access
+    node->setBlackboard(p_context.blackboard);
+
+    // Configure port remapping if parameters are present
+    if (p_content["parameters"])
+    {
+        node->setPortRemapping(extractPortRemapping(p_content["parameters"]));
+    }
+
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
         return robotik::Return<Node::Ptr>::error(children.getError());
@@ -651,7 +805,8 @@ static NodeCreatorMap& getNodeCreators()
         {Selector::toString(), createSelector},
         {Parallel::toString(), createParallel},
         {Inverter::toString(), createInverter},
-        {Repeat::toString(), createRepeat},
+        {Repeater::toString(), createRepeater},
+        {"Repeat", createRepeater}, // Backward compatibility alias
         {UntilSuccess::toString(), createRepeatUntilSuccess},
         {UntilFailure::toString(), createRepeatUntilFailure},
         {ForceSuccess::toString(), createForceSuccess},
