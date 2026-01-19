@@ -104,8 +104,11 @@ TEST(TestParallel, AllChildrenExecuted)
     parallel->addChild(bt::Node::create<CounterAction>(&counter));
     parallel->addChild(bt::Node::create<CounterAction>(&counter));
 
-    EXPECT_EQ(parallel->tick(), bt::Status::RUNNING);
-    EXPECT_EQ(counter, 3); // All children executed
+    EXPECT_EQ(counter, 0);
+    // 3 successes >= 1 required
+    EXPECT_EQ(parallel->tick(), bt::Status::SUCCESS);
+    // All children executed
+    EXPECT_EQ(counter, 3);
 }
 
 TEST(TestParallel, GetThresholds)

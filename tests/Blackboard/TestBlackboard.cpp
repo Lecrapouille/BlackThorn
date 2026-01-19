@@ -18,7 +18,9 @@
 
 struct Position
 {
-    float x, y, z;
+    int x;
+    int y;
+    int z;
 
     bool operator==(const Position& other) const
     {
@@ -78,8 +80,6 @@ class PrintMessage: public bt::Leaf
 {
 public:
 
-    explicit PrintMessage(bt::Blackboard::Ptr bb = nullptr) : bt::Leaf(bb) {}
-
     bt::PortList providedPorts() const override
     {
         bt::PortList ports;
@@ -133,9 +133,9 @@ public:
     {
         if (!m_blackboard)
             return bt::Status::FAILURE;
+
         auto a = getInput<int>("a", *m_blackboard);
         auto b = getInput<int>("b", *m_blackboard);
-
         if (a && b)
         {
             int result = *a + *b;
@@ -177,8 +177,8 @@ public:
     {
         if (!m_blackboard)
             return bt::Status::FAILURE;
-        auto target = getInput<Position>("target", *m_blackboard);
 
+        auto target = getInput<Position>("target", *m_blackboard);
         if (target)
         {
             // Simulate movement

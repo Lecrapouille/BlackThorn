@@ -105,8 +105,7 @@ int main()
     factory.registerNode<LoadGameState>("LoadGameState", blackboard);
     factory.registerNode<ChoosePrimaryEnemy>("ChoosePrimaryEnemy", blackboard);
 
-    auto yamlPath =
-        "/home/qq/MyGithub/BehaviorTree/doc/examples/GameState/GameState.yaml";
+    auto yamlPath = "doc/examples/GameState/GameState.yaml";
     auto result = Builder::fromFile(factory, yamlPath, blackboard);
     if (!result)
     {

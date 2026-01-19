@@ -31,6 +31,7 @@ LIB_BEHAVIOR_TREE := $(call internal-lib,behavior-tree)
 INTERNAL_LIBS := $(LIB_BEHAVIOR_TREE)
 PATH_SRC_BLACKTHORN := $(P)/src/BlackThorn
 PATH_SRC_OAKULAR := $(P)/src/Oakular
+PATH_APP_OAKULAR := $(P)/applications/Oakular
 DIRS_WITH_MAKEFILE := $(PATH_SRC_BLACKTHORN) $(PATH_SRC_OAKULAR)
 $(PATH_SRC_OAKULAR): $(PATH_SRC_BLACKTHORN)
 
@@ -41,8 +42,9 @@ include $(M)/rules/Makefile
 
 ###################################################
 # Extra rules: compile applications after everything
+# Application depends on the Oakular library
 #
-APPLICATIONS = $(PATH_SRC_OAKULAR)/.
+APPLICATIONS = $(PATH_APP_OAKULAR)/.
 EXAMPLES = $(sort $(dir $(wildcard $(P)/doc/examples/*/.)))
 
 .PHONY: applications

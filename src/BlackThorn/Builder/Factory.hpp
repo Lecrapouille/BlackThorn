@@ -36,6 +36,30 @@ public:
     virtual ~NodeFactory() = default;
 
     // ------------------------------------------------------------------------
+    //! \brief Helper template method to register a node without blackboard.
+    //! \tparam T The node type to register.
+    //! \param[in] p_name Name used to identify this node type.
+    // ------------------------------------------------------------------------
+    template <typename T>
+    void registerNode(std::string const& p_name)
+    {
+        registerNode(p_name, []() { return Node::create<T>(); });
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Helper template method to register a node with blackboard.
+    //! \tparam T The node type to register.
+    //! \param[in] p_name Name used to identify this node type.
+    //! \param[in] p_blackboard The blackboard to use.
+    // ------------------------------------------------------------------------
+    template <typename T>
+    void registerNode(std::string const& p_name, Blackboard::Ptr p_blackboard)
+    {
+        registerNode(
+            p_name, [p_blackboard]() { return Node::create<T>(p_blackboard); });
+    }
+
+    // ------------------------------------------------------------------------
     //! \brief Register a node type with a creation function.
     //! \param[in] p_name Name used to identify this node type.
     //! \param[in] p_creator Function that creates instances of this node type.
@@ -99,30 +123,6 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Helper template method to register a node with blackboard.
-    //! \tparam T The node type to register.
-    //! \param[in] p_name Name used to identify this node type.
-    //! \param[in] p_blackboard The blackboard to use.
-    // ------------------------------------------------------------------------
-    template <typename T>
-    void registerNode(std::string const& p_name, Blackboard::Ptr p_blackboard)
-    {
-        registerNode(
-            p_name, [p_blackboard]() { return Node::create<T>(p_blackboard); });
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Helper template method to register a node without blackboard.
-    //! \tparam T The node type to register.
-    //! \param[in] p_name Name used to identify this node type.
-    // ------------------------------------------------------------------------
-    template <typename T>
-    void registerNode(std::string const& p_name)
-    {
-        registerNode(p_name, []() { return Node::create<T>(); });
-    }
-
-    // ------------------------------------------------------------------------
     //! \brief Helper method to register a condition with a lambda.
     //! \param[in] p_name Name used to identify this condition.
     //! \param[in] p_func Lambda function implementing the condition.
@@ -151,7 +151,7 @@ public:
         });
     }
 
-protected:
+private:
 
     //! \brief Map of node names to their creation functions
     std::unordered_map<std::string, NodeCreator> m_creators;

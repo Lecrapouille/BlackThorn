@@ -80,6 +80,9 @@ public:
     }
 };
 
+// ---------------------------------------------------------------------------
+//! \brief Stateful action that resets index on reset() - for Repeat tests.
+// ---------------------------------------------------------------------------
 class StatefulAction final: public LambdaTestAction
 {
 public:
@@ -89,11 +92,6 @@ public:
 
     explicit StatefulAction(std::vector<bt::Status> statuses)
         : LambdaTestAction(makeHandlers(std::move(statuses)))
-    {
-    }
-
-    StatefulAction(std::initializer_list<bt::Status> statuses)
-        : StatefulAction(std::vector<bt::Status>(statuses))
     {
     }
 
@@ -124,6 +122,39 @@ private:
     }
 };
 
+// ---------------------------------------------------------------------------
+//! \brief Sequence action that does NOT reset index - for UntilSuccess/Failure.
+//! \details This action advances through statuses regardless of reset() calls,
+//!          which is needed because UntilSuccess/UntilFailure call reset()
+//!          after each child completion.
+// ---------------------------------------------------------------------------
+class SequenceAction final: public LambdaTestAction
+{
+public:
+
+    explicit SequenceAction(std::vector<bt::Status> statuses)
+        : LambdaTestAction(makeHandler(std::move(statuses)))
+    {
+    }
+
+private:
+
+    static Tick makeHandler(std::vector<bt::Status> statuses)
+    {
+        auto state =
+            std::make_shared<std::pair<std::vector<bt::Status>, size_t>>(
+                std::move(statuses), 0);
+
+        return [state]() {
+            if (state->second < state->first.size())
+            {
+                return state->first[state->second++];
+            }
+            return bt::Status::SUCCESS;
+        };
+    }
+};
+
 } // anonymous namespace
 
 // ===========================================================================
@@ -149,16 +180,18 @@ TEST(TestRepeat, RepeatExactTimes)
     EXPECT_EQ(repeat->getRepetitions(), 3);
 }
 
-TEST(TestRepeat, ChildFailureStopsRepeat)
+TEST(TestRepeat, ChildFailureIgnored)
 {
-    int counter = 0;
-    auto repeat = bt::Node::create<bt::Repeat>(5);
-    auto stateful = new StatefulAction(
-        {bt::Status::SUCCESS, bt::Status::FAILURE, bt::Status::SUCCESS});
-    repeat->setChild(std::unique_ptr<bt::Node>(stateful));
+    // Repeat ignores child's FAILURE status and continues until limit reached
+    auto repeat = bt::Node::create<bt::Repeat>(3);
+    auto stateful = bt::Node::create<StatefulAction>(std::vector<bt::Status>{
+        bt::Status::SUCCESS, bt::Status::FAILURE, bt::Status::SUCCESS});
+    repeat->setChild(std::move(stateful));
 
-    EXPECT_EQ(repeat->tick(), bt::Status::RUNNING);
-    EXPECT_EQ(repeat->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(repeat->tick(), bt::Status::RUNNING); // Child SUCCESS, continue
+    EXPECT_EQ(repeat->tick(), bt::Status::RUNNING); // Child FAILURE, continue
+    EXPECT_EQ(repeat->tick(),
+              bt::Status::SUCCESS); // Child SUCCESS, limit reached
 }
 
 TEST(TestRepeat, ChildRunningPropagates)
@@ -205,16 +238,26 @@ TEST(TestUntilSuccess, SuccessOnFirstTry)
     EXPECT_EQ(counter, 1);
 }
 
+// ---------------------------------------------------------------------------
+//! \brief Test UntilSuccess retries on child failure.
+//! \details GIVEN an UntilSuccess decorator with a child that fails twice
+//!          then succeeds, WHEN ticking the decorator, THEN it returns
+//!          RUNNING while child fails and SUCCESS when child succeeds.
+// ---------------------------------------------------------------------------
 TEST(TestUntilSuccess, RetryOnFailure)
 {
+    // GIVEN: UntilSuccess with child returning FAILURE, FAILURE, SUCCESS
     auto until = bt::Node::create<bt::UntilSuccess>(3);
-    auto stateful = new StatefulAction(
-        {bt::Status::FAILURE, bt::Status::FAILURE, bt::Status::SUCCESS});
-    until->setChild(std::unique_ptr<bt::Node>(stateful));
+    auto sequence = bt::Node::create<SequenceAction>(std::vector<bt::Status>{
+        bt::Status::FAILURE, bt::Status::FAILURE, bt::Status::SUCCESS});
+    until->setChild(std::move(sequence));
 
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // First failure
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // Second failure
-    EXPECT_EQ(until->tick(), bt::Status::SUCCESS); // Finally success
+    // WHEN/THEN: First two ticks return RUNNING (child failed, retry)
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+
+    // WHEN/THEN: Third tick returns SUCCESS (child finally succeeded)
+    EXPECT_EQ(until->tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestUntilSuccess, MaxAttemptsReached)
@@ -237,19 +280,30 @@ TEST(TestUntilSuccess, RunningPropagates)
     EXPECT_EQ(until->tick(), bt::Status::RUNNING);
 }
 
+// ---------------------------------------------------------------------------
+//! \brief Test UntilSuccess with infinite attempts.
+//! \details GIVEN an UntilSuccess decorator with infinite attempts (0) and
+//!          a child that fails multiple times then succeeds, WHEN ticking,
+//!          THEN it keeps retrying until child succeeds.
+// ---------------------------------------------------------------------------
 TEST(TestUntilSuccess, InfiniteAttempts)
 {
-    auto until = bt::Node::create<bt::UntilSuccess>(0); // 0 = infinite
-    auto stateful = new StatefulAction({bt::Status::FAILURE,
-                                        bt::Status::FAILURE,
-                                        bt::Status::FAILURE,
-                                        bt::Status::SUCCESS});
-    until->setChild(std::unique_ptr<bt::Node>(stateful));
+    // GIVEN: UntilSuccess with infinite attempts and child failing 3 times
+    auto until = bt::Node::create<bt::UntilSuccess>(0);
+    auto sequence = bt::Node::create<SequenceAction>(
+        std::vector<bt::Status>{bt::Status::FAILURE,
+                                bt::Status::FAILURE,
+                                bt::Status::FAILURE,
+                                bt::Status::SUCCESS});
+    until->setChild(std::move(sequence));
 
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // First failure
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // Second failure
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // Third failure
-    EXPECT_EQ(until->tick(), bt::Status::SUCCESS); // Finally success
+    // WHEN/THEN: Keeps returning RUNNING while child fails
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+
+    // WHEN/THEN: Returns SUCCESS when child finally succeeds
+    EXPECT_EQ(until->tick(), bt::Status::SUCCESS);
     EXPECT_EQ(until->getAttempts(), 0);
 }
 
@@ -273,17 +327,26 @@ TEST(TestUntilFailure, FailureOnFirstTry)
     EXPECT_EQ(until->tick(), bt::Status::SUCCESS);
 }
 
+// ---------------------------------------------------------------------------
+//! \brief Test UntilFailure retries on child success.
+//! \details GIVEN an UntilFailure decorator with a child that succeeds twice
+//!          then fails, WHEN ticking the decorator, THEN it returns RUNNING
+//!          while child succeeds and SUCCESS when child fails.
+// ---------------------------------------------------------------------------
 TEST(TestUntilFailure, RetryOnSuccess)
 {
+    // GIVEN: UntilFailure with child returning SUCCESS, SUCCESS, FAILURE
     auto until = bt::Node::create<bt::UntilFailure>(3);
-    auto stateful = new StatefulAction(
-        {bt::Status::SUCCESS, bt::Status::SUCCESS, bt::Status::FAILURE});
-    until->setChild(std::unique_ptr<bt::Node>(stateful));
+    auto sequence = bt::Node::create<SequenceAction>(std::vector<bt::Status>{
+        bt::Status::SUCCESS, bt::Status::SUCCESS, bt::Status::FAILURE});
+    until->setChild(std::move(sequence));
 
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // First success
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // Second success
-    EXPECT_EQ(until->tick(),
-              bt::Status::SUCCESS); // Finally failure -> returns SUCCESS
+    // WHEN/THEN: First two ticks return RUNNING (child succeeded, retry)
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+
+    // WHEN/THEN: Third tick returns SUCCESS (child finally failed)
+    EXPECT_EQ(until->tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestUntilFailure, MaxAttemptsReached)
@@ -306,19 +369,29 @@ TEST(TestUntilFailure, RunningPropagates)
     EXPECT_EQ(until->tick(), bt::Status::RUNNING);
 }
 
+// ---------------------------------------------------------------------------
+//! \brief Test UntilFailure with infinite attempts.
+//! \details GIVEN an UntilFailure decorator with infinite attempts (0) and
+//!          a child that succeeds multiple times then fails, WHEN ticking,
+//!          THEN it keeps retrying until child fails.
+// ---------------------------------------------------------------------------
 TEST(TestUntilFailure, InfiniteAttempts)
 {
-    auto until = bt::Node::create<bt::UntilFailure>(0); // 0 = infinite
-    auto stateful = new StatefulAction({bt::Status::SUCCESS,
-                                        bt::Status::SUCCESS,
-                                        bt::Status::SUCCESS,
-                                        bt::Status::FAILURE});
-    until->setChild(std::unique_ptr<bt::Node>(stateful));
+    // GIVEN: UntilFailure with infinite attempts and child succeeding 3 times
+    auto until = bt::Node::create<bt::UntilFailure>(0);
+    auto sequence = bt::Node::create<SequenceAction>(
+        std::vector<bt::Status>{bt::Status::SUCCESS,
+                                bt::Status::SUCCESS,
+                                bt::Status::SUCCESS,
+                                bt::Status::FAILURE});
+    until->setChild(std::move(sequence));
 
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // First success
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // Second success
-    EXPECT_EQ(until->tick(), bt::Status::RUNNING); // Third success
-    EXPECT_EQ(until->tick(),
-              bt::Status::SUCCESS); // Finally failure -> returns SUCCESS
+    // WHEN/THEN: Keeps returning RUNNING while child succeeds
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(until->tick(), bt::Status::RUNNING);
+
+    // WHEN/THEN: Returns SUCCESS when child finally fails
+    EXPECT_EQ(until->tick(), bt::Status::SUCCESS);
     EXPECT_EQ(until->getAttempts(), 0);
 }

@@ -38,18 +38,34 @@ if (status == bt::Status::RUNNING) {
 
 Base class for all nodes in the behavior tree. All behavior tree nodes inherit from this class.
 
-**Public Methods:**
+### Public Methods
 
-- **Factory Method 🏭:**
+#### 🏭 Factory Method
 
 ```cpp
 template<typename T, typename... Args>
 static std::unique_ptr<T> create(Args&&... args)
 ```
 
-Creates a new node of type T with the provided constructor arguments.
+Creates a new node of type `T` with the provided constructor arguments.
 
-- **Execution 🏃:**
+#### 🔎 Type of node
+
+```cpp
+std::string const& type() const
+```
+
+Will return for example "Parallel" or "Sequence" ...
+
+#### 🛡️ Validation
+
+```cpp
+virtual bool isValid() const = 0
+```
+
+Pure virtual method that must be implemented by derived classes to validate node structure (e.g., composite has children, decorator has a child). To be called once after the tree has been correctly created (for example missing child nodes).
+
+#### 🏃 Execution
 
 ```cpp
 Status tick()
@@ -57,16 +73,15 @@ Status tick()
 
 Execute the node. This method implements the template method pattern, calling `onSetUp()`, `onRunning()`, and `onTearDown()` as appropriate.
 
-- **Status Access 🔎:**
+#### 🚦 Status Access
 
 ```cpp
 Status status() const
-std::string const& type() const
 ```
 
 Get the current execution status and node type identifier.
 
-- **State Management 🧹:**
+#### 🧹 State Management
 
 ```cpp
 void reset()
@@ -75,15 +90,7 @@ void halt()
 
 Reset the node to INVALID state (forces re-initialization on next tick) or halt a running node.
 
-- **Validation 🛡️:**
-
-```cpp
-virtual bool isValid() const = 0
-```
-
-Pure virtual method that must be implemented by derived classes to validate node structure (e.g., composite has children, decorator has a child). To be called once after the tree has been created.
-
-- **Visitor Pattern 👀:**
+#### 👀 Visitor Pattern
 
 ```cpp
 virtual void accept(ConstBehaviorTreeVisitor& visitor) const = 0
@@ -92,9 +99,9 @@ virtual void accept(BehaviorTreeVisitor& visitor) = 0
 
 Accept visitors for tree traversal and modification.
 
-**Protected Methods (for derived classes):**
+### Protected Methods (for derived classes):
 
-- **Port Management 🔌:**
+#### 🔌 Port Management
 
 ```cpp
 template<typename T>
@@ -108,7 +115,7 @@ void configure(std::unordered_map<std::string, std::string> const& config)
 
 Access blackboard values through ports (configured via YAML parameters).
 
-- **Lifecycle Hooks 🕰️:**
+#### 🕰️ Lifecycle Hooks
 
 ```cpp
 virtual Status onSetUp()          // Called once before first execution
@@ -119,7 +126,7 @@ virtual void onHalt()             // Called when halt() is invoked on running no
 
 ---
 
-## Tree 🌲
+## 🌲 Tree
 
 Container for a behavior tree instance. The Tree class owns the root node and manages execution and state.
 

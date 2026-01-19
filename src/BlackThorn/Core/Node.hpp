@@ -159,8 +159,9 @@ protected: // Port management
     std::optional<T> getInput(std::string const& p_port,
                               Blackboard const& p_bb) const
     {
-        auto key = m_config.find(p_port) != m_config.end() ? m_config.at(p_port)
-                                                           : p_port;
+        auto key = m_port_config.find(p_port) != m_port_config.end()
+                       ? m_port_config.at(p_port)
+                       : p_port;
         return VariableResolver::resolveValue<T>(key, p_bb);
     }
 
@@ -173,9 +174,9 @@ protected: // Port management
     template <typename T>
     void setOutput(std::string const& p_port, T&& p_value, Blackboard& p_bb)
     {
-        if (m_config.find(p_port) != m_config.end())
+        if (m_port_config.find(p_port) != m_port_config.end())
         {
-            std::string key = m_config.at(p_port);
+            std::string key = m_port_config.at(p_port);
             // Extract the key from ${key}
             std::regex pattern(R"(\$\{([^}]+)\})");
             std::smatch match;
@@ -196,7 +197,7 @@ protected: // Port management
     // ------------------------------------------------------------------------
     void configure(std::unordered_map<std::string, std::string> const& p_config)
     {
-        m_config = p_config;
+        m_port_config = p_config;
     }
 
 protected: // Lifecycle methods
@@ -273,11 +274,11 @@ protected:
     //! \brief The unique ID of the node (used for visualization protocol).
     uint32_t m_id = 0;
     //! \brief The type of the node.
-    std::string m_type = "unknown";
+    std::string m_type;
     //! \brief The status of the node.
     Status m_status = Status::INVALID;
-    //! \brief The configuration of the node.
-    std::unordered_map<std::string, std::string> m_config;
+    //! \brief The port configuration for this node (input/output parameters).
+    std::unordered_map<std::string, std::string> m_port_config;
 };
 
 } // namespace bt

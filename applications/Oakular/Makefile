@@ -1,5 +1,5 @@
 ###############################################################################
-## Oakular: Behavior tree editor library for BlackThorn.
+## Oakular: Behavior tree editor application using the Oakular library.
 ## Copyright 2025 Quentin Quadrat <lecrapouille@gmail.com>
 ##
 ## This file is part of BlackThorn.
@@ -18,19 +18,20 @@ M := $(P)/.makefile
 # Project definition
 #
 include $(P)/Makefile.common
-TARGET_NAME := oakular
-TARGET_DESCRIPTION := Oakular - Behavior tree editor library
+TARGET_NAME := Oakular
+TARGET_DESCRIPTION := Oakular - Behavior tree editor and real-time visualizer
 include $(M)/project/Makefile
 
 ###############################################################################
 # Inform Makefile where to find *.cpp files
-CURRENT_DIR := $(P)/src/Oakular
+CURRENT_DIR := $(P)/applications/Oakular
 LIBRARY_DIR := $(P)/src/BlackThorn
+OAKULAR_LIB_DIR := $(P)/src/Oakular
 
 ###############################################################################
 # Inform Makefile where to find header files
 #
-INCLUDES += $(CURRENT_DIR) $(P)/src $(THIRD_PARTIES_DIR)
+INCLUDES += $(CURRENT_DIR) $(P)/src $(THIRD_PARTIES_DIR) $(OAKULAR_LIB_DIR)
 
 ###############################################################################
 # Inform Makefile where to find *.cpp files
@@ -40,39 +41,29 @@ VPATH += $(CURRENT_DIR) $(LIBRARY_DIR)
 ###################################################
 # Set third-party libraries. Order matters: dependencies last
 #
+INTERNAL_LIBS += $(call internal-lib,oakular)
 INTERNAL_LIBS += $(call internal-lib,blackthorn)
 
 ###############################################################################
-# Make the list of library files to compile (no main.cpp)
+# Make the list of files to compile (application sources only)
 #
-LIB_FILES := $(CURRENT_DIR)/IDE.cpp
-LIB_FILES += $(CURRENT_DIR)/Renderer.cpp
-LIB_FILES += $(CURRENT_DIR)/Server.cpp
-LIB_FILES += $(CURRENT_DIR)/Application/Application.cpp
-LIB_FILES += $(CURRENT_DIR)/Application/DearImGuiApplication.cpp
+SRC_FILES := $(CURRENT_DIR)/main.cpp
+SRC_FILES += $(CURRENT_DIR)/OakularApp.cpp
 
 ###################################################
-# Set third party Dear ImGui
+# Set third party Dear ImGui (for headers)
 #
 IMGUI_DIR := $(THIRD_PARTIES_DIR)/imgui
 INCLUDES += $(IMGUI_DIR) $(IMGUI_DIR)/misc/cpp $(IMGUI_DIR)/backends
-VPATH += $(IMGUI_DIR) $(IMGUI_DIR)/misc/cpp $(IMGUI_DIR)/backends
-LIB_FILES += $(IMGUI_DIR)/imgui_widgets.cpp $(IMGUI_DIR)/imgui_draw.cpp
-LIB_FILES += $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui.cpp
-LIB_FILES += $(IMGUI_DIR)/misc/cpp/imgui_stdlib.cpp
-LIB_FILES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp
-LIB_FILES += $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 USER_CXXFLAGS += -Wno-conversion -Wno-arith-conversion -Wno-double-promotion -Wno-cast-qual
 USER_CXXFLAGS += -Wno-old-style-cast -Wno-sign-conversion -Wno-duplicated-branches
 USER_CXXFLAGS += -Wno-useless-cast -Wno-ctor-dtor-privacy -Wno-float-equal -Wno-null-dereference
 
 ###################################################
-# Set third party ImGuiFileDialog
+# Set third party ImGuiFileDialog (for headers)
 #
 IMGUIFILEDIALOG_DIR := $(THIRD_PARTIES_DIR)/ImGuiFileDialog
 INCLUDES += $(IMGUIFILEDIALOG_DIR)
-VPATH += $(IMGUIFILEDIALOG_DIR)
-LIB_FILES += $(IMGUIFILEDIALOG_DIR)/ImGuiFileDialog.cpp
 
 ###################################################
 # Set Libraries.

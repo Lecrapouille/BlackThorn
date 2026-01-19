@@ -46,8 +46,10 @@ public:
 
             if (auto value = p_bb.get<std::string>(key))
             {
-                const auto pos =
-                    static_cast<std::string::size_type>(match.position(0));
+                const auto offset = static_cast<std::string::size_type>(
+                    std::distance(result.cbegin(), search_start));
+                const auto pos = offset + static_cast<std::string::size_type>(
+                                              match.position(0));
                 const auto len =
                     static_cast<std::string::size_type>(match.length(0));
                 result.replace(pos, len, *value);

@@ -72,57 +72,12 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get a value with automatic conversion.
-    //! \param[in] key The key to get the value.
-    //! \return The value.
-    // ------------------------------------------------------------------------
-    template <typename T>
-    [[nodiscard]] std::optional<T> get(const Key& p_key) const
-    {
-        // Search locally
-        if (auto it = m_data.find(p_key); it != m_data.end())
-        {
-            try
-            {
-                return std::any_cast<T>(it->second);
-            }
-            catch (const std::bad_any_cast&)
-            {
-                // Type mismatch, fall through to parent
-            }
-        }
-
-        // Search in the parent
-        if (m_parent)
-        {
-            return m_parent->get<T>(p_key);
-        }
-
-        return std::nullopt;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Get a value with automatic conversion or a default value if not
-    //! found.
-    //! \param[in] p_key The key to get the value.
-    //! \param[in] p_default The default value to return if the key is not
-    //! found.
-    //! \return The value or the default value if the key is not found.
-    // ------------------------------------------------------------------------
-    template <typename T>
-    [[nodiscard]] T getOrDefault(const Key& p_key, T p_default = T()) const
-    {
-        if (auto value = get<T>(p_key))
-        {
-            return *value;
-        }
-        return p_default;
-    }
-
-    // ------------------------------------------------------------------------
     //! \brief Get the raw stored value without casting.
+    //! \details Searches locally first, then in the parent blackboard if not
+    //!          found. Returns the stored std::any as-is without type
+    //!          conversion.
     //! \param[in] p_key The key to get the value.
-    //! \return The stored std::any if present.
+    //! \return The stored std::any if present, std::nullopt otherwise.
     // ------------------------------------------------------------------------
     [[nodiscard]] std::optional<Value> raw(const Key& p_key) const
     {
@@ -137,6 +92,61 @@ public:
         }
 
         return std::nullopt;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Get a value with automatic type conversion.
+    //! \details Searches locally first. If the key is found but the type does
+    //!          not match, continues searching in the parent blackboard.
+    //!          If the key is not found locally, searches in the parent.
+    //! \param[in] p_key The key to get the value.
+    //! \return The converted value if found and type matches, std::nullopt
+    //!         otherwise.
+    // ------------------------------------------------------------------------
+    template <typename T>
+    [[nodiscard]] std::optional<T> get(const Key& p_key) const
+    {
+        // Search locally first
+        if (auto it = m_data.find(p_key); it != m_data.end())
+        {
+            try
+            {
+                return std::any_cast<T>(it->second);
+            }
+            catch (const std::bad_any_cast&)
+            {
+                // Type mismatch, fall through to parent
+            }
+        }
+
+        // Search in the parent if not found locally or type mismatch
+        if (m_parent)
+        {
+            return m_parent->get<T>(p_key);
+        }
+
+        return std::nullopt;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Get a value with automatic type conversion or a default value.
+    //! \details Uses get<T>() internally, so follows the same search strategy:
+    //!          searches locally first, then in parent if not found or type
+    //!          mismatch. Returns the default value if the key is not found
+    //!          or cannot be converted to type T.
+    //! \param[in] p_key The key to get the value.
+    //! \param[in] p_default The default value to return if the key is not
+    //!                      found or type conversion fails.
+    //! \return The converted value if found, otherwise the default value.
+    // ------------------------------------------------------------------------
+    template <typename T>
+    [[nodiscard]] T getOrDefault(const Key& p_key, T p_default = T()) const
+    {
+        if (auto value = get<T>(p_key))
+        {
+            return *value;
+        }
+        return p_default;
     }
 
     // ------------------------------------------------------------------------
@@ -204,6 +214,8 @@ public:
         }
         return result;
     }
+
+    // QQ: AFFICHER lES PARENTS
 
 private:
 

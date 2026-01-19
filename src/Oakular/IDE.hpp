@@ -1,6 +1,6 @@
 /**
  * @file IDE.hpp
- * @brief Oakular - Behavior tree editor with graphical node editing
+ * @brief Oakular - Behavior tree editor library with graphical node editing
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -31,10 +31,17 @@ class Node;
 class Renderer;
 
 // ****************************************************************************
-//! \brief brief Behavior tree editor application.
+//! \brief Behavior tree editor library core class.
 //!
-//! - Editor: Create and edit behavior trees graphically
-//! - Visualizer: Display runtime behavior trees from TCP clients
+//! Provides the core functionality for editing and visualizing behavior trees:
+//! - Tree management (nodes, links)
+//! - YAML serialization/deserialization
+//! - Auto-layout
+//! - Menu bar
+//! - TCP server for real-time visualization
+//!
+//! This class is designed to be extended by applications that need custom
+//! UI widgets. See OakularApp for the standalone application.
 // ****************************************************************************
 class IDE: public robotik::renderer::Application
 {
@@ -65,20 +72,6 @@ public:
         LeftToRight = 0, //!< Layout direction from left to right
         TopToBottom = 1  //!< Layout direction from top to bottom
     };
-
-    // ------------------------------------------------------------------------
-    //! \brief Constructor.
-    //! \param p_width Initial framebuffer width.
-    //! \param p_height Initial framebuffer height.
-    // ------------------------------------------------------------------------
-    explicit IDE(size_t const p_width, size_t const p_height);
-
-    // ------------------------------------------------------------------------
-    //! \brief Destructor.
-    // ------------------------------------------------------------------------
-    virtual ~IDE();
-
-private:
 
     // ------------------------------------------------------------------------
     //! \brief Link between nodes.
@@ -142,7 +135,19 @@ private:
         std::unordered_map<ID, ImVec2> node_positions;
     };
 
-private: // Editor mode
+    // ------------------------------------------------------------------------
+    //! \brief Constructor.
+    //! \param p_width Initial framebuffer width.
+    //! \param p_height Initial framebuffer height.
+    // ------------------------------------------------------------------------
+    explicit IDE(size_t const p_width, size_t const p_height);
+
+    // ------------------------------------------------------------------------
+    //! \brief Destructor.
+    // ------------------------------------------------------------------------
+    virtual ~IDE();
+
+protected: // Core functionality for derived classes
 
     // ------------------------------------------------------------------------
     //! \brief Reset the editor.
@@ -160,6 +165,7 @@ private: // Editor mode
     //! \param p_type The type of the node (e.g. "Action", "Condition",
     //! "Composite", "Decorator").
     //! \param p_name The name of the node.
+    //! \return The ID of the new node.
     // ------------------------------------------------------------------------
     int addNode(std::string const& p_type, std::string const& p_name);
 
@@ -178,6 +184,9 @@ private: // Editor mode
 
     // ------------------------------------------------------------------------
     //! \brief Create a link between two nodes.
+    //! \param p_from_node The source node ID.
+    //! \param p_to_node The target node ID.
+    // ------------------------------------------------------------------------
     void createLink(int const p_from_node, int const p_to_node);
 
     // ------------------------------------------------------------------------
@@ -210,7 +219,39 @@ private: // Editor mode
     // ------------------------------------------------------------------------
     void autoLayoutNodes();
 
-private: // Signals for synchronization
+    // ------------------------------------------------------------------------
+    //! \brief Draw the behavior tree using the Renderer.
+    // ------------------------------------------------------------------------
+    void drawBehaviorTree();
+
+    // ------------------------------------------------------------------------
+    //! \brief Toggle the expansion state of a SubTree node.
+    //! \param node_id The ID of the SubTree node.
+    // ------------------------------------------------------------------------
+    void toggleSubTreeExpansion(ID node_id);
+
+protected: // TreeView helpers
+
+    //! \brief Get the current tree view (creates one if needed).
+    TreeView& getCurrentTreeView();
+
+    //! \brief Find a tree view by its root ID.
+    TreeView* findTreeViewByRootId(ID root_id);
+
+    //! \brief Find a node by its ID.
+    Node* findNode(ID const p_id);
+
+    //! \brief Get the position of a node in the current view.
+    ImVec2 getNodePosition(ID node_id);
+
+    //! \brief Set the position of a node in the current view.
+    void setNodePosition(ID node_id, ImVec2 position);
+
+    //! \brief Collect all visible nodes from a root (handles SubTree
+    //! expansion).
+    void collectVisibleNodes(ID root_id, std::unordered_set<ID>& visible_nodes);
+
+protected: // Signals for synchronization
 
     //! \brief Signal emitted when a node is modified
     //! \param p_node_id The ID of the node that was modified
@@ -223,52 +264,22 @@ private: // Signals for synchronization
     //! \param p_link_id The ID of the link that was deleted
     robotik::Signal<ID> onLinkDeleted;
 
-private: // Override methods from Application
+protected: // Override methods from Application
 
     bool onSetup() override;
     void onTeardown() override;
     void onUpdate(float) override {}
     void onDrawMenuBar() override;
-    void onDrawMainPanel() override;
 
-private: // UI widgets
+    // Virtual so derived classes can override main panel rendering
+    void onDrawMainPanel() override {}
 
-    void showAddNodePalette();
-    void showNodeContextMenu();
-    void showNodeEditPopup();
-    void showQuitConfirmationPopup();
-    void showVisualizerPanel();
-    void showEditorTabs();
-    void drawTreeTab(const std::string& name, TreeView& view);
-    void showFileDialogs();
-    void handleEditModeInteractions();
-    void drawBehaviorTree();
-    void handleKeyboardShortcuts();
-    void showBlackboardPanel();
+private: // SubTree management (internal)
 
-private: // TreeView helpers
-
-    TreeView& getCurrentTreeView();
-    TreeView* findTreeViewByRootId(ID root_id);
-    Node* findNode(ID const p_id);
-
-    // Helper functions to get/set node positions for current view
-    ImVec2 getNodePosition(ID node_id);
-    void setNodePosition(ID node_id, ImVec2 position);
-
-    void layoutNodeRecursive(Node* p_node,
-                             float p_x,
-                             float p_y,
-                             float& p_max_extent);
-
-private: // SubTree management
-
-    void toggleSubTreeExpansion(ID node_id);
     bool expandSubTree(Node* subtree_node);
     bool collapseSubTree(Node* subtree_node);
-    void collectVisibleNodes(ID root_id, std::unordered_set<ID>& visible_nodes);
 
-private: // Tree conversion
+private: // Tree conversion (internal)
 
     void buildTreeFromNodes();
     void buildNodesFromTree(bt::Node& p_root);
@@ -278,6 +289,11 @@ private: // Tree conversion
                              bool is_subtree_definition = false);
     int parseYamlNode(const YAML::Node& p_yaml_node, ID p_parent_id);
 
+    void layoutNodeRecursive(Node* p_node,
+                             float p_x,
+                             float p_y,
+                             float& p_max_extent);
+
 private: // auto-increment unique identifiers
 
     inline ID getNextNodeId()
@@ -285,7 +301,7 @@ private: // auto-increment unique identifiers
         return m_unique_node_id++;
     }
 
-private:
+protected:
 
     //! \brief Mode: visualizer or editor.
     Mode m_mode = Mode::Creation;
@@ -314,6 +330,7 @@ private:
     bool m_request_tab_change = false;
     //! \brief Pending link creation from drag-drop
     ID m_pending_link_from_node = -1;
+    //! \brief Palettes and popups state
     struct ShowPalettes
     {
         //! \brief Show the node creation palette.
