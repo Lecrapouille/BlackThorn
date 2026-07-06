@@ -13,7 +13,7 @@
 
 #include "BlackThorn/Blackboard/Serializer.hpp"
 
-#include "BlackThorn/Blackboard/PortBinding.hpp"
+#include "BlackThorn/Blackboard/Resolver.hpp"
 #include "BlackThorn/Yaml/Document.hpp"
 
 #include <unordered_map>
