@@ -9,7 +9,7 @@
 #include "Renderer.hpp"
 #include "IDE.hpp"
 
-#include "BlackThorn/Blackboard/BlackboardDisplay.hpp"
+#include "BlackThorn/Blackboard/Blackboard.hpp"
 
 #include <imgui.h>
 
@@ -34,7 +34,7 @@ static constexpr size_t MAX_VALUE_DISPLAY_LENGTH = 15;
 static std::string getBlackboardValueString(bt::Blackboard const* blackboard,
                                             const std::string& key)
 {
-    std::string result = bt::getBlackboardDisplayValue(blackboard, key);
+    std::string result = bt::Blackboard::displayKey(blackboard, key);
     if (result.length() > MAX_VALUE_DISPLAY_LENGTH)
     {
         result = result.substr(0, MAX_VALUE_DISPLAY_LENGTH - 3) + "...";

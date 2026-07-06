@@ -26,7 +26,6 @@
 #include "BlackThorn/Builder/Builder.hpp"
 #include "BlackThorn/Builder/Exporter.hpp"
 #include "BlackThorn/Builder/Factory.hpp"
-#include "BlackThorn/Builder/TreeDocument.hpp"
 
 // Composite nodes
 #include "BlackThorn/Nodes/Composites/Parallels.hpp"

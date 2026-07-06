@@ -9,7 +9,7 @@
 #pragma once
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
-#include "BlackThorn/Blackboard/PortBinding.hpp"
+#include "BlackThorn/Blackboard/Resolver.hpp"
 #include "BlackThorn/Blackboard/Ports.hpp"
 #include "BlackThorn/Blackboard/Resolver.hpp"
 #include "BlackThorn/Visitors/Visitor.hpp"

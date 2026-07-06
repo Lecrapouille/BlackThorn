@@ -1,6 +1,41 @@
 /**
  * @file Document.hpp
- * @brief Fast YAML document wrapper (rapidyaml).
+ * @brief Generic YAML parsing layer (rapidyaml wrapper).
+ *
+ * BlackThorn splits YAML handling into two layers:
+ *
+ * \code
+ *   YamlDocument / YamlNode     ← generic YAML (this file)
+ *        ↓
+ *   TreeDocument / Builder    ← behavior-tree semantics (Builder.hpp)
+ * \endcode
+ *
+ * \ref YamlDocument owns the file buffer and parsed tree.
+ * \ref YamlNode is a non-owning view; it becomes invalid when the document
+ * is destroyed.
+ *
+ * Example — read a config file without building a behavior tree:
+ * \code
+ *   auto doc = bt::YamlDocument::parseFile("settings.yaml");
+ *   if (!doc) { return; }
+ *
+ *   if (doc->hasKey("timeout")) {
+ *       auto ms = doc->root().child("timeout").asInt();
+ *   }
+ *
+ *   doc->root().forEachMap([](std::string_view key, bt::YamlNode value) {
+ *       std::cout << key << " = " << value.scalar() << '\n';
+ *   });
+ * \endcode
+ *
+ * Example — inspect a behavior-tree node definition:
+ * \code
+ *   // YAML:  Sequence:
+ *   //           name: Root
+ *   //           children: [...]
+ *   auto [type, content] = node.typeEntry();
+ *   // type == "Sequence", content.hasKey("children") == true
+ * \endcode
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -26,7 +61,10 @@ namespace bt {
 class YamlDocument;
 
 // ****************************************************************************
-//! \brief Non-owning view into a parsed YAML node.
+//! \brief Non-owning view into a node of a \ref YamlDocument.
+//!
+//! \warning Do not store a YamlNode after its parent \ref YamlDocument is
+//!          destroyed.
 // ****************************************************************************
 class YamlNode
 {
@@ -51,7 +89,7 @@ public:
     [[nodiscard]] std::optional<double> asDouble() const;
     [[nodiscard]] std::optional<std::size_t> asSize() const;
 
-    //! \brief For typed nodes: returns {typeName, contentMap}.
+    //! \brief Extract \c {TypeName, content} from a single-key map node.
     [[nodiscard]] std::pair<std::string, YamlNode> typeEntry() const;
 
     void forEachMap(
@@ -72,7 +110,10 @@ private:
 };
 
 // ****************************************************************************
-//! \brief Owns parsed YAML text and exposes root-level access.
+//! \brief Owns parsed YAML text and exposes the document root.
+//!
+//! Use \ref TreeDocument when loading a behavior tree (sections
+//! \c BehaviorTree, \c Blackboard, \c SubTrees).
 // ****************************************************************************
 class YamlDocument
 {

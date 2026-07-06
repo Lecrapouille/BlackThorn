@@ -1,6 +1,18 @@
 /**
  * @file Blackboard.hpp
- * @brief Blackboard class for shared data storage in behavior trees.
+ * @brief Shared key-value storage for behavior tree nodes.
+ *
+ * A blackboard lets nodes exchange typed data without direct coupling.
+ * Child blackboards inherit keys from their parent when a local key is absent.
+ *
+ * \code
+ *   auto bb = std::make_shared<Blackboard>();
+ *   bb->set("health", 100);
+ *   bb->set("target", std::string("enemy"));
+ *
+ *   auto health = bb->get<int>("health");   // optional<int>{100}
+ *   auto missing = bb->get<int>("mana");    // nullopt
+ * \endcode
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -19,92 +31,39 @@
 
 namespace bt {
 
-// Forward declaration for friend class
 class BlackboardSerializer;
 
 // ****************************************************************************
-//! \brief Class representing a blackboard.
-//!
-//! A blackboard is a shared data storage mechanism used in behavior trees to
-//! enable communication and data sharing between different nodes. It acts as
-//! a key-value store where nodes can read and write data of any type.
-//!
-//! Key features:
-//! - Type-safe storage using std::any for values of any type.
-//! - Hierarchical structure: child blackboards can access parent data.
-//! - Automatic parent lookup when a key is not found locally.
-//! - Support for creating child blackboards with createChild().
-//!
-//! Usage example:
-//! \code
-//!   auto bb = std::make_shared<Blackboard>();
-//!   bb->set("health", 100);
-//!   bb->set("target", std::string("enemy"));
-//!   auto health = bb->get<int>("health");
-//! \endcode
+//! \brief Hierarchical typed key-value store shared by tree nodes.
 // ****************************************************************************
 class Blackboard final: public std::enable_shared_from_this<Blackboard>
 {
-    friend class BlackboardSerializer;
-
 public:
 
     using Key = std::string;
     using Value = BlackboardValue;
     using Ptr = std::shared_ptr<Blackboard>;
 
-    // ------------------------------------------------------------------------
-    //! \brief Constructor.
-    //! \param[in] p_parent The parent blackboard.
-    // ------------------------------------------------------------------------
     explicit Blackboard(Blackboard::Ptr p_parent = nullptr);
 
-    // ------------------------------------------------------------------------
-    //! \brief Set a value with generic type.
-    //! \param[in] key The key to set the value.
-    //! \param[in] value The value to set.
-    // ------------------------------------------------------------------------
     template <typename T>
-    void set(const Key& p_key, T&& p_value)
+    void set(Key const& p_key, T&& p_value)
     {
         m_data[p_key] = detail::toStoredValue(std::forward<T>(p_value));
         invalidateKey(p_key);
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Set a raw std::any value directly.
-    //! \param[in] p_key The key to set the value.
-    //! \param[in] p_value The std::any value to set.
-    // ------------------------------------------------------------------------
-    void setRaw(const Key& p_key, Value const& p_value)
+    void setRaw(Key const& p_key, Value const& p_value)
     {
         m_data[p_key] = p_value;
         invalidateKey(p_key);
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Get the raw stored value without casting.
-    //! \details Searches locally first, then in the parent blackboard if not
-    //!          found. Returns the stored std::any as-is without type
-    //!          conversion.
-    //! \param[in] p_key The key to get the value.
-    //! \return The stored std::any if present, std::nullopt otherwise.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] std::optional<Value> raw(const Key& p_key) const;
+    [[nodiscard]] std::optional<Value> raw(Key const& p_key) const;
 
-    // ------------------------------------------------------------------------
-    //! \brief Get a value with automatic type conversion.
-    //! \details Searches locally first. If the key is found but the type does
-    //!          not match, continues searching in the parent blackboard.
-    //!          If the key is not found locally, searches in the parent.
-    //! \param[in] p_key The key to get the value.
-    //! \return The converted value if found and type matches, std::nullopt
-    //!         otherwise.
-    // ------------------------------------------------------------------------
     template <typename T>
-    [[nodiscard]] std::optional<T> get(const Key& p_key) const
+    [[nodiscard]] std::optional<T> get(Key const& p_key) const
     {
-        // Search in the cache first
         if (auto cached = readFromCache<T>(p_key))
         {
             return cached;
@@ -119,7 +78,6 @@ public:
             }
         }
 
-        // Search in the parent if not found locally or type mismatch
         if (m_parent)
         {
             return m_parent->get<T>(p_key);
@@ -128,19 +86,8 @@ public:
         return std::nullopt;
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Get a value with automatic type conversion or a default value.
-    //! \details Uses get<T>() internally, so follows the same search strategy:
-    //!          searches locally first, then in parent if not found or type
-    //!          mismatch. Returns the default value if the key is not found
-    //!          or cannot be converted to type T.
-    //! \param[in] p_key The key to get the value.
-    //! \param[in] p_default The default value to return if the key is not
-    //!                      found or type conversion fails.
-    //! \return The converted value if found, otherwise the default value.
-    // ------------------------------------------------------------------------
     template <typename T>
-    [[nodiscard]] T getOrDefault(const Key& p_key, T p_default = T()) const
+    [[nodiscard]] T getOrDefault(Key const& p_key, T p_default = T()) const
     {
         if (auto value = get<T>(p_key))
         {
@@ -149,56 +96,28 @@ public:
         return p_default;
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Check if a key exists.
-    //! \param[in] p_key The key to check.
-    //! \return True if the key exists, false otherwise.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] bool has(const Key& p_key) const;
+    [[nodiscard]] bool has(Key const& p_key) const;
 
-    // ------------------------------------------------------------------------
-    //! \brief Remove a key.
-    //! \param[in] p_key The key to remove.
-    // ------------------------------------------------------------------------
-    void remove(const Key& p_key)
+    void remove(Key const& p_key)
     {
         m_data.erase(p_key);
         invalidateKey(p_key);
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Create a child blackboard.
-    //! \return A shared pointer to the child blackboard.
-    // ------------------------------------------------------------------------
     [[nodiscard]] std::shared_ptr<Blackboard> createChild()
     {
-        return std::make_shared<Blackboard>(this->shared_from_this());
+        return std::make_shared<Blackboard>(shared_from_this());
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Set port remapping info for display purposes.
-    //! \param[in] p_remapping Map of local key -> parent key for remapped
-    //! ports.
-    // ------------------------------------------------------------------------
     void setPortRemapping(
         std::unordered_map<std::string, std::string> const& p_remapping)
     {
         m_portRemapping = p_remapping;
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Dump the contents of the blackboard to a string.
-    //! \param[in] p_title Optional title to display.
-    //! \param[in] p_showParent If true, also dump parent blackboard contents.
-    //! \return String representation of the blackboard contents.
-    // ------------------------------------------------------------------------
     [[nodiscard]] std::string dump(std::string const& p_title = "Blackboard",
                                    bool p_showParent = false) const;
 
-    // ------------------------------------------------------------------------
-    //! \brief Get all keys stored in this blackboard (not including parent).
-    //! \return Vector of all keys.
-    // ------------------------------------------------------------------------
     [[nodiscard]] std::vector<Key> keys() const;
 
     void beginTick()
@@ -214,6 +133,13 @@ public:
     {
         m_read_cache.erase(p_key);
     }
+
+    //! \brief Format a stored value for logging or visualizers.
+    [[nodiscard]] static std::string displayValue(Value const& p_value);
+
+    //! \brief Read and format a key for visualizer port display.
+    [[nodiscard]] static std::string
+    displayKey(Blackboard const* p_blackboard, std::string const& p_key);
 
 private:
 
@@ -252,10 +178,11 @@ private:
         Value value;
     };
 
+    friend class BlackboardSerializer;
+
     std::unordered_map<Key, Value> m_data;
     std::shared_ptr<Blackboard> m_parent;
     std::unordered_map<std::string, std::string> m_portRemapping;
-
     mutable std::uint64_t m_tick_generation = 0;
     mutable std::unordered_map<Key, CacheEntry> m_read_cache;
 };

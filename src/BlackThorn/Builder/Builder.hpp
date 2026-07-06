@@ -1,109 +1,139 @@
 /**
  * @file Builder.hpp
- * @brief Builder class for creating behavior trees from YAML.
+ * @brief Behavior tree construction from YAML.
+ *
+ * Loading pipeline:
+ * \code
+ *   YamlDocument::parseFile()   ← raw YAML bytes (Yaml/Document.hpp)
+ *        ↓
+ *   TreeDocument::parseFile()   ← BT metadata (SubTrees, Blackboard flag)
+ *        ↓
+ *   TreeDocument::instantiate() ← C++ nodes (Sequence, Action, …)
+ *        ↓
+ *   Tree::tick()
+ * \endcode
+ *
+ * Convenience shortcut — parse + instantiate in one call:
+ * \code
+ *   auto result = bt::Builder::fromFile(factory, "Patrol.yaml", blackboard);
+ *   if (result.isSuccess()) {
+ *       result.getValue()->tick();
+ *   }
+ * \endcode
+ *
+ * Split parse / build (for benchmarks or caching):
+ * \code
+ *   auto doc = bt::TreeDocument::parseFile("Patrol.yaml");
+ *   auto tree = doc.getValue()->instantiate(factory, blackboard);
+ * \endcode
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
- * @see https://github.com/Lecrapouille/Robotik
  */
 
 #pragma once
 
 #include "BlackThorn/Builder/Factory.hpp"
-#include "BlackThorn/Builder/TreeDocument.hpp"
 #include "BlackThorn/Common/Return.hpp"
 #include "BlackThorn/Nodes/Tree.hpp"
 #include "BlackThorn/Yaml/Document.hpp"
 
+#include <memory>
+#include <string>
+#include <unordered_map>
+
 namespace bt {
 
 // ****************************************************************************
-//! \brief Builder class for creating behavior trees from YAML.
+//! \brief Named subtree definitions from the YAML \c SubTrees section.
+// ****************************************************************************
+struct SubTreeRegistry
+{
+    std::unordered_map<std::string, YamlNode> definitions;
+};
+
+// ****************************************************************************
+//! \brief Options controlling tree instantiation from a parsed document.
+// ****************************************************************************
+struct BuilderOptions
+{
+    bool mergeBlackboard = true;
+    bool assignVisualizerIds = true;
+    bool reserveNodes = true;
+    bool lazySubTrees = false;
+};
+
+// ****************************************************************************
+//! \brief Parsed behavior-tree YAML kept alive for lazy subtree builds.
 //!
-//! The builder is a utility class that is used to create behavior trees from
-//! a YAML file or a YAML text string:
-//!   - Create a behavior tree from a YAML file or a YAML text.
-//!   - Parse a YAML node into a behavior tree node.
-//!   - Support for builtin nodes (Sequence, Selector, Success, SubTree, ...).
-//!   - Support for custom nodes via NodeFactory.
-//!   - Support for blackboard population and \c ${key} resolution.
-//!   - Support for reusable subtrees (\c SubTrees section).
+//! Wraps a \ref YamlDocument and pre-indexes BT-specific sections.
+//! Call \ref instantiate() to create a runnable \ref Tree.
 //!
-//! Usage example 1: Builtin nodes only (from YAML text)
 //! \code
-//!   bt::NodeFactory factory;
-//!   std::string yaml = R"(
-//!   BehaviorTree:
-//!     Sequence:
-//!       children:
-//!         - Success:
-//!             name: OpenDoor
-//!         - Success:
-//!             name: Walk
-//!   )";
+//!   auto doc = bt::TreeDocument::parseFile("patrol.yaml");
+//!   if (!doc) { return; }
 //!
-//!   auto result = bt::Builder::fromText(factory, yaml);
-//!   if (result.isSuccess()) {
-//!       auto tree = result.moveValue();
-//!       tree->tick();
-//!   }
+//!   auto tree = doc.getValue()->instantiate(factory, blackboard);
+//!   if (tree) { tree.getValue()->tick(); }
 //! \endcode
-//!
-//! Usage example 2: Custom nodes + blackboard (from YAML file)
-//! \code
-//!   auto bb = std::make_shared<bt::Blackboard>();
-//!   factory.registerNode<PatrolAction>("Patrol", bb);
-//!   factory.registerNode<AttackAction>("Attack", bb);
-//!
-//!   auto loaded = bt::Builder::fromFile(factory, "Patrol.yaml", bb);
-//!   if (loaded.isSuccess()) {
-//!       auto tree = loaded.moveValue();
-//!       tree->setBlackboard(bb);
-//!       tree->tick();
-//!   }
-//! \endcode
+// ****************************************************************************
+class TreeDocument
+{
+public:
+
+    [[nodiscard]] static robotik::Return<std::shared_ptr<TreeDocument>>
+    parseFile(std::string const& p_path);
+
+    [[nodiscard]] static robotik::Return<std::shared_ptr<TreeDocument>>
+    parseText(std::string p_text);
+
+    [[nodiscard]] robotik::Return<Tree::Ptr>
+    instantiate(NodeFactory const& p_factory,
+                Blackboard::Ptr p_blackboard = nullptr,
+                BuilderOptions p_options = {}) const;
+
+    [[nodiscard]] YamlDocument const& yaml() const noexcept
+    {
+        return m_yaml;
+    }
+
+    [[nodiscard]] SubTreeRegistry const& subtrees() const noexcept
+    {
+        return m_subtrees;
+    }
+
+    [[nodiscard]] bool hasBlackboardSection() const noexcept
+    {
+        return m_hasBlackboard;
+    }
+
+private:
+
+    YamlDocument m_yaml;
+    SubTreeRegistry m_subtrees;
+    bool m_hasBlackboard = false;
+};
+
+// ****************************************************************************
+//! \brief Creates \ref Tree instances from YAML definitions.
 // ****************************************************************************
 class Builder
 {
 public:
 
-    // --------------------------------------------------------------------------
-    //! \brief Create a behavior tree from a YAML file.
-    //! \param[in] p_factory The factory to create custom nodes.
-    //! \param[in] p_file_path The path to the YAML file.
-    //! \param[in] p_blackboard Optional blackboard to populate from YAML.
-    //! \return Return object containing the tree or an error message.
-    // --------------------------------------------------------------------------
-    static robotik::Return<Tree::Ptr>
+    [[nodiscard]] static robotik::Return<Tree::Ptr>
     fromFile(NodeFactory const& p_factory,
              std::string const& p_file_path,
              Blackboard::Ptr p_blackboard = nullptr,
              BuilderOptions p_options = {});
 
-    // --------------------------------------------------------------------------
-    //! \brief Create a behavior tree from YAML text.
-    //! \param[in] p_factory The factory to create custom nodes.
-    //! \param[in] p_yaml_text The YAML text describing the tree.
-    //! \param[in] p_blackboard Optional blackboard to populate from YAML.
-    //! \return Return object containing the tree or an error message.
-    // --------------------------------------------------------------------------
-    static robotik::Return<Tree::Ptr>
+    [[nodiscard]] static robotik::Return<Tree::Ptr>
     fromText(NodeFactory const& p_factory,
              std::string const& p_yaml_text,
              Blackboard::Ptr p_blackboard = nullptr,
              BuilderOptions p_options = {});
 
-    // --------------------------------------------------------------------------
-    //! \brief Parse a YAML node into a behavior tree, returning the root index.
-    //! \param[in,out] p_tree The tree to populate with parsed nodes.
-    //! \param[in] p_factory The factory to create custom nodes.
-    //! \param[in] p_node The YAML node to parse.
-    //! \param[in] p_blackboard Optional blackboard for parameter resolution.
-    //! \param[in] p_subtrees Optional reusable subtree definitions.
-    //! \return Return object containing the root node index or an error
-    //! message.
-    // --------------------------------------------------------------------------
-    static robotik::Return<uint32_t>
+    [[nodiscard]] static robotik::Return<uint32_t>
     parseYAMLNode(Tree& p_tree,
                   NodeFactory const& p_factory,
                   YamlNode const& p_node,

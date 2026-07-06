@@ -1,6 +1,17 @@
 /**
  * @file BlackboardValue.hpp
- * @brief Typed storage for blackboard entries.
+ * @brief Typed storage variant for blackboard entries.
+ *
+ * Built-in YAML types map directly to variant alternatives.
+ * Custom C++ types are boxed inside \c std::any.
+ *
+ * \code
+ *   BlackboardValue health = 100;
+ *   BlackboardValue label = std::string("idle");
+ *
+ *   auto as_int = detail::valueAs<int>(health); // optional{100}
+ *   bb.set("custom", MyStruct{...});             // stored as std::any
+ * \endcode
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -22,7 +33,7 @@ namespace bt {
 using BlackboardMap = std::unordered_map<std::string, struct BlackboardValue>;
 
 // ****************************************************************************
-//! \brief Value stored in a blackboard entry.
+//! \brief Value stored in a single blackboard entry.
 // ****************************************************************************
 struct BlackboardValue : std::variant<std::monostate,
                                       int,
@@ -128,31 +139,13 @@ BlackboardValue toStoredValue(T&& p_value)
     {
         return std::forward<T>(p_value);
     }
-    else if constexpr (std::is_same_v<Decayed, int>)
-    {
-        return std::forward<T>(p_value);
-    }
-    else if constexpr (std::is_same_v<Decayed, double>)
-    {
-        return std::forward<T>(p_value);
-    }
-    else if constexpr (std::is_same_v<Decayed, float>)
-    {
-        return std::forward<T>(p_value);
-    }
-    else if constexpr (std::is_same_v<Decayed, bool>)
-    {
-        return std::forward<T>(p_value);
-    }
-    else if constexpr (std::is_same_v<Decayed, std::string>)
-    {
-        return std::forward<T>(p_value);
-    }
-    else if constexpr (std::is_same_v<Decayed, std::size_t>)
-    {
-        return std::forward<T>(p_value);
-    }
-    else if constexpr (std::is_same_v<Decayed, std::any>)
+    else if constexpr (std::is_same_v<Decayed, int> ||
+                       std::is_same_v<Decayed, double> ||
+                       std::is_same_v<Decayed, float> ||
+                       std::is_same_v<Decayed, bool> ||
+                       std::is_same_v<Decayed, std::string> ||
+                       std::is_same_v<Decayed, std::size_t> ||
+                       std::is_same_v<Decayed, std::any>)
     {
         return std::forward<T>(p_value);
     }
