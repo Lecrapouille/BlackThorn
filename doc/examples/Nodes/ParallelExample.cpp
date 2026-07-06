@@ -4,36 +4,42 @@
 
 #include <iostream>
 
-class MonitorBattery final: public bt::Action
+class MonitorBattery final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    MonitorBattery()
+        : CallbackLeaf([]() {
+              std::cout << "[Parallel] Battery OK\n";
+              return bt::Status::SUCCESS;
+          })
     {
-        std::cout << "[Parallel] Battery OK\n";
-        return bt::Status::SUCCESS;
     }
 };
 
-class MonitorObstacles final: public bt::Action
+class MonitorObstacles final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    MonitorObstacles()
+        : CallbackLeaf([]() {
+              std::cout << "[Parallel] Obstacles detected -> FAILURE\n";
+              return bt::Status::FAILURE;
+          })
     {
-        std::cout << "[Parallel] Obstacles detected -> FAILURE\n";
-        return bt::Status::FAILURE;
     }
 };
 
-class MonitorComms final: public bt::Action
+class MonitorComms final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    MonitorComms()
+        : CallbackLeaf([]() {
+              std::cout << "[Parallel] Comms nominal\n";
+              return bt::Status::SUCCESS;
+          })
     {
-        std::cout << "[Parallel] Comms nominal\n";
-        return bt::Status::SUCCESS;
     }
 };
 
@@ -41,13 +47,11 @@ int parallel_example()
 {
     using namespace bt;
 
-    auto parallel = Node::create<Parallel>(2, 2);
-    parallel->addChild(Node::create<MonitorBattery>());
-    parallel->addChild(Node::create<MonitorObstacles>());
-    parallel->addChild(Node::create<MonitorComms>());
-
     auto tree = Tree::create();
-    tree->setRoot(std::move(parallel));
+    auto& parallel = tree->createRoot<Parallel>(2, 2);
+    parallel.addChild<MonitorBattery>();
+    parallel.addChild<MonitorObstacles>();
+    parallel.addChild<MonitorComms>();
 
     Status status = tree->tick();
     std::cout << "[Parallel] Result: " << to_string(status) << '\n';

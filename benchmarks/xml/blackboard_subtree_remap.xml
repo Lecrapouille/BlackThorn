@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="RemapChain">
+      <Script code="payload_0:= 1; tag_0:= 'tag-0'; payload_1:= 2; tag_1:= 'tag-1'; payload_2:= 3; tag_2:= 'tag-2'; payload_3:= 4; tag_3:= 'tag-3'; payload_4:= 5; tag_4:= 'tag-4'; payload_5:= 6; tag_5:= 'tag-5'; payload_6:= 7; tag_6:= 'tag-6'; payload_7:= 8; tag_7:= 'tag-7'; payload_8:= 9; tag_8:= 'tag-8'; payload_9:= 10; tag_9:= 'tag-9'"/>
+      <SubTree ID="CopyPayload" name="CopyPayload0" a="{payload_0}" b="{payload_0}" label="{tag_0}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload1" a="{payload_1}" b="{payload_1}" label="{tag_1}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload2" a="{payload_2}" b="{payload_2}" label="{tag_2}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload3" a="{payload_3}" b="{payload_3}" label="{tag_3}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload4" a="{payload_4}" b="{payload_4}" label="{tag_4}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload5" a="{payload_5}" b="{payload_5}" label="{tag_5}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload6" a="{payload_6}" b="{payload_6}" label="{tag_6}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload7" a="{payload_7}" b="{payload_7}" label="{tag_7}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload8" a="{payload_8}" b="{payload_8}" label="{tag_8}"/>
+      <SubTree ID="CopyPayload" name="CopyPayload9" a="{payload_9}" b="{payload_9}" label="{tag_9}"/>
+      <AlwaysSuccess name="Done"/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="CopyPayload">
+    <Sequence name="CopyPayload">
+      <ReadPorts name="ReadPayload" a="{a}" b="{b}" label="{label}"/>
+      <AlwaysSuccess name="Copied"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

@@ -5,3 +5,7 @@ ocornut/imgui@docking
 ### File Dialog for Dear ImGui
 ### License: MIT
 aiekick/ImGuiFileDialog
+
+### Third-party libraries for BlackThorn benchmarks.
+### License: MIT
+BehaviorTree/BehaviorTree.CPP@4.9.0

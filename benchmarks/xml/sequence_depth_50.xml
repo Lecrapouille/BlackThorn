@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="Root">
+      <Sequence name="Level1">
+        <Sequence name="Level2">
+          <Sequence name="Level3">
+            <Sequence name="Level4">
+              <Sequence name="Level5">
+                <Sequence name="Level6">
+                  <Sequence name="Level7">
+                    <Sequence name="Level8">
+                      <Sequence name="Level9">
+                        <Sequence name="Level10">
+                          <Sequence name="Level11">
+                            <Sequence name="Level12">
+                              <Sequence name="Level13">
+                                <Sequence name="Level14">
+                                  <Sequence name="Level15">
+                                    <Sequence name="Level16">
+                                      <Sequence name="Level17">
+                                        <Sequence name="Level18">
+                                          <Sequence name="Level19">
+                                            <Sequence name="Level20">
+                                              <Sequence name="Level21">
+                                                <Sequence name="Level22">
+                                                  <Sequence name="Level23">
+                                                    <Sequence name="Level24">
+                                                      <Sequence name="Level25">
+                                                        <Sequence name="Level26">
+                                                          <Sequence name="Level27">
+                                                            <Sequence name="Level28">
+                                                              <Sequence name="Level29">
+                                                                <Sequence name="Level30">
+                                                                  <Sequence name="Level31">
+                                                                    <Sequence name="Level32">
+                                                                      <Sequence name="Level33">
+                                                                        <Sequence name="Level34">
+                                                                          <Sequence name="Level35">
+                                                                            <Sequence name="Level36">
+                                                                              <Sequence name="Level37">
+                                                                                <Sequence name="Level38">
+                                                                                  <Sequence name="Level39">
+                                                                                    <Sequence name="Level40">
+                                                                                      <Sequence name="Level41">
+                                                                                        <Sequence name="Level42">
+                                                                                          <Sequence name="Level43">
+                                                                                            <Sequence name="Level44">
+                                                                                              <Sequence name="Level45">
+                                                                                                <Sequence name="Level46">
+                                                                                                  <Sequence name="Level47">
+                                                                                                    <Sequence name="Level48">
+                                                                                                      <AlwaysSuccess name="Leaf"/>
+                                                                                                    </Sequence>
+                                                                                                  </Sequence>
+                                                                                                </Sequence>
+                                                                                              </Sequence>
+                                                                                            </Sequence>
+                                                                                          </Sequence>
+                                                                                        </Sequence>
+                                                                                      </Sequence>
+                                                                                    </Sequence>
+                                                                                  </Sequence>
+                                                                                </Sequence>
+                                                                              </Sequence>
+                                                                            </Sequence>
+                                                                          </Sequence>
+                                                                        </Sequence>
+                                                                      </Sequence>
+                                                                    </Sequence>
+                                                                  </Sequence>
+                                                                </Sequence>
+                                                              </Sequence>
+                                                            </Sequence>
+                                                          </Sequence>
+                                                        </Sequence>
+                                                      </Sequence>
+                                                    </Sequence>
+                                                  </Sequence>
+                                                </Sequence>
+                                              </Sequence>
+                                            </Sequence>
+                                          </Sequence>
+                                        </Sequence>
+                                      </Sequence>
+                                    </Sequence>
+                                  </Sequence>
+                                </Sequence>
+                              </Sequence>
+                            </Sequence>
+                          </Sequence>
+                        </Sequence>
+                      </Sequence>
+                    </Sequence>
+                  </Sequence>
+                </Sequence>
+              </Sequence>
+            </Sequence>
+          </Sequence>
+        </Sequence>
+      </Sequence>
+    </Sequence>
+  </BehaviorTree>
+</root>

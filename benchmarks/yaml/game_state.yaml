@@ -1,0 +1,59 @@
+# Benchmark baseline: realistic GameState tree (from doc/examples/GameState).
+
+Blackboard:
+  game_state:
+    score: 1280
+    time: 42.5
+    enemies:
+      - name: "Drone-A"
+        health: 35
+        position:
+          x: 0.0
+          y: 5.0
+          z: 1.5
+      - name: "Drone-B"
+        health: 20
+        position:
+          x: -3.5
+          y: 2.25
+          z: 0.0
+
+  primary_enemy:
+    name: "Drone-A"
+    health: 35
+    position:
+      x: 0.0
+      y: 5.0
+      z: 1.5
+
+  selected_enemy: ${primary_enemy}
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: MissionRoot
+    children:
+      - SubTree:
+          _id: 2
+          name: EvaluateEnemies
+          reference: EvaluateEnemies
+      - Success:
+          _id: 3
+          name: MissionComplete
+
+SubTrees:
+  EvaluateEnemies:
+    Sequence:
+      _id: 4
+      name: EvaluateEnemies
+      children:
+        - Action:
+            _id: 5
+            name: LoadGameState
+            parameters:
+              snapshot: ${game_state}
+        - Action:
+            _id: 6
+            name: ChoosePrimaryEnemy
+            parameters:
+              candidate: ${selected_enemy}

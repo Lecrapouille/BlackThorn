@@ -6,90 +6,89 @@
 
 namespace bt::examples {
 
-class LoadGameState final: public Action
+class LoadGameState final: public CallbackLeaf
 {
 public:
 
     explicit LoadGameState(Blackboard::Ptr blackboard)
+        : CallbackLeaf(
+              [bb = blackboard]() {
+                  if (!bb)
+                  {
+                      std::cout << "[LoadGameState] Blackboard unavailable"
+                                << std::endl;
+                      return Status::FAILURE;
+                  }
+
+                  if (!bb->has("snapshot"))
+                  {
+                      std::cout << "[LoadGameState] Missing 'snapshot' parameter"
+                                << std::endl;
+                      if (bb->has("game_state"))
+                      {
+                          std::cout << "[LoadGameState] Debug: 'game_state' "
+                                       "found in blackboard"
+                                    << std::endl;
+                      }
+                      else
+                      {
+                          std::cout << "[LoadGameState] Debug: 'game_state' "
+                                       "NOT found in blackboard"
+                                    << std::endl;
+                      }
+                      return Status::FAILURE;
+                  }
+
+                  auto snapshot = bb->get<AnyMap>("snapshot");
+                  if (!snapshot)
+                  {
+                      std::cout << "[LoadGameState] 'snapshot' exists but is "
+                                   "not an AnyMap"
+                                << std::endl;
+                      return Status::FAILURE;
+                  }
+
+                  std::cout << "[LoadGameState] Snapshot content:" << std::endl;
+                  printAny(*snapshot, 2);
+                  return Status::SUCCESS;
+              },
+              std::move(blackboard))
     {
-        m_blackboard = std::move(blackboard);
-    }
-
-    [[nodiscard]] Status onRunning() override
-    {
-        if (!m_blackboard)
-        {
-            std::cout << "[LoadGameState] Blackboard unavailable" << std::endl;
-            return Status::FAILURE;
-        }
-
-        // Debug: check if snapshot exists
-        if (!m_blackboard->has("snapshot"))
-        {
-            std::cout << "[LoadGameState] Missing 'snapshot' parameter"
-                      << std::endl;
-            // Debug: check if game_state exists in parent
-            if (m_blackboard->has("game_state"))
-            {
-                std::cout
-                    << "[LoadGameState] Debug: 'game_state' found in blackboard"
-                    << std::endl;
-            }
-            else
-            {
-                std::cout << "[LoadGameState] Debug: 'game_state' NOT found in "
-                             "blackboard"
-                          << std::endl;
-            }
-            return Status::FAILURE;
-        }
-
-        auto snapshot = m_blackboard->get<AnyMap>("snapshot");
-        if (!snapshot)
-        {
-            std::cout
-                << "[LoadGameState] 'snapshot' exists but is not an AnyMap"
-                << std::endl;
-            return Status::FAILURE;
-        }
-
-        std::cout << "[LoadGameState] Snapshot content:" << std::endl;
-        printAny(*snapshot, 2);
-        return Status::SUCCESS;
     }
 };
 
-class ChoosePrimaryEnemy final: public Action
+class ChoosePrimaryEnemy final: public CallbackLeaf
 {
 public:
 
     explicit ChoosePrimaryEnemy(Blackboard::Ptr blackboard)
+        : CallbackLeaf(
+              [bb = blackboard]() {
+                  if (!bb)
+                  {
+                      std::cout << "[ChoosePrimaryEnemy] Blackboard unavailable"
+                                << std::endl;
+                      return Status::FAILURE;
+                  }
+
+                  auto candidate = bb->get<AnyMap>("candidate");
+                  if (!candidate)
+                  {
+                      std::cout
+                          << "[ChoosePrimaryEnemy] Missing 'candidate' parameter"
+                          << std::endl;
+                      return Status::FAILURE;
+                  }
+
+                  bb->set("engaged_enemy", *candidate);
+
+                  std::cout << "[ChoosePrimaryEnemy] Evaluating candidate:"
+                            << std::endl;
+                  printAny(*candidate, 2);
+                  return Status::SUCCESS;
+              },
+              std::move(blackboard))
     {
-        m_blackboard = std::move(blackboard);
-    }
-
-    [[nodiscard]] Status onRunning() override
-    {
-        if (!m_blackboard)
-        {
-            std::cout << "[ChoosePrimaryEnemy] Blackboard unavailable"
-                      << std::endl;
-            return Status::FAILURE;
-        }
-
-        auto candidate = m_blackboard->get<AnyMap>("candidate");
-        if (!candidate)
-        {
-            std::cout << "[ChoosePrimaryEnemy] Missing 'candidate' parameter"
-                      << std::endl;
-            return Status::FAILURE;
-        }
-
-        m_blackboard->set("engaged_enemy", *candidate);
-
-        std::cout << "[ChoosePrimaryEnemy] Evaluating candidate:" << std::endl;
-        printAny(*candidate, 2);
-        return Status::SUCCESS;
     }
 };
 
@@ -116,7 +115,6 @@ int main()
     auto tree = result.moveValue();
     tree->setBlackboard(blackboard);
 
-    // Connect to visualizer (optional - will work without it)
     auto visualizer = std::make_shared<VisualizerClient>();
     if (visualizer->connect("localhost", 8888))
     {

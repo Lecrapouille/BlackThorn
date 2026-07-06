@@ -4,25 +4,24 @@
 
 #include <iostream>
 
-class ReportEnemy final: public bt::Action
+class ReportEnemy final: public bt::CallbackLeaf
 {
 public:
 
     explicit ReportEnemy(bt::Blackboard::Ptr blackboard)
+        : CallbackLeaf(
+              [bb = blackboard]() {
+                  auto target = bb->get<std::string>("target");
+                  if (!target)
+                  {
+                      std::cout << "[Leaf] No target assigned\n";
+                      return bt::Status::FAILURE;
+                  }
+                  std::cout << "[Leaf] Engaging " << *target << '\n';
+                  return bt::Status::SUCCESS;
+              },
+              std::move(blackboard))
     {
-        m_blackboard = std::move(blackboard);
-    }
-
-    bt::Status onRunning() override
-    {
-        auto target = m_blackboard->get<std::string>("target");
-        if (!target)
-        {
-            std::cout << "[Leaf] No target assigned\n";
-            return bt::Status::FAILURE;
-        }
-        std::cout << "[Leaf] Engaging " << *target << '\n';
-        return bt::Status::SUCCESS;
     }
 };
 
@@ -34,21 +33,15 @@ int leaf_example()
     blackboard->set<int>("battery", 75);
     blackboard->set<std::string>("target", "Drone-A");
 
-    auto condition = Node::create<Condition>(
+    auto tree = Tree::create();
+    tree->setBlackboard(blackboard);
+    auto& sequence = tree->createRoot<Sequence>();
+    sequence.addChild<Condition>(
         Condition::Function([bb = blackboard]() {
             return bb->get<int>("battery").value_or(0) > 20;
         }),
         blackboard);
-
-    auto report = Node::create<ReportEnemy>(blackboard);
-
-    auto sequence = Node::create<Sequence>();
-    sequence->addChild(std::move(condition));
-    sequence->addChild(std::move(report));
-
-    auto tree = Tree::create();
-    tree->setBlackboard(blackboard);
-    tree->setRoot(std::move(sequence));
+    sequence.addChild<ReportEnemy>(blackboard);
 
     Status status = tree->tick();
     std::cout << "[Leaf] Result: " << to_string(status) << '\n';

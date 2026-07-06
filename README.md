@@ -14,10 +14,16 @@ BlackThorn is a wordplay on "BT" (behavior tree) and serves as the name of the b
 
 ## 💻 Quick Start
 
-- Prerequisites:
+- Prerequisites Ubuntu:
 
 ```bash
 sudo apt-get install libyaml-cpp-dev
+```
+
+- Prerequisites Fedora:
+
+```bash
+sudo dnf install yaml-cpp-devel
 ```
 
 - Download and compilation:

@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="WriteChain">
+      <SetBlackboard output_key="step_0" value="0"/>
+      <SetBlackboard output_key="step_1" value="1"/>
+      <SetBlackboard output_key="step_2" value="2"/>
+      <SetBlackboard output_key="step_3" value="3"/>
+      <SetBlackboard output_key="step_4" value="4"/>
+      <SetBlackboard output_key="step_5" value="5"/>
+      <SetBlackboard output_key="step_6" value="6"/>
+      <SetBlackboard output_key="step_7" value="7"/>
+      <SetBlackboard output_key="step_8" value="8"/>
+      <SetBlackboard output_key="step_9" value="9"/>
+      <SetBlackboard output_key="step_10" value="10"/>
+      <SetBlackboard output_key="step_11" value="11"/>
+      <SetBlackboard output_key="step_12" value="12"/>
+      <SetBlackboard output_key="step_13" value="13"/>
+      <SetBlackboard output_key="step_14" value="14"/>
+      <SetBlackboard output_key="step_15" value="15"/>
+      <SetBlackboard output_key="step_16" value="16"/>
+      <SetBlackboard output_key="step_17" value="17"/>
+      <SetBlackboard output_key="step_18" value="18"/>
+      <SetBlackboard output_key="step_19" value="19"/>
+      <SetBlackboard output_key="step_20" value="20"/>
+      <SetBlackboard output_key="step_21" value="21"/>
+      <SetBlackboard output_key="step_22" value="22"/>
+      <SetBlackboard output_key="step_23" value="23"/>
+      <SetBlackboard output_key="step_24" value="24"/>
+      <SetBlackboard output_key="step_25" value="25"/>
+      <SetBlackboard output_key="step_26" value="26"/>
+      <SetBlackboard output_key="step_27" value="27"/>
+      <SetBlackboard output_key="step_28" value="28"/>
+      <SetBlackboard output_key="step_29" value="29"/>
+      <SetBlackboard output_key="step_30" value="30"/>
+      <SetBlackboard output_key="step_31" value="31"/>
+      <SetBlackboard output_key="step_32" value="32"/>
+      <SetBlackboard output_key="step_33" value="33"/>
+      <SetBlackboard output_key="step_34" value="34"/>
+      <SetBlackboard output_key="step_35" value="35"/>
+      <SetBlackboard output_key="step_36" value="36"/>
+      <SetBlackboard output_key="step_37" value="37"/>
+      <SetBlackboard output_key="step_38" value="38"/>
+      <SetBlackboard output_key="step_39" value="39"/>
+      <AlwaysSuccess name="Done"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

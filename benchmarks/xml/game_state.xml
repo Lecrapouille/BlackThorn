@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="MissionRoot">
+      <SubTree ID="EvaluateEnemies" name="EvaluateEnemies"/>
+      <AlwaysSuccess name="MissionComplete"/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="EvaluateEnemies">
+    <Sequence name="EvaluateEnemies">
+      <Action ID="LoadGameState" name="LoadGameState"/>
+      <Action ID="ChoosePrimaryEnemy" name="ChoosePrimaryEnemy"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

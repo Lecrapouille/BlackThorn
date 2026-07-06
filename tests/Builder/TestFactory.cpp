@@ -17,6 +17,16 @@
 
 #include "BlackThorn/BlackThorn.hpp"
 
+namespace {
+
+bt::Node& adoptCreatedNode(bt::Tree& p_tree, std::unique_ptr<bt::Node> p_node)
+{
+    uint32_t index = p_tree.adoptNode(std::move(p_node));
+    return p_tree.node(index);
+}
+
+} // anonymous namespace
+
 // ===========================================================================
 // bt::NodeFactory Tests
 // ===========================================================================
@@ -27,9 +37,11 @@ TEST(TestNodeFactory, RegisterAndCreateNode)
 
     factory.registerNode<bt::Success>("MySuccess");
 
+    auto tree = bt::Tree::create();
     auto node = factory.createNode("MySuccess");
     ASSERT_NE(node, nullptr);
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(node)).tick(),
+              bt::Status::SUCCESS);
 }
 
 TEST(TestNodeFactory, CreateNonExistentNode)
@@ -59,10 +71,12 @@ TEST(TestNodeFactory, RegisterAction)
         return bt::Status::SUCCESS;
     });
 
+    auto tree = bt::Tree::create();
     auto node = factory.createNode("CountAction");
     ASSERT_NE(node, nullptr);
 
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(node)).tick(),
+              bt::Status::SUCCESS);
     EXPECT_EQ(counter, 1);
 }
 
@@ -81,9 +95,11 @@ TEST(TestNodeFactory, RegisterActionWithBlackboard)
         },
         bb);
 
+    auto tree = bt::Tree::create();
     auto node = factory.createNode("BBAction");
     ASSERT_NE(node, nullptr);
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(node)).tick(),
+              bt::Status::SUCCESS);
 }
 
 TEST(TestNodeFactory, RegisterCondition)
@@ -93,13 +109,15 @@ TEST(TestNodeFactory, RegisterCondition)
 
     factory.registerCondition("TestCondition", [&flag]() { return flag; });
 
+    auto tree = bt::Tree::create();
     auto node = factory.createNode("TestCondition");
     ASSERT_NE(node, nullptr);
 
-    EXPECT_EQ(node->tick(), bt::Status::FAILURE);
+    auto& adopted = adoptCreatedNode(*tree, std::move(node));
+    EXPECT_EQ(adopted.tick(), bt::Status::FAILURE);
 
     flag = true;
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(adopted.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestNodeFactory, RegisterConditionWithBlackboard)
@@ -113,9 +131,11 @@ TEST(TestNodeFactory, RegisterConditionWithBlackboard)
         [bb]() { return bb->get<bool>("enabled").value_or(false); },
         bb);
 
+    auto tree = bt::Tree::create();
     auto node = factory.createNode("BBCondition");
     ASSERT_NE(node, nullptr);
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(node)).tick(),
+              bt::Status::SUCCESS);
 }
 
 TEST(TestNodeFactory, RegisterNodeWithBlackboard)
@@ -133,9 +153,11 @@ TEST(TestNodeFactory, RegisterNodeWithBlackboard)
         },
         bb);
 
+    auto tree = bt::Tree::create();
     auto node = factory.createNode("BBAction");
     ASSERT_NE(node, nullptr);
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(node)).tick(),
+              bt::Status::SUCCESS);
 }
 
 TEST(TestNodeFactory, MultipleRegistrations)
@@ -150,6 +172,7 @@ TEST(TestNodeFactory, MultipleRegistrations)
     EXPECT_TRUE(factory.hasNode("FailureNode"));
     EXPECT_TRUE(factory.hasNode("ActionNode"));
 
+    auto tree = bt::Tree::create();
     auto success = factory.createNode("SuccessNode");
     auto failure = factory.createNode("FailureNode");
     auto action = factory.createNode("ActionNode");
@@ -158,7 +181,10 @@ TEST(TestNodeFactory, MultipleRegistrations)
     ASSERT_NE(failure, nullptr);
     ASSERT_NE(action, nullptr);
 
-    EXPECT_EQ(success->tick(), bt::Status::SUCCESS);
-    EXPECT_EQ(failure->tick(), bt::Status::FAILURE);
-    EXPECT_EQ(action->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(success)).tick(),
+              bt::Status::SUCCESS);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(failure)).tick(),
+              bt::Status::FAILURE);
+    EXPECT_EQ(adoptCreatedNode(*tree, std::move(action)).tick(),
+              bt::Status::SUCCESS);
 }

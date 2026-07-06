@@ -1,0 +1,28 @@
+#!/bin/bash -e
+# Build BehaviorTree.CPP as a static library for benchmarks.
+
+BTCPP_DIR="BehaviorTree.CPP"
+LEXY_TYPO="3rdparty/lexy/include/lexy/input_location.hpp"
+
+if [ ! -d "$BTCPP_DIR" ]; then
+    echo "Missing external/$BTCPP_DIR (run: make download-external-libs)"
+    exit 1
+fi
+
+# Fix typo in bundled lexy (GCC 16+).
+if grep -q "_colum_nr" "$BTCPP_DIR/$LEXY_TYPO" 2>/dev/null; then
+    sed -i 's/_colum_nr/_column_nr/g' "$BTCPP_DIR/$LEXY_TYPO"
+fi
+
+cmake -S "$BTCPP_DIR" -B "$BTCPP_DIR/build" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBTCPP_SHARED_LIBS=OFF \
+    -DBTCPP_BUILD_TOOLS=OFF \
+    -DBTCPP_EXAMPLES=OFF \
+    -DBTCPP_UNIT_TESTS=OFF \
+    -DBTCPP_GROOT_INTERFACE=OFF \
+    -DBTCPP_SQLITE_LOGGING=OFF
+
+cmake --build "$BTCPP_DIR/build" --target behaviortree_cpp -j"${NPROC:-$(nproc)}"
+
+echo "Built external/$BTCPP_DIR/build/libbehaviortree_cpp.a"

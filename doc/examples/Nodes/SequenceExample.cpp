@@ -4,36 +4,42 @@
 
 #include <iostream>
 
-class OpenDoor final: public bt::Action
+class OpenDoor final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    OpenDoor()
+        : CallbackLeaf([]() {
+              std::cout << "[Sequence] Opening door\n";
+              return bt::Status::SUCCESS;
+          })
     {
-        std::cout << "[Sequence] Opening door\n";
-        return bt::Status::SUCCESS;
     }
 };
 
-class WalkThrough final: public bt::Action
+class WalkThrough final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    WalkThrough()
+        : CallbackLeaf([]() {
+              std::cout << "[Sequence] Walking through doorway\n";
+              return bt::Status::SUCCESS;
+          })
     {
-        std::cout << "[Sequence] Walking through doorway\n";
-        return bt::Status::SUCCESS;
     }
 };
 
-class CloseDoor final: public bt::Action
+class CloseDoor final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    CloseDoor()
+        : CallbackLeaf([]() {
+              std::cout << "[Sequence] Closing door\n";
+              return bt::Status::SUCCESS;
+          })
     {
-        std::cout << "[Sequence] Closing door\n";
-        return bt::Status::SUCCESS;
     }
 };
 
@@ -41,13 +47,11 @@ int sequence_example()
 {
     using namespace bt;
 
-    auto sequence = Node::create<Sequence>();
-    sequence->addChild(Node::create<OpenDoor>());
-    sequence->addChild(Node::create<WalkThrough>());
-    sequence->addChild(Node::create<CloseDoor>());
-
     auto tree = Tree::create();
-    tree->setRoot(std::move(sequence));
+    auto& sequence = tree->createRoot<Sequence>();
+    sequence.addChild<OpenDoor>();
+    sequence.addChild<WalkThrough>();
+    sequence.addChild<CloseDoor>();
 
     Status status = tree->tick();
     std::cout << "[Sequence] Result: " << to_string(status) << '\n';
