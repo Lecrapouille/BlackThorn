@@ -21,6 +21,7 @@ TARGET_NAME := $(PROJECT_NAME)-UnitTest
 TARGET_DESCRIPTION := Unit tests for $(PROJECT_NAME)
 COMPILATION_MODE = test
 include $(M)/project/Makefile
+include $(P)/src/BlackThorn/BlackThorn.deps.mk
 
 ###################################################
 # Inform Makefile where to find *.cpp files

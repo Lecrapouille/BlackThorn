@@ -1,5 +1,23 @@
 #!/bin/bash -e
-# Build BehaviorTree.CPP as a static library for benchmarks.
+# Build third-party libraries for BlackThorn.
+
+RYML_DIR="rapidyaml"
+if [ -d "$RYML_DIR" ]; then
+    if [ ! -f "$RYML_DIR/ext/c4core/CMakeLists.txt" ]; then
+        (cd "$RYML_DIR" && git submodule update --init --recursive)
+    fi
+
+    cmake -S "$RYML_DIR" -B "$RYML_DIR/build" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DRYML_BUILD_SHARED_LIBS=OFF \
+        -DRYML_BUILD_TESTS=OFF \
+        -DRYML_BUILD_BENCHMARKS=OFF \
+        -DRYML_BUILD_API=OFF
+
+    cmake --build "$RYML_DIR/build" --target ryml -j"${NPROC:-$(nproc)}"
+    echo "Built external/$RYML_DIR/build/libryml.a"
+fi
 
 BTCPP_DIR="BehaviorTree.CPP"
 LEXY_TYPO="3rdparty/lexy/include/lexy/input_location.hpp"

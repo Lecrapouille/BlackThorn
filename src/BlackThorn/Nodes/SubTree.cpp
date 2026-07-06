@@ -20,10 +20,29 @@ SubTreeNode::SubTreeNode(std::string p_reference, Tree::Ptr p_tree)
 {
 }
 
+SubTreeNode::SubTreeNode(std::string p_reference,
+                         std::function<Tree::Ptr()> p_builder)
+    : m_reference(std::move(p_reference)), m_builder(std::move(p_builder))
+{
+}
+
+void SubTreeNode::ensureBuilt() const
+{
+    if (m_subtree == nullptr && m_builder)
+    {
+        m_subtree = m_builder();
+        m_builder = {};
+    }
+}
+
 bool SubTreeNode::isValidCustom() const
 {
-    return (m_subtree != nullptr) && m_subtree->hasRoot() &&
-           m_subtree->isValid();
+    ensureBuilt();
+    if (m_subtree == nullptr)
+    {
+        return false;
+    }
+    return m_subtree->hasRoot() && m_subtree->isValid();
 }
 
 void SubTreeNode::accept(ConstBehaviorTreeVisitor& p_visitor) const
@@ -38,6 +57,7 @@ void SubTreeNode::accept(BehaviorTreeVisitor& p_visitor)
 
 Blackboard::Ptr SubTreeNode::blackboard() const
 {
+    ensureBuilt();
     return m_subtree ? m_subtree->blackboard() : nullptr;
 }
 

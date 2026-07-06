@@ -15,6 +15,7 @@ TARGET_NAME := $(PROJECT_NAME)-Benchmark
 TARGET_DESCRIPTION := Comparative benchmarks for $(PROJECT_NAME)
 COMPILATION_MODE := release
 include $(M)/project/Makefile
+include $(P)/src/BlackThorn/BlackThorn.deps.mk
 
 CURRENT_DIR := $(P)/benchmarks
 BTCPP_DIR := $(P)/external/BehaviorTree.CPP

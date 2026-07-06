@@ -12,6 +12,7 @@
 #
 P := ../..
 M := $(P)/.makefile
+CURRENT_DIR := $(P)/src/BlackThorn
 
 ###############################################################################
 # Project definition
@@ -20,10 +21,7 @@ include $(P)/Makefile.common
 TARGET_NAME := blackthorn
 TARGET_DESCRIPTION := Library for BlackThorn Behavior Tree
 include $(M)/project/Makefile
-
-###############################################################################
-# Inform Makefile where to find *.cpp files
-CURRENT_DIR := $(P)/src/BlackThorn
+include $(CURRENT_DIR)/BlackThorn.deps.mk
 
 ###############################################################################
 # Inform Makefile where to find header files

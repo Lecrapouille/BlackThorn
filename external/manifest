@@ -9,3 +9,7 @@ aiekick/ImGuiFileDialog
 ### Third-party libraries for BlackThorn benchmarks.
 ### License: MIT
 BehaviorTree/BehaviorTree.CPP@4.9.0
+
+### Fast YAML parser for BlackThorn tree loading.
+### License: MIT
+biojppm/rapidyaml@v0.7.2
