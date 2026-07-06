@@ -9,6 +9,7 @@
 #pragma once
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
+#include "BlackThorn/Blackboard/PortBinding.hpp"
 #include "BlackThorn/Blackboard/Ports.hpp"
 #include "BlackThorn/Blackboard/Resolver.hpp"
 #include "BlackThorn/Visitors/Visitor.hpp"
@@ -22,7 +23,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <regex>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -260,6 +260,14 @@ public:
             m_nodes.clear();
         }
 
+        // --------------------------------------------------------------------
+        //! \brief Pre-allocate storage for upcoming node creations.
+        // --------------------------------------------------------------------
+        void reserve(std::size_t p_count)
+        {
+            m_nodes.reserve(p_count);
+        }
+
     private:
 
         //! \brief Maximum size of a node object constructed in-place.
@@ -401,7 +409,12 @@ public:
     void setPortRemapping(
         std::unordered_map<std::string, std::string> const& p_remapping)
     {
-        m_port_remapping = p_remapping;
+        m_resolved_ports = resolvePortRemapping(p_remapping);
+    }
+
+    void setResolvedPorts(ResolvedPortMap const& p_ports)
+    {
+        m_resolved_ports = p_ports;
     }
 
     // ------------------------------------------------------------------------
@@ -449,17 +462,15 @@ protected: // Port management
         {
             return std::nullopt;
         }
-        auto key = m_port_remapping.count(p_port) ? m_port_remapping.at(p_port)
-                                                  : p_port;
-        return VariableResolver::resolveValue<T>(key, *m_blackboard);
+
+        if (auto it = m_resolved_ports.find(p_port); it != m_resolved_ports.end())
+        {
+            return VariableResolver::resolveBinding<T>(it->second, *m_blackboard);
+        }
+
+        return m_blackboard->get<T>(p_port);
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Set an output to the port.
-    //! Resolves the port name to a blackboard key using port remapping.
-    //! \param[in] p_port The port to set the output to.
-    //! \param[in] p_value The value to set the output to.
-    // ------------------------------------------------------------------------
     template <typename T>
     void setOutput(std::string const& p_port, T&& p_value)
     {
@@ -468,20 +479,21 @@ protected: // Port management
             return;
         }
 
-        std::string key = m_port_remapping.count(p_port)
-                              ? m_port_remapping.at(p_port)
-                              : p_port;
+        PortBinding const* binding = nullptr;
+        if (auto it = m_resolved_ports.find(p_port); it != m_resolved_ports.end())
+        {
+            binding = &it->second;
+        }
 
-        std::regex pattern(R"(\$\{([^}]+)\})");
-        std::smatch match;
-        if (std::regex_match(key, match, pattern))
+        if (binding && binding->kind == PortBindingKind::BlackboardKey)
         {
-            m_blackboard->set(match[1].str(), std::forward<T>(p_value));
+            m_blackboard->set(binding->data, std::forward<T>(p_value));
+            return;
         }
-        else
-        {
-            m_blackboard->set(key, std::forward<T>(p_value));
-        }
+
+        std::string const key =
+            binding ? binding->data : p_port;
+        m_blackboard->set(key, std::forward<T>(p_value));
     }
 
 protected: // Lifecycle hooks
@@ -551,7 +563,7 @@ protected: // Lifecycle hooks
     //! \brief The blackboard for the node (shared data store).
     Blackboard::Ptr m_blackboard = nullptr;
     //! \brief The port remapping for this node (port name -> blackboard key).
-    std::unordered_map<std::string, std::string> m_port_remapping;
+    ResolvedPortMap m_resolved_ports;
 };
 
 using NodeKind = Node::Kind;

@@ -8,7 +8,9 @@
 
 #pragma once
 
-#include <any>
+#include "BlackThorn/Blackboard/BlackboardValue.hpp"
+
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -48,7 +50,7 @@ class Blackboard final: public std::enable_shared_from_this<Blackboard>
 public:
 
     using Key = std::string;
-    using Value = std::any;
+    using Value = BlackboardValue;
     using Ptr = std::shared_ptr<Blackboard>;
 
     // ------------------------------------------------------------------------
@@ -65,7 +67,8 @@ public:
     template <typename T>
     void set(const Key& p_key, T&& p_value)
     {
-        m_data[p_key] = std::forward<T>(p_value);
+        m_data[p_key] = detail::toStoredValue(std::forward<T>(p_value));
+        invalidateKey(p_key);
     }
 
     // ------------------------------------------------------------------------
@@ -76,6 +79,7 @@ public:
     void setRaw(const Key& p_key, Value const& p_value)
     {
         m_data[p_key] = p_value;
+        invalidateKey(p_key);
     }
 
     // ------------------------------------------------------------------------
@@ -100,16 +104,18 @@ public:
     template <typename T>
     [[nodiscard]] std::optional<T> get(const Key& p_key) const
     {
-        // Search locally first
+        // Search in the cache first
+        if (auto cached = readFromCache<T>(p_key))
+        {
+            return cached;
+        }
+
         if (auto it = m_data.find(p_key); it != m_data.end())
         {
-            try
+            if (auto value = detail::valueAs<T>(it->second))
             {
-                return std::any_cast<T>(it->second);
-            }
-            catch (const std::bad_any_cast&)
-            {
-                // Type mismatch, fall through to parent
+                storeInCache(p_key, *value);
+                return value;
             }
         }
 
@@ -157,6 +163,7 @@ public:
     void remove(const Key& p_key)
     {
         m_data.erase(p_key);
+        invalidateKey(p_key);
     }
 
     // ------------------------------------------------------------------------
@@ -194,15 +201,63 @@ public:
     // ------------------------------------------------------------------------
     [[nodiscard]] std::vector<Key> keys() const;
 
+    void beginTick()
+    {
+        ++m_tick_generation;
+        if (m_read_cache.size() > 256)
+        {
+            m_read_cache.clear();
+        }
+    }
+
+    void invalidateKey(Key const& p_key)
+    {
+        m_read_cache.erase(p_key);
+    }
+
 private:
 
-    static std::string anyToString(Value const& p_value);
+    template <typename T>
+    [[nodiscard]] std::optional<T> readFromCache(Key const& p_key) const
+    {
+        auto it = m_read_cache.find(p_key);
+        if (it == m_read_cache.end() ||
+            it->second.generation != m_tick_generation)
+        {
+            return std::nullopt;
+        }
 
-private:
+        if (it->second.value.index() == 0)
+        {
+            return std::nullopt;
+        }
+
+        return detail::valueAs<T>(it->second.value);
+    }
+
+    template <typename T>
+    void storeInCache(Key const& p_key, T const& /*p_value*/) const
+    {
+        if (auto it = m_data.find(p_key); it != m_data.end())
+        {
+            m_read_cache[p_key] = CacheEntry{m_tick_generation, it->second};
+        }
+    }
+
+    static std::string valueToString(Value const& p_value);
+
+    struct CacheEntry
+    {
+        std::uint64_t generation = 0;
+        Value value;
+    };
 
     std::unordered_map<Key, Value> m_data;
     std::shared_ptr<Blackboard> m_parent;
     std::unordered_map<std::string, std::string> m_portRemapping;
+
+    mutable std::uint64_t m_tick_generation = 0;
+    mutable std::unordered_map<Key, CacheEntry> m_read_cache;
 };
 
 } // namespace bt

@@ -9,8 +9,7 @@
 #pragma once
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
-
-#include <any>
+#include "BlackThorn/Blackboard/BlackboardValue.hpp"
 #include <string>
 
 namespace YAML {
@@ -18,6 +17,8 @@ class Node;
 }
 
 namespace bt {
+
+class YamlNode;
 
 // ****************************************************************************
 //! \brief Utility for loading/storing blackboard content from/to YAML.
@@ -46,6 +47,25 @@ public:
                      Blackboard const* p_reference = nullptr);
 
     // ------------------------------------------------------------------------
+    //! \brief Populate a blackboard from a parsed YAML node (rapidyaml).
+    //! \param[in,out] p_target Blackboard to populate.
+    //! \param[in] p_node YAML map containing key/value pairs.
+    //! \param[in] p_reference Optional scope used to resolve ${var} references.
+    // ------------------------------------------------------------------------
+    static void load(Blackboard& p_target,
+                     YamlNode const& p_node,
+                     Blackboard const* p_reference = nullptr);
+
+    // ------------------------------------------------------------------------
+    //! \brief Convert a YAML node into a blackboard value.
+    //! \param[in] p_node Source YAML node.
+    //! \param[in] p_scope Optional scope for ${var} resolution.
+    //! \return Stored blackboard value.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] static BlackboardValue
+    valueFromNode(YamlNode const& p_node, Blackboard const* p_scope = nullptr);
+
+    // ------------------------------------------------------------------------
     //! \brief Serialize the content of a blackboard into YAML.
     //! \param[in] p_source Blackboard to serialize.
     //! \return YAML node representing the stored data.
@@ -55,8 +75,11 @@ public:
 private:
 
     static bool isReference(std::string const& p_literal, std::string& p_key);
-    static std::any toAny(YAML::Node const& p_node, Blackboard const* p_scope);
-    static YAML::Node toYaml(std::any const& p_value);
+    static BlackboardValue toValue(YAML::Node const& p_node,
+                                   Blackboard const* p_scope);
+    static BlackboardValue toValue(YamlNode const& p_node,
+                                   Blackboard const* p_scope);
+    static YAML::Node toYaml(BlackboardValue const& p_value);
 };
 
 } // namespace bt

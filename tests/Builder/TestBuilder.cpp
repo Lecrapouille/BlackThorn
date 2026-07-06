@@ -635,11 +635,11 @@ BehaviorTree:
 
     ASSERT_TRUE(result.isSuccess());
 
-    using VariantMap = std::unordered_map<std::string, std::any>;
-    auto gains = bb->get<VariantMap>("gains");
+    using BlackboardMap = bt::BlackboardMap;
+    auto gains = bb->get<BlackboardMap>("gains");
     ASSERT_TRUE(gains.has_value());
-    EXPECT_EQ(std::any_cast<int>(gains->at("kp")), 10);
-    EXPECT_DOUBLE_EQ(std::any_cast<double>(gains->at("kd")), 0.25);
+    EXPECT_EQ(std::get<int>(gains->at("kp")), 10);
+    EXPECT_DOUBLE_EQ(std::get<double>(gains->at("kd")), 0.25);
 
     auto waypoints = bb->get<std::vector<double>>("waypoints");
     ASSERT_TRUE(waypoints.has_value());

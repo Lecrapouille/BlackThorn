@@ -701,6 +701,11 @@ Status Tree::tick()
         return m_status;
     }
 
+    if (m_blackboard)
+    {
+        m_blackboard->beginTick();
+    }
+
     m_status = tickNode(m_root_index);
 
     if (m_visualizer && m_visualizer->isConnected())

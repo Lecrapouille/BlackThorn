@@ -12,6 +12,7 @@
 #include "BlackThorn/Nodes/Tree.hpp"
 
 #include <cassert>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -46,6 +47,13 @@ public:
     SubTreeNode(std::string p_reference, Tree::Ptr p_tree);
 
     // ------------------------------------------------------------------------
+    //! \brief Construct a subtree node that builds its tree on first access.
+    //! \param[in] p_reference Reference name used in YAML definitions.
+    //! \param[in] p_builder Factory invoked once to create the nested tree.
+    // ------------------------------------------------------------------------
+    SubTreeNode(std::string p_reference, std::function<Tree::Ptr()> p_builder);
+
+    // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
     //! \return The string "SubTree".
     // ------------------------------------------------------------------------
@@ -76,17 +84,19 @@ public:
     // ------------------------------------------------------------------------
     [[nodiscard]] Tree& subtree()
     {
+        ensureBuilt();
         assert(m_subtree != nullptr);
         return *m_subtree;
     }
 
     // ------------------------------------------------------------------------
     //! \brief Return the nested tree (const).
-    //! \pre \c m_subtree is not null.
+    //! \pre \c m_subtree is not null after build.
     //! \return Const reference to the owned nested tree.
     // ------------------------------------------------------------------------
     [[nodiscard]] Tree const& subtree() const
     {
+        ensureBuilt();
         assert(m_subtree != nullptr);
         return *m_subtree;
     }
@@ -102,10 +112,14 @@ public:
 
 private:
 
+    void ensureBuilt() const;
+
     //! \brief Reference name used to resolve the subtree definition.
     std::string m_reference;
     //! \brief Owned nested tree executed on each tick.
-    Tree::Ptr m_subtree;
+    mutable Tree::Ptr m_subtree;
+    //! \brief Optional lazy builder invoked on first subtree access.
+    mutable std::function<Tree::Ptr()> m_builder;
 };
 
 template <>

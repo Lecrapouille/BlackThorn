@@ -7,29 +7,26 @@
  * @see https://github.com/Lecrapouille/Robotik
  */
 
-#include "BlackThorn/Builder/Builder.hpp"
 #include "BlackThorn/BlackThorn.hpp"
+#include "BlackThorn/Blackboard/PortBinding.hpp"
+#include "BlackThorn/Builder/Builder.hpp"
+#include "BlackThorn/Builder/TreeDocument.hpp"
 
 #include <functional>
 #include <unordered_map>
-#include <yaml-cpp/yaml.h>
 
 namespace bt {
 
 // ****************************************************************************
 //! \brief Context structure for parsing, containing factory and blackboard
 // ****************************************************************************
-struct SubTreeRegistry
-{
-    std::unordered_map<std::string, YAML::Node> definitions;
-};
-
 struct ParsingContext
 {
     NodeFactory const& factory;
     Blackboard::Ptr blackboard;
     SubTreeRegistry const* subtrees = nullptr;
     Tree* tree = nullptr;
+    BuilderOptions options{};
 };
 
 // ----------------------------------------------------------------------------
@@ -37,12 +34,24 @@ struct ParsingContext
 // ----------------------------------------------------------------------------
 static void assignNodeId(uint32_t p_node_index,
                          ParsingContext const& p_context,
-                         YAML::Node const& p_content)
+                         YamlNode const& p_content)
 {
-    if (p_content["_id"])
+    if (!p_context.options.assignVisualizerIds)
     {
-        p_context.tree->metadata().setVisualizerId(
-            p_node_index, p_content["_id"].as<uint32_t>());
+        return;
+    }
+
+    if (p_content.hasKey("_id"))
+    {
+        if (auto id = p_content.child("_id").asSize())
+        {
+            p_context.tree->metadata().setVisualizerId(
+                p_node_index, static_cast<uint32_t>(*id));
+        }
+        else
+        {
+            p_context.tree->metadata().assignVisualizerId(p_node_index);
+        }
     }
     else
     {
@@ -53,19 +62,68 @@ static void assignNodeId(uint32_t p_node_index,
 using NodeCreatorMap = std::unordered_map<
     std::string,
     std::function<robotik::Return<uint32_t>(ParsingContext const&,
-                                             YAML::Node const&)>>;
+                                             YamlNode const&)>>;
 
 static robotik::Return<uint32_t>
-parseYAMLNodeInternal(ParsingContext const& p_context,
-                      YAML::Node const& p_node);
+parseYAMLNodeInternal(ParsingContext const& p_context, YamlNode const& p_node);
+
+// ----------------------------------------------------------------------------
+//! \brief Count YAML nodes for pool pre-allocation.
+// ----------------------------------------------------------------------------
+static std::size_t countYamlNodes(YamlNode const& p_node)
+{
+    if (!p_node.valid() || !p_node.isMap())
+    {
+        return 0;
+    }
+
+    auto const [type, content] = p_node.typeEntry();
+    if (type.empty())
+    {
+        return 0;
+    }
+
+    std::size_t count = 1;
+
+    auto countField = [&](std::string_view p_field) {
+        if (!content.hasKey(p_field))
+        {
+            return;
+        }
+        YamlNode const field = content.child(p_field);
+        if (!field.isSeq())
+        {
+            return;
+        }
+        field.forEachSeq([&](YamlNode const& p_child) {
+            count += countYamlNodes(p_child);
+        });
+    };
+
+    countField("children");
+    countField("child");
+
+    return count;
+}
 
 // ----------------------------------------------------------------------------
 //! \brief Get the name of a node from YAML content
 // ----------------------------------------------------------------------------
-static std::string getNodeName(YAML::Node const& p_content)
+static std::string getNodeName(YamlNode const& p_content)
 {
-    return p_content["name"] ? p_content["name"].as<std::string>()
-                             : p_content.begin()->first.as<std::string>();
+    if (p_content.hasKey("name"))
+    {
+        return p_content.child("name").scalar();
+    }
+
+    std::string firstKey;
+    p_content.forEachMap([&](std::string_view p_key, YamlNode) {
+        if (firstKey.empty())
+        {
+            firstKey = std::string(p_key);
+        }
+    });
+    return firstKey;
 }
 
 // ----------------------------------------------------------------------------
@@ -73,17 +131,17 @@ static std::string getNodeName(YAML::Node const& p_content)
 //! Converts YAML parameters to a map of port name -> blackboard key.
 // ----------------------------------------------------------------------------
 static std::unordered_map<std::string, std::string>
-extractPortRemapping(YAML::Node const& p_parameters)
+extractPortRemapping(YamlNode const& p_parameters)
 {
     std::unordered_map<std::string, std::string> remapping;
-    if (p_parameters && p_parameters.IsMap())
+    if (!p_parameters.isMap())
     {
-        for (auto const& param : p_parameters)
-        {
-            remapping[param.first.as<std::string>()] =
-                param.second.as<std::string>();
-        }
+        return remapping;
     }
+
+    p_parameters.forEachMap([&](std::string_view p_key, YamlNode p_value) {
+        remapping[std::string(p_key)] = p_value.scalar();
+    });
     return remapping;
 }
 
@@ -92,35 +150,22 @@ extractPortRemapping(YAML::Node const& p_parameters)
 //! Skips ${...} references which are only used for port remapping.
 // ----------------------------------------------------------------------------
 static void loadLiteralParameters(Blackboard& p_bb,
-                                  YAML::Node const& p_parameters)
+                                  YamlNode const& p_parameters)
 {
-    if (!p_parameters || !p_parameters.IsMap())
+    if (!p_parameters.isMap())
     {
         return;
     }
 
-    std::regex refPattern(R"(\$\{([^}]+)\})");
-
-    for (auto const& param : p_parameters)
-    {
-        auto const& valueNode = param.second;
-
-        // Skip ${...} references - they're for port remapping only
-        if (valueNode.IsScalar())
+    p_parameters.forEachMap([&](std::string_view p_key, YamlNode p_value) {
+        if (p_value.isScalar() && isBlackboardReference(p_value.scalar()))
         {
-            std::string value = valueNode.as<std::string>();
-            if (std::regex_match(value, refPattern))
-            {
-                continue; // Skip reference
-            }
+            return;
         }
 
-        // Load literal value into blackboard
-        std::string key = param.first.as<std::string>();
-        YAML::Node single;
-        single[key] = valueNode;
-        BlackboardSerializer::load(p_bb, single, &p_bb);
-    }
+        p_bb.setRaw(std::string(p_key),
+                    BlackboardSerializer::valueFromNode(p_value, &p_bb));
+    });
 }
 
 // ----------------------------------------------------------------------------
@@ -128,24 +173,25 @@ static void loadLiteralParameters(Blackboard& p_bb,
 // ----------------------------------------------------------------------------
 static robotik::Return<std::vector<uint32_t>>
 parseChildren(ParsingContext const& p_context,
-              YAML::Node const& p_content,
+              YamlNode const& p_content,
               std::string const& p_field_name)
 {
-    if (!p_content[p_field_name])
+    if (!p_content.hasKey(p_field_name))
     {
         return robotik::Return<std::vector<uint32_t>>::error(
             "Node '" + getNodeName(p_content) + "' missing '" + p_field_name +
             "' field");
     }
 
-    if (!p_content[p_field_name].IsSequence())
+    YamlNode const field = p_content.child(p_field_name);
+    if (!field.isSeq())
     {
         return robotik::Return<std::vector<uint32_t>>::error(
             "Node '" + getNodeName(p_content) + "': '" + p_field_name +
             "' field must be a sequence");
     }
 
-    if (p_content[p_field_name].size() == 0)
+    if (field.size() == 0)
     {
         return robotik::Return<std::vector<uint32_t>>::error(
             "Node '" + getNodeName(p_content) +
@@ -153,9 +199,9 @@ parseChildren(ParsingContext const& p_context,
     }
 
     std::vector<uint32_t> children;
-    for (auto const& child : p_content[p_field_name])
+    for (std::size_t i = 0; i < field.size(); ++i)
     {
-        auto result = parseYAMLNodeInternal(p_context, child);
+        auto result = parseYAMLNodeInternal(p_context, field.child(i));
         if (!result)
         {
             return robotik::Return<std::vector<uint32_t>>::error(
@@ -167,38 +213,10 @@ parseChildren(ParsingContext const& p_context,
 }
 
 // ----------------------------------------------------------------------------
-//! \brief Build the registry of reusable subtrees if provided in YAML input.
-// ----------------------------------------------------------------------------
-static robotik::Return<SubTreeRegistry>
-buildSubTreeRegistry(YAML::Node const& p_root)
-{
-    SubTreeRegistry registry;
-
-    if (!p_root["SubTrees"])
-    {
-        return robotik::Return<SubTreeRegistry>::success(std::move(registry));
-    }
-
-    if (!p_root["SubTrees"].IsMap())
-    {
-        return robotik::Return<SubTreeRegistry>::error(
-            "'SubTrees' section must be a map of name -> node definitions");
-    }
-
-    for (auto const& entry : p_root["SubTrees"])
-    {
-        registry.definitions.emplace(entry.first.as<std::string>(),
-                                     entry.second);
-    }
-
-    return robotik::Return<SubTreeRegistry>::success(std::move(registry));
-}
-
-// ----------------------------------------------------------------------------
 //! \brief Static creator functions for each node type
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createSequence(ParsingContext const& p_context, YAML::Node const& p_content)
+createSequence(ParsingContext const& p_context, YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<Sequence>();
     node.name = getNodeName(p_content);
@@ -217,7 +235,7 @@ createSequence(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create a selector node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createSelector(ParsingContext const& p_context, YAML::Node const& p_content)
+createSelector(ParsingContext const& p_context, YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<Selector>();
     node.name = getNodeName(p_content);
@@ -236,11 +254,12 @@ createSelector(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create a parallel node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
+createParallel(ParsingContext const& p_context, YamlNode const& p_content)
 {
-    bool has_policies = p_content["success_on_all"] || p_content["fail_on_all"];
-    bool has_thresholds =
-        p_content["success_threshold"] || p_content["failure_threshold"];
+    bool has_policies =
+        p_content.hasKey("success_on_all") || p_content.hasKey("fail_on_all");
+    bool has_thresholds = p_content.hasKey("success_threshold") ||
+                          p_content.hasKey("failure_threshold");
 
     if (has_policies && has_thresholds)
     {
@@ -256,12 +275,14 @@ createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
     Composite* composite = nullptr;
     if (has_policies)
     {
-        bool success_on_all = p_content["success_on_all"]
-                                  ? p_content["success_on_all"].as<bool>()
-                                  : true;
-        bool fail_on_all = p_content["fail_on_all"]
-                               ? p_content["fail_on_all"].as<bool>()
-                               : true;
+        bool success_on_all =
+            p_content.hasKey("success_on_all")
+                ? p_content.child("success_on_all").asBool().value_or(true)
+                : true;
+        bool fail_on_all =
+            p_content.hasKey("fail_on_all")
+                ? p_content.child("fail_on_all").asBool().value_or(true)
+                : true;
         auto& par =
             p_context.tree->emplaceNode<ParallelAll>(success_on_all, fail_on_all);
         composite = &par;
@@ -269,12 +290,12 @@ createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
     else
     {
         size_t success_threshold =
-            p_content["success_threshold"]
-                ? p_content["success_threshold"].as<size_t>()
+            p_content.hasKey("success_threshold")
+                ? p_content.child("success_threshold").asSize().value_or(1)
                 : 1;
         size_t failure_threshold =
-            p_content["failure_threshold"]
-                ? p_content["failure_threshold"].as<size_t>()
+            p_content.hasKey("failure_threshold")
+                ? p_content.child("failure_threshold").asSize().value_or(1)
                 : 1;
         auto& par = p_context.tree->emplaceNode<Parallel>(success_threshold,
                                                           failure_threshold);
@@ -299,7 +320,7 @@ createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create an inverter node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createInverter(ParsingContext const& p_context, YAML::Node const& p_content)
+createInverter(ParsingContext const& p_context, YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<Inverter>();
     node.name = getNodeName(p_content);
@@ -320,20 +341,21 @@ createInverter(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create a repeater node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createRepeater(ParsingContext const& p_context, YAML::Node const& p_content)
+createRepeater(ParsingContext const& p_context, YamlNode const& p_content)
 {
-    size_t times = p_content["times"] ? p_content["times"].as<size_t>() : 0;
+    size_t times = p_content.hasKey("times")
+                       ? p_content.child("times").asSize().value_or(0)
+                       : 0;
     auto& node = p_context.tree->emplaceNode<Repeater>(times);
     node.name = getNodeName(p_content);
     assignNodeId(node.index(), p_context, p_content);
 
-    // Set blackboard for port access
     node.setBlackboard(p_context.blackboard);
 
-    // Configure port remapping if parameters are present
-    if (p_content["parameters"])
+    if (p_content.hasKey("parameters"))
     {
-        node.setPortRemapping(extractPortRemapping(p_content["parameters"]));
+        node.setResolvedPorts(resolvePortRemapping(
+            extractPortRemapping(p_content.child("parameters"))));
     }
 
     auto children = parseChildren(p_context, p_content, "child");
@@ -353,10 +375,11 @@ createRepeater(ParsingContext const& p_context, YAML::Node const& p_content)
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
 createRepeatUntilSuccess(ParsingContext const& p_context,
-                         YAML::Node const& p_content)
+                         YamlNode const& p_content)
 {
-    size_t attempts =
-        p_content["attempts"] ? p_content["attempts"].as<size_t>() : 0;
+    size_t attempts = p_content.hasKey("attempts")
+                          ? p_content.child("attempts").asSize().value_or(0)
+                          : 0;
     auto& node = p_context.tree->emplaceNode<UntilSuccess>(attempts);
     node.name = getNodeName(p_content);
     assignNodeId(node.index(), p_context, p_content);
@@ -377,10 +400,11 @@ createRepeatUntilSuccess(ParsingContext const& p_context,
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
 createRepeatUntilFailure(ParsingContext const& p_context,
-                         YAML::Node const& p_content)
+                         YamlNode const& p_content)
 {
-    size_t attempts =
-        p_content["attempts"] ? p_content["attempts"].as<size_t>() : 0;
+    size_t attempts = p_content.hasKey("attempts")
+                          ? p_content.child("attempts").asSize().value_or(0)
+                          : 0;
     auto& node = p_context.tree->emplaceNode<UntilFailure>(attempts);
     node.name = getNodeName(p_content);
     assignNodeId(node.index(), p_context, p_content);
@@ -400,7 +424,7 @@ createRepeatUntilFailure(ParsingContext const& p_context,
 //! \brief Create a force success node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createForceSuccess(ParsingContext const& p_context, YAML::Node const& p_content)
+createForceSuccess(ParsingContext const& p_context, YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<ForceSuccess>();
     node.name = getNodeName(p_content);
@@ -421,7 +445,7 @@ createForceSuccess(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create a force failure node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createForceFailure(ParsingContext const& p_context, YAML::Node const& p_content)
+createForceFailure(ParsingContext const& p_context, YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<ForceFailure>();
     node.name = getNodeName(p_content);
@@ -442,40 +466,34 @@ createForceFailure(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create an action node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t> createAction(ParsingContext const& p_context,
-                                              YAML::Node const& p_content)
+                                              YamlNode const& p_content)
 {
-    if (!p_content["name"])
+    if (!p_content.hasKey("name"))
     {
-        return robotik::Return<uint32_t>::error(
-            p_content.begin()->first.as<std::string>() +
-            " node missing 'name' field");
+        return robotik::Return<uint32_t>::error(getNodeName(p_content) +
+                                                " node missing 'name' field");
     }
 
-    std::string name = p_content["name"].as<std::string>();
+    std::string name = p_content.child("name").scalar();
 
     auto node_ptr = p_context.factory.createNode(name);
     if (!node_ptr)
     {
         return robotik::Return<uint32_t>::error(
-            "Failed to create " + p_content.begin()->first.as<std::string>() +
-            " node: " + name);
+            "Failed to create " + getNodeName(p_content) + " node: " + name);
     }
 
     uint32_t node_index = p_context.tree->adoptNode(std::move(node_ptr));
     Node& node = p_context.tree->node(node_index);
 
-    // Set the blackboard for the node (now on Node base class)
     node.setBlackboard(p_context.blackboard);
 
-    // Handle local parameters if present
-    if (p_context.blackboard && p_content["parameters"])
+    if (p_context.blackboard && p_content.hasKey("parameters"))
     {
-        // Load only literal parameters into blackboard (not ${...} references)
-        // References are only used for port remapping, not stored in BB
-        loadLiteralParameters(*p_context.blackboard, p_content["parameters"]);
-
-        // Configure port remapping for all parameters
-        node.setPortRemapping(extractPortRemapping(p_content["parameters"]));
+        YamlNode const parameters = p_content.child("parameters");
+        loadLiteralParameters(*p_context.blackboard, parameters);
+        node.setResolvedPorts(
+            resolvePortRemapping(extractPortRemapping(parameters)));
     }
 
     node.name = name;
@@ -487,7 +505,7 @@ static robotik::Return<uint32_t> createAction(ParsingContext const& p_context,
 //! \brief Create a condition node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createCondition(ParsingContext const& p_context, YAML::Node const& p_content)
+createCondition(ParsingContext const& p_context, YamlNode const& p_content)
 {
     return createAction(p_context, p_content);
 }
@@ -496,7 +514,7 @@ createCondition(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create a success node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t> createSuccess(ParsingContext const& p_context,
-                                               YAML::Node const& p_content)
+                                               YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<Success>();
     node.name = getNodeName(p_content);
@@ -508,7 +526,7 @@ static robotik::Return<uint32_t> createSuccess(ParsingContext const& p_context,
 //! \brief Create a failure node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t> createFailure(ParsingContext const& p_context,
-                                               YAML::Node const& p_content)
+                                               YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<Failure>();
     node.name = getNodeName(p_content);
@@ -522,77 +540,47 @@ static robotik::Return<uint32_t> createFailure(ParsingContext const& p_context,
 //! For outputs: stores remapping info for later propagation.
 // ----------------------------------------------------------------------------
 static void applySubTreePortRemapping(
-    YAML::Node const& p_parameters,
+    YamlNode const& p_parameters,
     Blackboard::Ptr const& p_parentBB,
     Blackboard::Ptr const& p_childBB,
     std::unordered_map<std::string, std::string>& p_outputRemapping)
 {
-    if (!p_parameters || !p_parameters.IsMap())
+    if (!p_parameters.isMap())
     {
         return;
     }
 
-    std::regex pattern(R"(\$\{([^}]+)\})");
+    p_parameters.forEachMap([&](std::string_view p_key, YamlNode p_value) {
+        std::string childKey(p_key);
+        std::string value = p_value.scalar();
 
-    for (auto const& param : p_parameters)
-    {
-        std::string childKey = param.first.as<std::string>();
-        std::string value = param.second.as<std::string>();
-
-        std::smatch match;
-        if (std::regex_match(value, match, pattern))
+        if (auto parentKey = extractBlackboardReference(value))
         {
-            // It's a reference ${parent_key}
-            std::string parentKey = match[1].str();
-
-            // Try to get value from parent blackboard and copy to child
-            if (auto raw = p_parentBB->raw(parentKey); raw)
+            if (auto raw = p_parentBB->raw(*parentKey); raw)
             {
-                // Input: copy value from parent to child under childKey
                 p_childBB->setRaw(childKey, *raw);
             }
             else
             {
-                // Output: parent key doesn't exist yet, store remapping
-                // The child will write to childKey, we need to propagate to
-                // parentKey
-                p_outputRemapping[childKey] = parentKey;
+                p_outputRemapping[childKey] = *parentKey;
             }
         }
         else
         {
-            // Literal value, set directly in child blackboard
             p_childBB->set(childKey, value);
         }
-    }
+    });
 }
 
 // ----------------------------------------------------------------------------
-//! \brief Create a subtree node referencing another behavior tree
+//! \brief Build a nested subtree tree from a YAML definition node.
 // ----------------------------------------------------------------------------
-static robotik::Return<uint32_t> createSubTree(ParsingContext const& p_context,
-                                               YAML::Node const& p_content)
+static robotik::Return<Tree::Ptr>
+buildSubTreeTree(ParsingContext const& p_context,
+                 std::string const& p_reference,
+                 YamlNode const& p_definition,
+                 YamlNode const& p_parameters)
 {
-    if (!p_context.subtrees)
-    {
-        return robotik::Return<uint32_t>::error(
-            "SubTree node encountered but no 'SubTrees' section was provided");
-    }
-
-    if (!p_content["reference"])
-    {
-        return robotik::Return<uint32_t>::error(
-            "SubTree node missing 'reference' field");
-    }
-
-    auto reference = p_content["reference"].as<std::string>();
-    auto it = p_context.subtrees->definitions.find(reference);
-    if (it == p_context.subtrees->definitions.end())
-    {
-        return robotik::Return<uint32_t>::error("Unknown subtree reference: " +
-                                                reference);
-    }
-
     auto subtree = Tree::create();
 
     ParsingContext nested = p_context;
@@ -606,48 +594,112 @@ static robotik::Return<uint32_t> createSubTree(ParsingContext const& p_context,
         nested.blackboard = std::make_shared<Blackboard>();
     }
 
-    // Apply port remapping from parameters
     std::unordered_map<std::string, std::string> outputRemapping;
     std::unordered_map<std::string, std::string> allRemapping;
-    if (p_content["parameters"] && p_context.blackboard)
+    if (p_parameters.valid() && p_context.blackboard)
     {
-        applySubTreePortRemapping(p_content["parameters"],
+        applySubTreePortRemapping(p_parameters,
                                   p_context.blackboard,
                                   nested.blackboard,
                                   outputRemapping);
-
-        // Extract all remappings for display
-        allRemapping = extractPortRemapping(p_content["parameters"]);
+        allRemapping = extractPortRemapping(p_parameters);
     }
 
-    // Store port remapping info in the child blackboard for dump()
     if (!allRemapping.empty())
     {
         nested.blackboard->setPortRemapping(allRemapping);
     }
 
-    auto subtreeRoot = parseYAMLNodeInternal(nested, it->second);
+    auto subtreeRoot = parseYAMLNodeInternal(nested, p_definition);
     if (!subtreeRoot)
     {
-        return robotik::Return<uint32_t>::error(
-            "Failed to instantiate subtree '" + reference +
+        return robotik::Return<Tree::Ptr>::error(
+            "Failed to instantiate subtree '" + p_reference +
             "': " + subtreeRoot.getError());
     }
 
     subtree->setBlackboard(nested.blackboard);
     subtree->setRootIndex(subtreeRoot.getValue());
 
-    // Store output remapping and parent blackboard for later propagation
     if (!outputRemapping.empty())
     {
         subtree->setOutputRemapping(outputRemapping);
         subtree->setParentBlackboard(p_context.blackboard);
     }
 
-    auto& node =
-        p_context.tree->emplaceNode<SubTreeNode>(reference, std::move(subtree));
-    node.name =
-        p_content["name"] ? p_content["name"].as<std::string>() : reference;
+    return robotik::Return<Tree::Ptr>::success(std::move(subtree));
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Create a subtree node referencing another behavior tree
+// ----------------------------------------------------------------------------
+static robotik::Return<uint32_t> createSubTree(ParsingContext const& p_context,
+                                               YamlNode const& p_content)
+{
+    if (!p_context.subtrees)
+    {
+        return robotik::Return<uint32_t>::error(
+            "SubTree node encountered but no 'SubTrees' section was provided");
+    }
+
+    if (!p_content.hasKey("reference"))
+    {
+        return robotik::Return<uint32_t>::error(
+            "SubTree node missing 'reference' field");
+    }
+
+    std::string const reference = p_content.child("reference").scalar();
+    auto it = p_context.subtrees->definitions.find(reference);
+    if (it == p_context.subtrees->definitions.end())
+    {
+        return robotik::Return<uint32_t>::error("Unknown subtree reference: " +
+                                                reference);
+    }
+
+    YamlNode const parameters =
+        p_content.hasKey("parameters") ? p_content.child("parameters")
+                                       : YamlNode{};
+
+    std::string nodeName =
+        p_content.hasKey("name") ? p_content.child("name").scalar() : reference;
+
+    if (p_context.options.lazySubTrees)
+    {
+        NodeFactory const& factory = p_context.factory;
+        Blackboard::Ptr parentBB = p_context.blackboard;
+        SubTreeRegistry const* subtrees = p_context.subtrees;
+        BuilderOptions options = p_context.options;
+        YamlNode definition = it->second;
+
+        auto builder = [factory, parentBB, subtrees, options, definition,
+                        parameters, reference]() -> Tree::Ptr {
+            ParsingContext ctx{factory, parentBB, subtrees, nullptr, options};
+            auto result =
+                buildSubTreeTree(ctx, reference, definition, parameters);
+            if (!result)
+            {
+                return nullptr;
+            }
+            return result.moveValue();
+        };
+
+        auto& node =
+            p_context.tree->emplaceNode<SubTreeNode>(reference, std::move(builder));
+        node.name = nodeName;
+        assignNodeId(node.index(), p_context, p_content);
+        return robotik::Return<uint32_t>::success(node.index());
+    }
+
+    auto subtreeResult =
+        buildSubTreeTree(p_context, reference, it->second, parameters);
+    if (!subtreeResult)
+    {
+        return robotik::Return<uint32_t>::error(subtreeResult.getError());
+    }
+
+    auto& node = p_context.tree->emplaceNode<SubTreeNode>(
+        reference, subtreeResult.moveValue());
+    node.name = nodeName;
     assignNodeId(node.index(), p_context, p_content);
     return robotik::Return<uint32_t>::success(node.index());
 }
@@ -656,22 +708,21 @@ static robotik::Return<uint32_t> createSubTree(ParsingContext const& p_context,
 //! \brief Create a timeout decorator node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t> createTimeout(ParsingContext const& p_context,
-                                               YAML::Node const& p_content)
+                                               YamlNode const& p_content)
 {
-    size_t ms = p_content["milliseconds"]
-                    ? p_content["milliseconds"].as<size_t>()
+    size_t ms = p_content.hasKey("milliseconds")
+                    ? p_content.child("milliseconds").asSize().value_or(1000)
                     : 1000;
     auto& node = p_context.tree->emplaceNode<Timeout>(ms);
     node.name = getNodeName(p_content);
     assignNodeId(node.index(), p_context, p_content);
 
-    // Set blackboard for port access
     node.setBlackboard(p_context.blackboard);
 
-    // Configure port remapping if parameters are present
-    if (p_content["parameters"])
+    if (p_content.hasKey("parameters"))
     {
-        node.setPortRemapping(extractPortRemapping(p_content["parameters"]));
+        node.setResolvedPorts(resolvePortRemapping(
+            extractPortRemapping(p_content.child("parameters"))));
     }
 
     auto children = parseChildren(p_context, p_content, "child");
@@ -690,10 +741,10 @@ static robotik::Return<uint32_t> createTimeout(ParsingContext const& p_context,
 //! \brief Create a delay decorator node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t> createDelay(ParsingContext const& p_context,
-                                             YAML::Node const& p_content)
+                                             YamlNode const& p_content)
 {
-    size_t ms = p_content["milliseconds"]
-                    ? p_content["milliseconds"].as<size_t>()
+    size_t ms = p_content.hasKey("milliseconds")
+                    ? p_content.child("milliseconds").asSize().value_or(1000)
                     : 1000;
     auto& node = p_context.tree->emplaceNode<Delay>(ms);
     node.name = getNodeName(p_content);
@@ -714,10 +765,10 @@ static robotik::Return<uint32_t> createDelay(ParsingContext const& p_context,
 //! \brief Create a cooldown decorator node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-createCooldown(ParsingContext const& p_context, YAML::Node const& p_content)
+createCooldown(ParsingContext const& p_context, YamlNode const& p_content)
 {
-    size_t ms = p_content["milliseconds"]
-                    ? p_content["milliseconds"].as<size_t>()
+    size_t ms = p_content.hasKey("milliseconds")
+                    ? p_content.child("milliseconds").asSize().value_or(1000)
                     : 1000;
     auto& node = p_context.tree->emplaceNode<Cooldown>(ms);
     node.name = getNodeName(p_content);
@@ -738,7 +789,7 @@ createCooldown(ParsingContext const& p_context, YAML::Node const& p_content)
 //! \brief Create a run once decorator node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t> createRunOnce(ParsingContext const& p_context,
-                                               YAML::Node const& p_content)
+                                               YamlNode const& p_content)
 {
     auto& node = p_context.tree->emplaceNode<RunOnce>();
     node.name = getNodeName(p_content);
@@ -759,10 +810,10 @@ static robotik::Return<uint32_t> createRunOnce(ParsingContext const& p_context,
 //! \brief Create a wait leaf node
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t> createWait(ParsingContext const& p_context,
-                                            YAML::Node const& p_content)
+                                            YamlNode const& p_content)
 {
-    size_t ms = p_content["milliseconds"]
-                    ? p_content["milliseconds"].as<size_t>()
+    size_t ms = p_content.hasKey("milliseconds")
+                    ? p_content.child("milliseconds").asSize().value_or(1000)
                     : 1000;
     auto& node = p_context.tree->emplaceNode<Wait>(ms);
     node.name = getNodeName(p_content);
@@ -775,21 +826,21 @@ static robotik::Return<uint32_t> createWait(ParsingContext const& p_context,
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
 createSetBlackboard(ParsingContext const& p_context,
-                    YAML::Node const& p_content)
+                    YamlNode const& p_content)
 {
-    if (!p_content["key"])
+    if (!p_content.hasKey("key"))
     {
         return robotik::Return<uint32_t>::error(
             "SetBlackboard node missing 'key' field");
     }
-    if (!p_content["value"])
+    if (!p_content.hasKey("value"))
     {
         return robotik::Return<uint32_t>::error(
             "SetBlackboard node missing 'value' field");
     }
 
-    std::string key = p_content["key"].as<std::string>();
-    std::string value = p_content["value"].as<std::string>();
+    std::string key = p_content.child("key").scalar();
+    std::string value = p_content.child("value").scalar();
     auto& node =
         p_context.tree->emplaceNode<SetBlackboard>(key, value, p_context.blackboard);
     node.name = getNodeName(p_content);
@@ -832,23 +883,22 @@ static NodeCreatorMap& getNodeCreators()
 //! \brief Internal helper to parse YAML node with context
 // ----------------------------------------------------------------------------
 static robotik::Return<uint32_t>
-parseYAMLNodeInternal(ParsingContext const& p_context, YAML::Node const& p_node)
+parseYAMLNodeInternal(ParsingContext const& p_context, YamlNode const& p_node)
 {
-    if (!p_node.IsMap())
+    if (!p_node.isMap())
     {
         return robotik::Return<uint32_t>::error(
             "Invalid node format: must be a map");
     }
 
-    auto it = p_node.begin();
-    if (it == p_node.end())
+    auto const [type, content] = p_node.typeEntry();
+    if (type.empty())
     {
         return robotik::Return<uint32_t>::error(
             "Empty YAML node: a node must contain at least one key defining "
             "its type (e.g. Sequence, Selector, Action)");
     }
 
-    std::string type = it->first.as<std::string>();
     auto const& creators = getNodeCreators();
     auto fn_it = creators.find(type);
     if (fn_it == creators.end())
@@ -856,132 +906,55 @@ parseYAMLNodeInternal(ParsingContext const& p_context, YAML::Node const& p_node)
         return robotik::Return<uint32_t>::error("Unknown node type: " + type);
     }
 
-    return fn_it->second(p_context, it->second);
+    return fn_it->second(p_context, content);
 }
 
 //-----------------------------------------------------------------------------
 robotik::Return<Tree::Ptr> Builder::fromFile(NodeFactory const& p_factory,
                                              std::string const& p_file_path,
-                                             Blackboard::Ptr p_blackboard)
+                                             Blackboard::Ptr p_blackboard,
+                                             BuilderOptions p_options)
 {
-    try
+    auto docResult = TreeDocument::parseFile(p_file_path);
+    if (!docResult)
     {
-        YAML::Node root = YAML::LoadFile(p_file_path);
-        if (!root["BehaviorTree"])
-        {
-            return robotik::Return<Tree::Ptr>::error(
-                "Missing 'BehaviorTree' node in YAML file");
-        }
-
-        Blackboard::Ptr blackboard =
-            p_blackboard ? p_blackboard : std::make_shared<Blackboard>();
-
-        if (root["Blackboard"])
-        {
-            BlackboardSerializer::load(
-                *blackboard, root["Blackboard"], blackboard.get());
-        }
-
-        auto registryResult = buildSubTreeRegistry(root);
-        if (!registryResult)
-        {
-            return robotik::Return<Tree::Ptr>::error(registryResult.getError());
-        }
-        auto registry = registryResult.moveValue();
-        SubTreeRegistry const* registryPtr =
-            registry.definitions.empty() ? nullptr : &registry;
-
-        auto tree = Tree::create();
-        tree->setBlackboard(blackboard);
-
-        auto nodeResult = parseYAMLNode(
-            *tree, p_factory, root["BehaviorTree"], blackboard, registryPtr);
-        if (!nodeResult)
-        {
-            return robotik::Return<Tree::Ptr>::error(nodeResult.getError());
-        }
-
-        tree->setRootIndex(nodeResult.getValue());
-        return robotik::Return<Tree::Ptr>::success(std::move(tree));
+        return robotik::Return<Tree::Ptr>::error(docResult.getError());
     }
-    catch (const YAML::Exception& e)
-    {
-        return robotik::Return<Tree::Ptr>::error("YAML parsing error: " +
-                                                 std::string(e.what()));
-    }
-    catch (const std::exception& e)
-    {
-        return robotik::Return<Tree::Ptr>::error("Error: " +
-                                                 std::string(e.what()));
-    }
+
+    return docResult.getValue()->instantiate(p_factory, p_blackboard, p_options);
 }
 
 //-----------------------------------------------------------------------------
 robotik::Return<Tree::Ptr> Builder::fromText(NodeFactory const& p_factory,
                                              std::string const& p_yaml_text,
-                                             Blackboard::Ptr p_blackboard)
+                                             Blackboard::Ptr p_blackboard,
+                                             BuilderOptions p_options)
 {
-    try
+    auto docResult = TreeDocument::parseText(p_yaml_text);
+    if (!docResult)
     {
-        YAML::Node root = YAML::Load(p_yaml_text);
-        if (!root["BehaviorTree"])
-        {
-            return robotik::Return<Tree::Ptr>::error(
-                "Missing 'BehaviorTree' node in YAML text");
-        }
-
-        Blackboard::Ptr blackboard =
-            p_blackboard ? p_blackboard : std::make_shared<Blackboard>();
-
-        if (root["Blackboard"])
-        {
-            BlackboardSerializer::load(
-                *blackboard, root["Blackboard"], blackboard.get());
-        }
-
-        auto registryResult = buildSubTreeRegistry(root);
-        if (!registryResult)
-        {
-            return robotik::Return<Tree::Ptr>::error(registryResult.getError());
-        }
-        auto registry = registryResult.moveValue();
-        SubTreeRegistry const* registryPtr =
-            registry.definitions.empty() ? nullptr : &registry;
-
-        auto tree = Tree::create();
-        tree->setBlackboard(blackboard);
-
-        auto nodeResult = parseYAMLNode(
-            *tree, p_factory, root["BehaviorTree"], blackboard, registryPtr);
-        if (!nodeResult)
-        {
-            return robotik::Return<Tree::Ptr>::error(nodeResult.getError());
-        }
-
-        tree->setRootIndex(nodeResult.getValue());
-        return robotik::Return<Tree::Ptr>::success(std::move(tree));
+        return robotik::Return<Tree::Ptr>::error(docResult.getError());
     }
-    catch (const YAML::Exception& e)
-    {
-        return robotik::Return<Tree::Ptr>::error("YAML parsing error: " +
-                                                 std::string(e.what()));
-    }
-    catch (const std::exception& e)
-    {
-        return robotik::Return<Tree::Ptr>::error("Error: " +
-                                                 std::string(e.what()));
-    }
+
+    return docResult.getValue()->instantiate(p_factory, p_blackboard, p_options);
 }
 
 //-----------------------------------------------------------------------------
 robotik::Return<uint32_t>
 Builder::parseYAMLNode(Tree& p_tree,
                        NodeFactory const& p_factory,
-                       YAML::Node const& p_node,
+                       YamlNode const& p_node,
                        Blackboard::Ptr p_blackboard,
-                       SubTreeRegistry const* p_subtrees)
+                       SubTreeRegistry const* p_subtrees,
+                       BuilderOptions p_options)
 {
-    ParsingContext context{p_factory, p_blackboard, p_subtrees, &p_tree};
+    if (p_options.reserveNodes)
+    {
+        p_tree.reserveNodes(countYamlNodes(p_node));
+    }
+
+    ParsingContext context{
+        p_factory, p_blackboard, p_subtrees, &p_tree, p_options};
     return parseYAMLNodeInternal(context, p_node);
 }
 

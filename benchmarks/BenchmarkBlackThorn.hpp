@@ -47,10 +47,13 @@ inline void registerBenchmarkNodes(NodeFactory& p_factory)
 {
     auto success = []() { return Status::SUCCESS; };
 
-    for (char const* name :
-         {"LoadRoute", "FollowWaypoints", "AttemptNonLethal",
-          "NeutralizeThreat", "ExtractTeam", "LoadGameState",
-          "ChoosePrimaryEnemy"})
+    for (char const* name : {"LoadRoute",
+                             "FollowWaypoints",
+                             "AttemptNonLethal",
+                             "NeutralizeThreat",
+                             "ExtractTeam",
+                             "LoadGameState",
+                             "ChoosePrimaryEnemy"})
     {
         p_factory.registerAction(name, success);
     }
@@ -61,9 +64,25 @@ inline void registerBenchmarkNodes(NodeFactory& p_factory)
 inline robotik::Return<Tree::Ptr>
 loadTreeFromYaml(NodeFactory const& p_factory,
                  std::filesystem::path const& p_path,
-                 Blackboard::Ptr p_blackboard = nullptr)
+                 Blackboard::Ptr p_blackboard = nullptr,
+                 BuilderOptions p_options = {})
 {
-    return Builder::fromFile(p_factory, p_path.string(), p_blackboard);
+    return Builder::fromFile(p_factory, p_path.string(), p_blackboard, p_options);
+}
+
+inline robotik::Return<std::shared_ptr<TreeDocument>>
+parseTreeDocument(std::filesystem::path const& p_path)
+{
+    return TreeDocument::parseFile(p_path.string());
+}
+
+inline robotik::Return<Tree::Ptr>
+instantiateTree(NodeFactory const& p_factory,
+                std::shared_ptr<TreeDocument> const& p_document,
+                Blackboard::Ptr p_blackboard = nullptr,
+                BuilderOptions p_options = {})
+{
+    return p_document->instantiate(p_factory, p_blackboard, p_options);
 }
 
 } // namespace bt::benchmark

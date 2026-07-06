@@ -12,11 +12,11 @@
 #pragma once
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
+#include "BlackThorn/Blackboard/PortBinding.hpp"
 
 #include <optional>
 #include <regex>
 #include <string>
-#include <type_traits>
 
 namespace bt {
 
@@ -76,7 +76,12 @@ public:
     // ------------------------------------------------------------------------
     static std::string resolve(const std::string& p_str, const Blackboard& p_bb)
     {
-        std::regex pattern(R"(\$\{([^}]+)\})");
+        if (auto key = extractBlackboardReference(p_str))
+        {
+            return p_bb.getOrDefault<std::string>(*key, p_str);
+        }
+
+        static std::regex const pattern(R"(\$\{([^}]+)\})");
         std::string result = p_str;
         std::smatch match;
 
@@ -140,18 +145,36 @@ public:
     static std::optional<T> resolveValue(const std::string& p_expr,
                                          const Blackboard& p_bb)
     {
-        // If it is a reference ${key}
-        std::regex pattern(R"(\$\{([^}]+)\})");
-        std::smatch match;
-
-        if (std::regex_match(p_expr, match, pattern))
+        if (auto key = extractBlackboardReference(p_expr))
         {
-            std::string key = match[1].str();
-            return p_bb.get<T>(key);
+            return p_bb.get<T>(*key);
         }
 
         // Otherwise, it is a literal value
         return parseLiteral<T>(p_expr);
+    }
+
+    template <typename T>
+    static std::optional<T> resolveBinding(PortBinding const& p_binding,
+                                           Blackboard const& p_bb)
+    {
+        switch (p_binding.kind)
+        {
+            case PortBindingKind::BlackboardKey:
+                return p_bb.get<T>(p_binding.data);
+            case PortBindingKind::Literal:
+                return parseLiteral<T>(p_binding.data);
+        }
+        return std::nullopt;
+    }
+
+    static std::string resolveOutputKey(PortBinding const& p_binding)
+    {
+        if (p_binding.kind == PortBindingKind::BlackboardKey)
+        {
+            return p_binding.data;
+        }
+        return p_binding.data;
     }
 
 private:
@@ -211,9 +234,13 @@ private:
         else if constexpr (std::is_same_v<T, bool>)
         {
             if (p_str == "true" || p_str == "1")
+            {
                 return true;
+            }
             if (p_str == "false" || p_str == "0")
+            {
                 return false;
+            }
             return std::nullopt;
         }
         return std::nullopt;

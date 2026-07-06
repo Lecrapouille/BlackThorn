@@ -20,15 +20,13 @@ M := $(P)/.makefile
 include $(P)/Makefile.common
 TARGET_NAME := oakular
 TARGET_DESCRIPTION := Oakular - Behavior tree editor library
+CURRENT_DIR := $(P)/src/Oakular
+LIBRARY_DIR := $(P)/src/BlackThorn
 include $(M)/project/Makefile
+include $(LIBRARY_DIR)/BlackThorn.deps.mk
 
 ###############################################################################
 # Inform Makefile where to find *.cpp files
-CURRENT_DIR := $(P)/src/Oakular
-LIBRARY_DIR := $(P)/src/BlackThorn
-
-###############################################################################
-# Inform Makefile where to find header files
 #
 INCLUDES += $(CURRENT_DIR) $(P)/src $(THIRD_PARTIES_DIR)
 

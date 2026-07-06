@@ -8,7 +8,9 @@
 
 #include "BlackThorn/Blackboard/Serializer.hpp"
 
-#include <regex>
+#include "BlackThorn/Blackboard/PortBinding.hpp"
+#include "BlackThorn/Yaml/Document.hpp"
+
 #include <unordered_map>
 #include <vector>
 #include <yaml-cpp/yaml.h>
@@ -30,8 +32,31 @@ void BlackboardSerializer::load(Blackboard& p_target,
     for (auto const& entry : p_node)
     {
         auto key = entry.first.as<std::string>();
-        p_target.m_data[key] = toAny(entry.second, scope);
+        p_target.m_data[key] = toValue(entry.second, scope);
     }
+}
+
+void BlackboardSerializer::load(Blackboard& p_target,
+                                YamlNode const& p_node,
+                                Blackboard const* p_reference)
+{
+    if (!p_node.isMap())
+    {
+        return;
+    }
+
+    Blackboard const* scope = p_reference != nullptr ? p_reference : &p_target;
+
+    p_node.forEachMap([&](std::string_view p_key, YamlNode p_value) {
+        p_target.m_data[std::string(p_key)] = toValue(p_value, scope);
+    });
+}
+
+BlackboardValue
+BlackboardSerializer::valueFromNode(YamlNode const& p_node,
+                                    Blackboard const* p_scope)
+{
+    return toValue(p_node, p_scope);
 }
 
 // ------------------------------------------------------------------------
@@ -49,18 +74,16 @@ YAML::Node BlackboardSerializer::dump(Blackboard const& p_source)
 bool BlackboardSerializer::isReference(std::string const& p_literal,
                                        std::string& p_key)
 {
-    static std::regex pattern(R"(\$\{([^}]+)\})");
-    if (std::smatch match; std::regex_match(p_literal, match, pattern))
+    if (auto ref = extractBlackboardReference(p_literal))
     {
-        p_key = match[1].str();
+        p_key = std::move(*ref);
         return true;
     }
     return false;
 }
 
-// ------------------------------------------------------------------------
-std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
-                                     Blackboard const* p_scope)
+BlackboardValue BlackboardSerializer::toValue(YAML::Node const& p_node,
+                                              Blackboard const* p_scope)
 {
     if (!p_node)
     {
@@ -82,8 +105,7 @@ std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
 
         try
         {
-            int i = p_node.as<int>();
-            return i;
+            return p_node.as<int>();
         }
         catch (...)
         {
@@ -92,8 +114,7 @@ std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
 
         try
         {
-            double d = p_node.as<double>();
-            return d;
+            return p_node.as<double>();
         }
         catch (...)
         {
@@ -102,8 +123,7 @@ std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
 
         try
         {
-            bool b = p_node.as<bool>();
-            return b;
+            return p_node.as<bool>();
         }
         catch (...)
         {
@@ -116,7 +136,7 @@ std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
     // Convert a sequence value into a std::any value
     if (p_node.IsSequence())
     {
-        std::vector<std::any> generic;
+        std::vector<BlackboardValue> generic;
         generic.reserve(p_node.size());
 
         bool numeric_only = true;
@@ -125,16 +145,18 @@ std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
 
         for (auto const& element : p_node)
         {
-            auto entry = toAny(element, p_scope);
+            auto entry = toValue(element, p_scope);
 
-            if (entry.type() == typeid(int))
+            if (std::holds_alternative<int>(static_cast<BlackboardValue::Base const&>(entry)))
             {
                 numeric_values.push_back(
-                    static_cast<double>(std::any_cast<int>(entry)));
+                    static_cast<double>(std::get<int>(static_cast<BlackboardValue::Base const&>(entry))));
             }
-            else if (entry.type() == typeid(double))
+            else if (std::holds_alternative<double>(
+                         static_cast<BlackboardValue::Base const&>(entry)))
             {
-                numeric_values.push_back(std::any_cast<double>(entry));
+                numeric_values.push_back(std::get<double>(
+                    static_cast<BlackboardValue::Base const&>(entry)));
             }
             else
             {
@@ -155,11 +177,11 @@ std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
     // Convert a map value into a std::any value
     if (p_node.IsMap())
     {
-        std::unordered_map<std::string, std::any> map;
+        BlackboardMap map;
         for (auto const& element : p_node)
         {
             map.emplace(element.first.as<std::string>(),
-                        toAny(element.second, p_scope));
+                        toValue(element.second, p_scope));
         }
         return map;
     }
@@ -167,59 +189,164 @@ std::any BlackboardSerializer::toAny(YAML::Node const& p_node,
     return {};
 }
 
-// ------------------------------------------------------------------------
-YAML::Node BlackboardSerializer::toYaml(std::any const& p_value)
+BlackboardValue BlackboardSerializer::toValue(YamlNode const& p_node,
+                                              Blackboard const* p_scope)
 {
-    if (!p_value.has_value())
+    if (!p_node.valid())
+    {
+        return {};
+    }
+
+    if (p_node.isScalar())
+    {
+        std::string literal = p_node.scalar();
+        std::string key;
+        if (p_scope != nullptr && isReference(literal, key))
+        {
+            if (auto value = p_scope->raw(key))
+            {
+                return *value;
+            }
+        }
+
+        if (auto v = p_node.asInt())
+        {
+            return *v;
+        }
+
+        if (auto v = p_node.asDouble())
+        {
+            return *v;
+        }
+
+        if (auto v = p_node.asBool())
+        {
+            return *v;
+        }
+
+        return literal;
+    }
+
+    if (p_node.isSeq())
+    {
+        std::vector<BlackboardValue> generic;
+        generic.reserve(p_node.size());
+
+        bool numeric_only = true;
+        std::vector<double> numeric_values;
+        numeric_values.reserve(p_node.size());
+
+        p_node.forEachSeq([&](YamlNode p_element) {
+            auto entry = toValue(p_element, p_scope);
+
+            if (std::holds_alternative<int>(
+                    static_cast<BlackboardValue::Base const&>(entry)))
+            {
+                numeric_values.push_back(static_cast<double>(std::get<int>(
+                    static_cast<BlackboardValue::Base const&>(entry))));
+            }
+            else if (std::holds_alternative<double>(
+                         static_cast<BlackboardValue::Base const&>(entry)))
+            {
+                numeric_values.push_back(std::get<double>(
+                    static_cast<BlackboardValue::Base const&>(entry)));
+            }
+            else
+            {
+                numeric_only = false;
+            }
+
+            generic.push_back(std::move(entry));
+        });
+
+        if (numeric_only && !numeric_values.empty())
+        {
+            return numeric_values;
+        }
+
+        return generic;
+    }
+
+    if (p_node.isMap())
+    {
+        BlackboardMap map;
+        p_node.forEachMap([&](std::string_view p_key, YamlNode p_value) {
+            map.emplace(std::string(p_key), toValue(p_value, p_scope));
+        });
+        return map;
+    }
+
+    return {};
+}
+
+YAML::Node BlackboardSerializer::toYaml(BlackboardValue const& p_value)
+{
+    if (std::holds_alternative<std::monostate>(
+        static_cast<BlackboardValue::Base const&>(p_value)))
     {
         return YAML::Node();
     }
-
-    if (p_value.type() == typeid(int))
+    if (auto const* v = std::get_if<int>(&p_value.asBase()))
     {
-        return YAML::Node(std::any_cast<int>(p_value));
+        return YAML::Node(*v);
     }
-    if (p_value.type() == typeid(double))
+    if (auto const* v = std::get_if<double>(&p_value.asBase()))
     {
-        return YAML::Node(std::any_cast<double>(p_value));
+        return YAML::Node(*v);
     }
-    if (p_value.type() == typeid(bool))
+    if (auto const* v = std::get_if<bool>(&p_value.asBase()))
     {
-        return YAML::Node(std::any_cast<bool>(p_value));
+        return YAML::Node(*v);
     }
-    if (p_value.type() == typeid(std::string))
+    if (auto const* v = std::get_if<std::string>(&p_value.asBase()))
     {
-        return YAML::Node(std::any_cast<std::string>(p_value));
+        return YAML::Node(*v);
     }
-    if (p_value.type() == typeid(std::vector<double>))
+    if (auto const* v = std::get_if<std::vector<double>>(&p_value.asBase()))
     {
         YAML::Node node(YAML::NodeType::Sequence);
-        for (double entry : std::any_cast<std::vector<double> const&>(p_value))
+        for (double entry : *v)
         {
             node.push_back(entry);
         }
         return node;
     }
-    if (p_value.type() == typeid(std::vector<std::any>))
+    if (auto const* v = std::get_if<std::vector<BlackboardValue>>(&p_value.asBase()))
     {
         YAML::Node node(YAML::NodeType::Sequence);
-        for (auto const& entry :
-             std::any_cast<std::vector<std::any> const&>(p_value))
+        for (auto const& entry : *v)
         {
             node.push_back(toYaml(entry));
         }
         return node;
     }
-    if (p_value.type() == typeid(std::unordered_map<std::string, std::any>))
+    if (auto const* v = std::get_if<BlackboardMap>(&p_value.asBase()))
     {
         YAML::Node node(YAML::NodeType::Map);
-        for (auto const& [key, entry] :
-             std::any_cast<std::unordered_map<std::string, std::any> const&>(
-                 p_value))
+        for (auto const& [key, entry] : *v)
         {
             node[key] = toYaml(entry);
         }
         return node;
+    }
+    if (auto const* v = std::get_if<std::any>(&p_value.asBase()))
+    {
+        if (v->type() == typeid(int))
+        {
+            return YAML::Node(std::any_cast<int>(*v));
+        }
+        if (v->type() == typeid(double))
+        {
+            return YAML::Node(std::any_cast<double>(*v));
+        }
+        if (v->type() == typeid(bool))
+        {
+            return YAML::Node(std::any_cast<bool>(*v));
+        }
+        if (v->type() == typeid(std::string))
+        {
+            return YAML::Node(std::any_cast<std::string>(*v));
+        }
     }
 
     return YAML::Node();

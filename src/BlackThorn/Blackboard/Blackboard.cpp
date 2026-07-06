@@ -12,7 +12,6 @@
 
 namespace bt {
 
-// ------------------------------------------------------------------------
 Blackboard::Blackboard(Blackboard::Ptr p_parent) : m_parent(std::move(p_parent))
 {
 }
@@ -56,7 +55,7 @@ std::string Blackboard::dump(std::string const& p_title,
 
     for (const auto& [key, value] : m_data)
     {
-        oss << "  " << key << " = " << anyToString(value);
+        oss << "  " << key << " = " << valueToString(value);
 
         if (auto it = m_portRemapping.find(key); it != m_portRemapping.end())
         {
@@ -79,7 +78,7 @@ std::string Blackboard::dump(std::string const& p_title,
         oss << "  --- Parent Blackboard ---" << std::endl;
         for (const auto& [key, value] : m_parent->m_data)
         {
-            oss << "    " << key << " = " << anyToString(value) << std::endl;
+            oss << "    " << key << " = " << valueToString(value) << std::endl;
         }
     }
 
@@ -100,35 +99,38 @@ std::vector<Blackboard::Key> Blackboard::keys() const
     return result;
 }
 
-// ------------------------------------------------------------------------
-std::string Blackboard::anyToString(Value const& p_value)
+std::string Blackboard::valueToString(Value const& p_value)
 {
-    if (auto* v = std::any_cast<std::string>(&p_value))
+    if (auto const* v = std::get_if<std::string>(&p_value.asBase()))
     {
         return "\"" + *v + "\" (string)";
     }
-    if (auto* v = std::any_cast<int>(&p_value))
+    if (auto const* v = std::get_if<int>(&p_value.asBase()))
     {
         return std::to_string(*v) + " (int)";
     }
-    if (auto* v = std::any_cast<double>(&p_value))
+    if (auto const* v = std::get_if<double>(&p_value.asBase()))
     {
         return std::to_string(*v) + " (double)";
     }
-    if (auto* v = std::any_cast<float>(&p_value))
+    if (auto const* v = std::get_if<float>(&p_value.asBase()))
     {
         return std::to_string(*v) + " (float)";
     }
-    if (auto* v = std::any_cast<bool>(&p_value))
+    if (auto const* v = std::get_if<bool>(&p_value.asBase()))
     {
         return (*v ? "true" : "false") + std::string(" (bool)");
     }
-    if (auto* v = std::any_cast<size_t>(&p_value))
+    if (auto const* v = std::get_if<std::size_t>(&p_value.asBase()))
     {
         return std::to_string(*v) + " (size_t)";
     }
+    if (auto const* v = std::get_if<std::any>(&p_value.asBase()))
+    {
+        return std::string("(") + v->type().name() + ")";
+    }
 
-    return std::string("(") + p_value.type().name() + ")";
+    return "(complex)";
 }
 
 } // namespace bt

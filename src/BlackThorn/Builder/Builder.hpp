@@ -10,16 +10,12 @@
 #pragma once
 
 #include "BlackThorn/Builder/Factory.hpp"
+#include "BlackThorn/Builder/TreeDocument.hpp"
 #include "BlackThorn/Common/Return.hpp"
 #include "BlackThorn/Nodes/Tree.hpp"
-
-namespace YAML {
-class Node;
-}
+#include "BlackThorn/Yaml/Document.hpp"
 
 namespace bt {
-
-struct SubTreeRegistry;
 
 // ****************************************************************************
 //! \brief Builder class for creating behavior trees from YAML.
@@ -81,7 +77,8 @@ public:
     static robotik::Return<Tree::Ptr>
     fromFile(NodeFactory const& p_factory,
              std::string const& p_file_path,
-             Blackboard::Ptr p_blackboard = nullptr);
+             Blackboard::Ptr p_blackboard = nullptr,
+             BuilderOptions p_options = {});
 
     // --------------------------------------------------------------------------
     //! \brief Create a behavior tree from YAML text.
@@ -93,7 +90,8 @@ public:
     static robotik::Return<Tree::Ptr>
     fromText(NodeFactory const& p_factory,
              std::string const& p_yaml_text,
-             Blackboard::Ptr p_blackboard = nullptr);
+             Blackboard::Ptr p_blackboard = nullptr,
+             BuilderOptions p_options = {});
 
     // --------------------------------------------------------------------------
     //! \brief Parse a YAML node into a behavior tree, returning the root index.
@@ -102,14 +100,16 @@ public:
     //! \param[in] p_node The YAML node to parse.
     //! \param[in] p_blackboard Optional blackboard for parameter resolution.
     //! \param[in] p_subtrees Optional reusable subtree definitions.
-    //! \return Return object containing the root node index or an error message.
+    //! \return Return object containing the root node index or an error
+    //! message.
     // --------------------------------------------------------------------------
     static robotik::Return<uint32_t>
     parseYAMLNode(Tree& p_tree,
                   NodeFactory const& p_factory,
-                  YAML::Node const& p_node,
+                  YamlNode const& p_node,
                   Blackboard::Ptr p_blackboard = nullptr,
-                  SubTreeRegistry const* p_subtrees = nullptr);
+                  SubTreeRegistry const* p_subtrees = nullptr,
+                  BuilderOptions p_options = {});
 };
 
 } // namespace bt

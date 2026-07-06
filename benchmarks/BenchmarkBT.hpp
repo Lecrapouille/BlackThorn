@@ -40,7 +40,8 @@ public:
 
     static BT::PortsList providedPorts()
     {
-        return {BT::InputPort<int>("a"), BT::InputPort<int>("b"),
+        return {BT::InputPort<int>("a"),
+                BT::InputPort<int>("b"),
                 BT::InputPort<std::string>("label")};
     }
 };
@@ -50,12 +51,15 @@ inline BT::BehaviorTreeFactory makeFactory()
     BT::BehaviorTreeFactory factory;
 
     BT::NodeStatus const ok = BT::NodeStatus::SUCCESS;
-    auto noop = [ok](BT::TreeNode&) { return ok; };
+    auto noop = [&ok](BT::TreeNode&) { return ok; };
 
-    for (char const* name :
-         {"LoadRoute", "FollowWaypoints", "AttemptNonLethal",
-          "NeutralizeThreat", "ExtractTeam", "LoadGameState",
-          "ChoosePrimaryEnemy"})
+    for (char const* name : {"LoadRoute",
+                             "FollowWaypoints",
+                             "AttemptNonLethal",
+                             "NeutralizeThreat",
+                             "ExtractTeam",
+                             "LoadGameState",
+                             "ChoosePrimaryEnemy"})
     {
         factory.registerSimpleAction(name, noop);
     }

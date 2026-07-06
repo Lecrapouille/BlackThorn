@@ -54,6 +54,41 @@ void benchBlackThornYamlLoad(char const* p_name,
     ::benchmark::printResult(p_name, kLoadIterations, total_ms);
 }
 
+void benchBlackThornYamlParse(char const* p_name,
+                              std::filesystem::path const& p_path)
+{
+    double const total_ms = ::benchmark::runTimed(kLoadIterations, [&]() {
+        auto result = bt::benchmark::parseTreeDocument(p_path);
+        if (!result.isSuccess())
+        {
+            throw std::runtime_error(result.getError());
+        }
+    });
+    ::benchmark::printResult(p_name, kLoadIterations, total_ms);
+}
+
+void benchBlackThornYamlBuild(char const* p_name,
+                              std::filesystem::path const& p_path,
+                              bt::NodeFactory const& p_factory,
+                              bt::Blackboard::Ptr p_blackboard = nullptr)
+{
+    auto document = bt::benchmark::parseTreeDocument(p_path);
+    if (!document.isSuccess())
+    {
+        throw std::runtime_error(document.getError());
+    }
+
+    double const total_ms = ::benchmark::runTimed(kLoadIterations, [&]() {
+        auto result = bt::benchmark::instantiateTree(
+            p_factory, document.getValue(), p_blackboard);
+        if (!result.isSuccess())
+        {
+            throw std::runtime_error(result.getError());
+        }
+    });
+    ::benchmark::printResult(p_name, kLoadIterations, total_ms);
+}
+
 void benchBlackThornTick(char const* p_name, bt::Tree& p_tree)
 {
     warmupBlackThorn(p_tree);
@@ -108,10 +143,19 @@ void runBlackThornBenchmarks()
     auto const bb_large_yaml = bt::benchmark::yamlPath("blackboard_large.yaml");
 
     std::cout << "--- XML/YAML load (Builder::fromFile) ---\n";
-    benchBlackThornYamlLoad("[BlackThorn] load.parallel_100_success", parallel_yaml,
-                            factory);
-    benchBlackThornYamlLoad("[BlackThorn] load.sequence_depth_50", sequence_yaml,
-                            factory);
+    benchBlackThornYamlParse("[BlackThorn] load.parse.parallel_100_success",
+                             parallel_yaml);
+    benchBlackThornYamlBuild("[BlackThorn] load.build.parallel_100_success",
+                             parallel_yaml, factory);
+    benchBlackThornYamlLoad("[BlackThorn] load.full.parallel_100_success",
+                            parallel_yaml, factory);
+
+    benchBlackThornYamlParse("[BlackThorn] load.parse.sequence_depth_50",
+                             sequence_yaml);
+    benchBlackThornYamlBuild("[BlackThorn] load.build.sequence_depth_50",
+                             sequence_yaml, factory);
+    benchBlackThornYamlLoad("[BlackThorn] load.full.sequence_depth_50",
+                            sequence_yaml, factory);
 
     auto patrol_bb = std::make_shared<Blackboard>();
     benchBlackThornYamlLoad("[BlackThorn] load.patrol", patrol_yaml, factory,

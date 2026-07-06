@@ -23,8 +23,8 @@ inline std::filesystem::path benchmarksRoot()
     fs::path probe = fs::current_path();
     for (int i = 0; i < 8; ++i)
     {
-        fs::path candidate = probe / "benchmarks";
-        if (fs::exists(candidate / "yaml") || fs::exists(candidate / "xml"))
+        if (fs::path candidate = probe / "benchmarks";
+            fs::exists(candidate / "yaml") || fs::exists(candidate / "xml"))
         {
             return candidate;
         }
@@ -63,17 +63,18 @@ inline void printResult(std::string const& p_name,
                         double p_total_ms)
 {
     double const per_op_us =
-        p_iterations > 0 ? (p_total_ms * 1000.0) / static_cast<double>(p_iterations)
-                         : 0.0;
+        p_iterations > 0
+            ? (p_total_ms * 1000.0) / static_cast<double>(p_iterations)
+            : 0.0;
 
-    std::cout << std::left << std::setw(46) << p_name << "  "
-              << std::setw(10) << p_iterations << std::setw(12) << std::fixed
+    std::cout << std::left << std::setw(46) << p_name << "  " << std::setw(10)
+              << p_iterations << std::setw(12) << std::fixed
               << std::setprecision(3) << p_total_ms << " ms" << "  ("
               << std::setprecision(2) << per_op_us << " us/op)" << '\n';
 }
 
-inline double runTimed(std::size_t p_iterations,
-                       std::function<void()> const& p_fn)
+template <typename Fn>
+inline double runTimed(std::size_t p_iterations, Fn const& p_fn)
 {
     Timer timer;
     timer.start();

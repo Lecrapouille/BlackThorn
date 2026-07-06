@@ -141,6 +141,23 @@ public:
         {
             flags[p_index] = p_value;
         }
+
+        // --------------------------------------------------------------------
+        //! \brief Pre-allocate runtime slots for upcoming nodes.
+        // --------------------------------------------------------------------
+        void reserve(std::size_t p_count)
+        {
+            statuses.reserve(p_count);
+            children.reserve(p_count);
+            child_cursors.reserve(p_count);
+            decorator_children.reserve(p_count);
+            counters.reserve(p_count);
+            limits.reserve(p_count);
+            cached_statuses.reserve(p_count);
+            flags.reserve(p_count);
+            time_points.reserve(p_count);
+            duration_ms_runtime.reserve(p_count);
+        }
     };
 
     // ------------------------------------------------------------------------
@@ -202,6 +219,19 @@ public:
         m_runtime.pushSlot();
         m_metadata.pushSlot();
         return index;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Pre-allocate storage for an expected node count.
+    //! \param[in] p_count Expected number of nodes in the tree.
+    // ------------------------------------------------------------------------
+    void reserveNodes(std::size_t p_count)
+    {
+        m_pool.reserve(p_count);
+        m_kinds.reserve(p_count);
+        m_configs.reserve(p_count);
+        m_runtime.reserve(p_count);
+        m_metadata.reserve(p_count);
     }
 
     // ------------------------------------------------------------------------

@@ -9,6 +9,8 @@
 #include "Renderer.hpp"
 #include "IDE.hpp"
 
+#include "BlackThorn/Blackboard/BlackboardDisplay.hpp"
+
 #include <imgui.h>
 
 #include <cmath>
@@ -32,83 +34,11 @@ static constexpr size_t MAX_VALUE_DISPLAY_LENGTH = 15;
 static std::string getBlackboardValueString(bt::Blackboard const* blackboard,
                                             const std::string& key)
 {
-    if (!blackboard)
-        return "";
-
-    auto raw_value = blackboard->raw(key);
-    if (!raw_value.has_value())
-        return "";
-
-    std::string result;
-    try
-    {
-        if (raw_value->type() == typeid(int))
-            result = std::to_string(std::any_cast<int>(*raw_value));
-        else if (raw_value->type() == typeid(double))
-        {
-            // Format double with limited precision
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(2)
-                << std::any_cast<double>(*raw_value);
-            result = oss.str();
-        }
-        else if (raw_value->type() == typeid(bool))
-            result = std::any_cast<bool>(*raw_value) ? "true" : "false";
-        else if (raw_value->type() == typeid(std::string))
-            result = std::any_cast<std::string>(*raw_value);
-        else if (raw_value->type() ==
-                 typeid(std::unordered_map<std::string, std::any>))
-        {
-            // Struct: show field names
-            const auto& map =
-                std::any_cast<const std::unordered_map<std::string, std::any>&>(
-                    *raw_value);
-            result = "{";
-            size_t count = 0;
-            for (const auto& [field_key, field_value] : map)
-            {
-                if (count > 0)
-                    result += ", ";
-                result += field_key;
-                ++count;
-                if (count >= 3 && map.size() > 3)
-                {
-                    result += ", ...";
-                    break;
-                }
-            }
-            result += "}";
-        }
-        else if (raw_value->type() == typeid(std::vector<std::any>))
-        {
-            // Array: show item count
-            const auto& vec =
-                std::any_cast<const std::vector<std::any>&>(*raw_value);
-            result = "[" + std::to_string(vec.size()) + " items]";
-        }
-        else if (raw_value->type() == typeid(std::vector<double>))
-        {
-            // Double array: show item count
-            const auto& vec =
-                std::any_cast<const std::vector<double>&>(*raw_value);
-            result = "[" + std::to_string(vec.size()) + " doubles]";
-        }
-        else
-        {
-            result = "..."; // Unknown complex type
-        }
-    }
-    catch (...)
-    {
-        return "";
-    }
-
-    // Truncate if too long
+    std::string result = bt::getBlackboardDisplayValue(blackboard, key);
     if (result.length() > MAX_VALUE_DISPLAY_LENGTH)
     {
         result = result.substr(0, MAX_VALUE_DISPLAY_LENGTH - 3) + "...";
     }
-
     return result;
 }
 
