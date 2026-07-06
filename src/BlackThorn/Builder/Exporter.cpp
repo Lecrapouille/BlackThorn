@@ -41,7 +41,7 @@ public:
             yaml << indent() << "- " << p_type << ":\n";
         }
         indent_level++;
-        yaml << indent() << "_id: " << p_node.id() << "\n";
+        yaml << indent() << "_id: " << p_node.visualizerId() << "\n";
         yaml << indent() << "name: " << p_node.name << "\n";
     }
 
@@ -79,9 +79,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -94,9 +94,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -109,9 +109,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -124,9 +124,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -139,9 +139,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -154,9 +154,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -173,9 +173,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -193,9 +193,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -209,7 +209,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -222,7 +222,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -235,7 +235,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -248,7 +248,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -260,7 +260,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -272,7 +272,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -286,7 +286,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -300,7 +300,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -314,7 +314,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -326,7 +326,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildEnd();
         }
         writeNodeEnd();
@@ -351,13 +351,7 @@ public:
         writeNodeEnd();
     }
 
-    void visitAction(Action const& p_node) override
-    {
-        writeNodeStart("Action", p_node);
-        writeNodeEnd();
-    }
-
-    void visitSugarAction(SugarAction const& p_node) override
+    void visitCallback(CallbackLeaf const& p_node) override
     {
         writeNodeStart("Action", p_node);
         writeNodeEnd();
@@ -366,10 +360,7 @@ public:
     void visitSubTree(SubTreeNode const& p_node) override
     {
         writeNodeStart("SubTree", p_node);
-        if (p_node.handle())
-        {
-            yaml << indent() << "reference: " << p_node.handle()->id() << "\n";
-        }
+        yaml << indent() << "reference: " << p_node.reference() << "\n";
         writeNodeEnd();
     }
 
@@ -413,7 +404,7 @@ public:
 
     std::string nodeId(Node const& p_node) const
     {
-        return "n" + std::to_string(p_node.id());
+        return "n" + std::to_string(p_node.visualizerId());
     }
 
     void writeNode(std::string const& p_type,
@@ -437,9 +428,9 @@ public:
         writeNode(p_type, p_node, "[[", "]]");
         std::string prev_parent = m_parent_id;
         m_parent_id = nodeId(p_node);
-        for (auto const& child : p_node.getChildren())
+        for (uint32_t child_index : p_node.childIndices())
         {
-            child->accept(*this);
+            p_node.ownerTree()->node(child_index).accept(*this);
         }
         m_parent_id = prev_parent;
     }
@@ -451,7 +442,7 @@ public:
         m_parent_id = nodeId(p_node);
         if (p_node.hasChild())
         {
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
         }
         m_parent_id = prev_parent;
     }
@@ -550,11 +541,7 @@ public:
     {
         visitLeaf("Condition", p_node);
     }
-    void visitAction(Action const& p_node) override
-    {
-        visitLeaf("Action", p_node);
-    }
-    void visitSugarAction(SugarAction const& p_node) override
+    void visitCallback(CallbackLeaf const& p_node) override
     {
         visitLeaf("Action", p_node);
     }

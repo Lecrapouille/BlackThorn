@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="PatrolAndEngage">
+      <SubTree ID="PatrolRoute" name="PatrolRoute"/>
+      <SubTree ID="EngageEnemy" name="EngageEnemy"/>
+      <Action ID="ExtractTeam" name="ExtractTeam"/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="PatrolRoute">
+    <Sequence name="PatrolRoute">
+      <Action ID="LoadRoute" name="LoadRoute"/>
+      <Action ID="FollowWaypoints" name="FollowWaypoints"/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="EngageEnemy">
+    <Fallback name="EngageEnemy">
+      <Action ID="AttemptNonLethal" name="AttemptNonLethal"/>
+      <Action ID="NeutralizeThreat" name="NeutralizeThreat"/>
+    </Fallback>
+  </BehaviorTree>
+</root>

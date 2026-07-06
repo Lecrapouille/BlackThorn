@@ -9,10 +9,8 @@
 #pragma once
 
 #include <any>
-#include <iostream>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -57,9 +55,7 @@ public:
     //! \brief Constructor.
     //! \param[in] p_parent The parent blackboard.
     // ------------------------------------------------------------------------
-    explicit Blackboard(Blackboard::Ptr p_parent = nullptr) : m_parent(p_parent)
-    {
-    }
+    explicit Blackboard(Blackboard::Ptr p_parent = nullptr);
 
     // ------------------------------------------------------------------------
     //! \brief Set a value with generic type.
@@ -90,20 +86,7 @@ public:
     //! \param[in] p_key The key to get the value.
     //! \return The stored std::any if present, std::nullopt otherwise.
     // ------------------------------------------------------------------------
-    [[nodiscard]] std::optional<Value> raw(const Key& p_key) const
-    {
-        if (auto it = m_data.find(p_key); it != m_data.end())
-        {
-            return it->second;
-        }
-
-        if (m_parent)
-        {
-            return m_parent->raw(p_key);
-        }
-
-        return std::nullopt;
-    }
+    [[nodiscard]] std::optional<Value> raw(const Key& p_key) const;
 
     // ------------------------------------------------------------------------
     //! \brief Get a value with automatic type conversion.
@@ -165,14 +148,7 @@ public:
     //! \param[in] p_key The key to check.
     //! \return True if the key exists, false otherwise.
     // ------------------------------------------------------------------------
-    [[nodiscard]] bool has(const Key& p_key) const
-    {
-        if (m_data.find(p_key) != m_data.end())
-            return true;
-        if (m_parent)
-            return m_parent->has(p_key);
-        return false;
-    }
+    [[nodiscard]] bool has(const Key& p_key) const;
 
     // ------------------------------------------------------------------------
     //! \brief Remove a key.
@@ -210,90 +186,19 @@ public:
     //! \return String representation of the blackboard contents.
     // ------------------------------------------------------------------------
     [[nodiscard]] std::string dump(std::string const& p_title = "Blackboard",
-                                   bool p_showParent = false) const
-    {
-        std::ostringstream oss;
-        oss << "=== " << p_title << " ===" << std::endl;
-
-        // Show local data with values
-        for (const auto& [key, value] : m_data)
-        {
-            oss << "  " << key << " = " << anyToString(value);
-
-            // Show remapping info if this key is remapped
-            auto it = m_portRemapping.find(key);
-            if (it != m_portRemapping.end())
-            {
-                oss << "  [remapped to port of parent tree: " << it->second
-                    << "]";
-            }
-            oss << std::endl;
-        }
-
-        // Show remapped ports that don't have local values yet
-        for (const auto& [localKey, parentKey] : m_portRemapping)
-        {
-            if (m_data.find(localKey) == m_data.end())
-            {
-                oss << "  [" << localKey
-                    << "] remapped to port of parent tree [" << parentKey << "]"
-                    << std::endl;
-            }
-        }
-
-        // Optionally show parent data
-        if (p_showParent && m_parent)
-        {
-            oss << "  --- Parent Blackboard ---" << std::endl;
-            for (const auto& [key, value] : m_parent->m_data)
-            {
-                oss << "    " << key << " = " << anyToString(value)
-                    << std::endl;
-            }
-        }
-
-        return oss.str();
-    }
+                                   bool p_showParent = false) const;
 
     // ------------------------------------------------------------------------
     //! \brief Get all keys stored in this blackboard (not including parent).
     //! \return Vector of all keys.
     // ------------------------------------------------------------------------
-    [[nodiscard]] std::vector<Key> keys() const
-    {
-        std::vector<Key> result;
-        result.reserve(m_data.size());
-        for (const auto& [key, _] : m_data)
-        {
-            result.push_back(key);
-        }
-        return result;
-    }
+    [[nodiscard]] std::vector<Key> keys() const;
 
 private:
 
-    // ------------------------------------------------------------------------
-    //! \brief Convert std::any to a readable string.
-    // ------------------------------------------------------------------------
-    static std::string anyToString(Value const& p_value)
-    {
-        // Try common types
-        if (auto* v = std::any_cast<std::string>(&p_value))
-            return "\"" + *v + "\" (string)";
-        if (auto* v = std::any_cast<int>(&p_value))
-            return std::to_string(*v) + " (int)";
-        if (auto* v = std::any_cast<double>(&p_value))
-            return std::to_string(*v) + " (double)";
-        if (auto* v = std::any_cast<float>(&p_value))
-            return std::to_string(*v) + " (float)";
-        if (auto* v = std::any_cast<bool>(&p_value))
-            return (*v ? "true" : "false") + std::string(" (bool)");
-        if (auto* v = std::any_cast<size_t>(&p_value))
-            return std::to_string(*v) + " (size_t)";
+    static std::string anyToString(Value const& p_value);
 
-        // Fallback to type name
-        return std::string("(") + p_value.type().name() + ")";
-    }
+private:
 
     std::unordered_map<Key, Value> m_data;
     std::shared_ptr<Blackboard> m_parent;

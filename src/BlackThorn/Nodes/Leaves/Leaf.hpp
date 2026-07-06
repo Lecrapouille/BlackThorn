@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Node.hpp"
+#include "BlackThorn/Nodes/Node.hpp"
 
 namespace bt {
 
@@ -25,15 +25,6 @@ public:
     //! \brief Default constructor.
     // ------------------------------------------------------------------------
     Leaf() = default;
-
-    // ------------------------------------------------------------------------
-    //! \brief Check if the leaf node is valid.
-    //! \return True if the leaf node is valid, false otherwise.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] bool isValid() const override
-    {
-        return true;
-    }
 };
 
 } // namespace bt

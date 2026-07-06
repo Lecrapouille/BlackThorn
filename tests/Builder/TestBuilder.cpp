@@ -45,16 +45,16 @@ std::filesystem::path resolveExampleFile(std::string const& filename)
 // Custom Test Action Nodes
 // ===========================================================================
 
-class TestAction: public bt::Action
+class TestAction: public bt::CallbackLeaf
 {
 public:
 
-    TestAction() : m_executed(false) {}
-
-    bt::Status onRunning() override
+    TestAction()
+        : CallbackLeaf([this]() {
+              m_executed = true;
+              return bt::Status::SUCCESS;
+          })
     {
-        m_executed = true;
-        return bt::Status::SUCCESS;
     }
 
     bool wasExecuted() const
@@ -64,18 +64,16 @@ public:
 
 private:
 
-    bool m_executed;
+    bool m_executed = false;
 };
 
-class TestCondition: public bt::Action
+class TestCondition: public bt::CallbackLeaf
 {
 public:
 
-    TestCondition() = default;
-
-    bt::Status onRunning() override
+    TestCondition()
+        : CallbackLeaf([]() { return bt::Status::SUCCESS; })
     {
-        return bt::Status::SUCCESS;
     }
 };
 
@@ -1137,25 +1135,27 @@ BehaviorTree:
 namespace {
 
 // Test action that reads a goal from port and writes result
-class MoveBase: public bt::Action
+class MoveBase: public bt::CallbackLeaf
 {
 public:
+
+    MoveBase()
+        : CallbackLeaf([this]() {
+              if (auto goal = getInput<std::string>("goal"); goal)
+              {
+                  m_last_goal = *goal;
+                  return bt::Status::SUCCESS;
+              }
+              return bt::Status::FAILURE;
+          })
+    {
+    }
 
     bt::PortList providedPorts() const override
     {
         bt::PortList ports;
         ports.addInput<std::string>("goal");
         return ports;
-    }
-
-    bt::Status onRunning() override
-    {
-        if (auto goal = getInput<std::string>("goal"); goal)
-        {
-            m_last_goal = *goal;
-            return bt::Status::SUCCESS;
-        }
-        return bt::Status::FAILURE;
     }
 
     std::string getLastGoal() const
@@ -1169,25 +1169,27 @@ private:
 };
 
 // Test action that reads a message from port
-class SaySomething: public bt::Action
+class SaySomething: public bt::CallbackLeaf
 {
 public:
+
+    SaySomething()
+        : CallbackLeaf([this]() {
+              if (auto msg = getInput<std::string>("message"); msg)
+              {
+                  m_last_message = *msg;
+                  return bt::Status::SUCCESS;
+              }
+              return bt::Status::FAILURE;
+          })
+    {
+    }
 
     bt::PortList providedPorts() const override
     {
         bt::PortList ports;
         ports.addInput<std::string>("message");
         return ports;
-    }
-
-    bt::Status onRunning() override
-    {
-        if (auto msg = getInput<std::string>("message"); msg)
-        {
-            m_last_message = *msg;
-            return bt::Status::SUCCESS;
-        }
-        return bt::Status::FAILURE;
     }
 
     std::string getLastMessage() const

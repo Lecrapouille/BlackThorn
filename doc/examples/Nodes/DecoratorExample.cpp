@@ -4,22 +4,24 @@
 
 #include <iostream>
 
-class FlakyConnect final: public bt::Action
+class FlakyConnect final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    FlakyConnect()
+        : CallbackLeaf([this]() {
+              ++m_attempts;
+              if (m_attempts < 3)
+              {
+                  std::cout << "[Decorator] Connect attempt " << m_attempts
+                            << " failed\n";
+                  return bt::Status::FAILURE;
+              }
+              std::cout << "[Decorator] Connect attempt " << m_attempts
+                        << " succeeded\n";
+              return bt::Status::SUCCESS;
+          })
     {
-        ++m_attempts;
-        if (m_attempts < 3)
-        {
-            std::cout << "[Decorator] Connect attempt " << m_attempts
-                      << " failed\n";
-            return bt::Status::FAILURE;
-        }
-        std::cout << "[Decorator] Connect attempt " << m_attempts
-                  << " succeeded\n";
-        return bt::Status::SUCCESS;
     }
 
 private:
@@ -31,11 +33,9 @@ int decorator_example()
 {
     using namespace bt;
 
-    auto retry = Node::create<UntilSuccess>(3);
-    retry->setChild(Node::create<FlakyConnect>());
-
     auto tree = Tree::create();
-    tree->setRoot(std::move(retry));
+    auto& retry = tree->createRoot<UntilSuccess>(3);
+    retry.createChild<FlakyConnect>();
 
     Status status = Status::RUNNING;
     while (status == Status::RUNNING)

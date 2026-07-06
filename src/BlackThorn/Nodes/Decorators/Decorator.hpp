@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Node.hpp"
+#include "BlackThorn/Nodes/Node.hpp"
+#include "BlackThorn/Nodes/Tree.hpp"
 
 namespace bt {
 
@@ -21,26 +22,28 @@ class Decorator: public Node
 public:
 
     // ------------------------------------------------------------------------
-    //! \brief Set the child node of the decorator.
-    //! \param[in] child The child node to set.
+    //! \brief Set the child node index of the decorator.
+    //! \param[in] p_child_index Storage index of the child inside the tree.
     // ------------------------------------------------------------------------
-    void setChild(Node::Ptr p_child)
+    void setChildIndex(std::size_t p_child_index)
     {
-        m_child = std::move(p_child);
+        m_child_index = p_child_index;
+        tree().runtime().setDecoratorChild(index(), p_child_index);
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Set the child node of the decorator.
-    //! \param[in] args The arguments to pass to the constructor of T
-    //! \return A reference to the new child node
+    //! \brief Create and attach a single child node of type T.
+    //! \tparam T Concrete node type derived from \ref Node.
+    //! \param[in] p_args Arguments forwarded to the node constructor.
+    //! \return A reference to the new child node.
     // ------------------------------------------------------------------------
     template <class T, typename... Args>
     [[nodiscard]] inline T& createChild(Args&&... p_args)
     {
-        auto child = Node::create<T>(std::forward<Args>(p_args)...);
-        T* ptr = child.get();
-        m_child = std::move(child);
-        return *ptr;
+        static_assert(std::is_base_of_v<Node, T>, "T must inherit from Node");
+        T& child = tree().emplaceNode<T>(std::forward<Args>(p_args)...);
+        setChildIndex(child.index());
+        return child;
     }
 
     // ------------------------------------------------------------------------
@@ -49,7 +52,7 @@ public:
     // ------------------------------------------------------------------------
     [[nodiscard]] inline bool hasChild() const
     {
-        return m_child != nullptr;
+        return m_child_index != INVALID_NODE_INDEX;
     }
 
     // ------------------------------------------------------------------------
@@ -57,9 +60,9 @@ public:
     //! \note The child node shall exist. Use hasChild() to check.
     //! \return The child node reference.
     // ------------------------------------------------------------------------
-    [[nodiscard]] inline Node const& getChild() const
+    [[nodiscard]] inline Node const& childNode() const
     {
-        return *(m_child.get());
+        return tree().node(m_child_index);
     }
 
     // ------------------------------------------------------------------------
@@ -67,51 +70,15 @@ public:
     //! \note The child node shall exist. Use hasChild() to check.
     //! \return The child node reference.
     // ------------------------------------------------------------------------
-    [[nodiscard]] inline Node& getChild()
+    [[nodiscard]] inline Node& childNode()
     {
-        return *(m_child.get());
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Check if the composite node is valid.
-    //! \return True if the composite node is valid, false otherwise.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] bool isValid() const override
-    {
-        return (m_child != nullptr) && (m_child->isValid());
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Reset the decorator and its child recursively.
-    // ------------------------------------------------------------------------
-    void reset() override
-    {
-        if (m_child != nullptr)
-        {
-            m_child->reset();
-        }
-        m_status = Status::INVALID;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Halt the decorator and its child recursively.
-    // ------------------------------------------------------------------------
-    void halt() override
-    {
-        if (m_child != nullptr)
-        {
-            m_child->halt();
-        }
-        if (m_status == Status::RUNNING)
-        {
-            onHalt();
-        }
-        m_status = Status::INVALID;
+        return tree().node(m_child_index);
     }
 
 protected:
 
-    Node::Ptr m_child = nullptr;
+    //! \brief Storage index of the single child node.
+    std::size_t m_child_index = INVALID_NODE_INDEX;
 };
 
 } // namespace bt

@@ -1,0 +1,154 @@
+# Benchmark: Sequence nested 50 levels deep (indirection stress).
+BehaviorTree:
+  Sequence:
+    name: Root
+    children:
+    - Sequence:
+        name: Level1
+        children:
+          - Sequence:
+              name: Level2
+              children:
+                - Sequence:
+                    name: Level3
+                    children:
+                      - Sequence:
+                          name: Level4
+                          children:
+                            - Sequence:
+                                name: Level5
+                                children:
+                                  - Sequence:
+                                      name: Level6
+                                      children:
+                                        - Sequence:
+                                            name: Level7
+                                            children:
+                                              - Sequence:
+                                                  name: Level8
+                                                  children:
+                                                    - Sequence:
+                                                        name: Level9
+                                                        children:
+                                                          - Sequence:
+                                                              name: Level10
+                                                              children:
+                                                                - Sequence:
+                                                                    name: Level11
+                                                                    children:
+                                                                      - Sequence:
+                                                                          name: Level12
+                                                                          children:
+                                                                            - Sequence:
+                                                                                name: Level13
+                                                                                children:
+                                                                                  - Sequence:
+                                                                                      name: Level14
+                                                                                      children:
+                                                                                        - Sequence:
+                                                                                            name: Level15
+                                                                                            children:
+                                                                                              - Sequence:
+                                                                                                  name: Level16
+                                                                                                  children:
+                                                                                                    - Sequence:
+                                                                                                        name: Level17
+                                                                                                        children:
+                                                                                                          - Sequence:
+                                                                                                              name: Level18
+                                                                                                              children:
+                                                                                                                - Sequence:
+                                                                                                                    name: Level19
+                                                                                                                    children:
+                                                                                                                      - Sequence:
+                                                                                                                          name: Level20
+                                                                                                                          children:
+                                                                                                                            - Sequence:
+                                                                                                                                name: Level21
+                                                                                                                                children:
+                                                                                                                                  - Sequence:
+                                                                                                                                      name: Level22
+                                                                                                                                      children:
+                                                                                                                                        - Sequence:
+                                                                                                                                            name: Level23
+                                                                                                                                            children:
+                                                                                                                                              - Sequence:
+                                                                                                                                                  name: Level24
+                                                                                                                                                  children:
+                                                                                                                                                    - Sequence:
+                                                                                                                                                        name: Level25
+                                                                                                                                                        children:
+                                                                                                                                                          - Sequence:
+                                                                                                                                                              name: Level26
+                                                                                                                                                              children:
+                                                                                                                                                                - Sequence:
+                                                                                                                                                                    name: Level27
+                                                                                                                                                                    children:
+                                                                                                                                                                      - Sequence:
+                                                                                                                                                                          name: Level28
+                                                                                                                                                                          children:
+                                                                                                                                                                            - Sequence:
+                                                                                                                                                                                name: Level29
+                                                                                                                                                                                children:
+                                                                                                                                                                                  - Sequence:
+                                                                                                                                                                                      name: Level30
+                                                                                                                                                                                      children:
+                                                                                                                                                                                        - Sequence:
+                                                                                                                                                                                            name: Level31
+                                                                                                                                                                                            children:
+                                                                                                                                                                                              - Sequence:
+                                                                                                                                                                                                  name: Level32
+                                                                                                                                                                                                  children:
+                                                                                                                                                                                                    - Sequence:
+                                                                                                                                                                                                        name: Level33
+                                                                                                                                                                                                        children:
+                                                                                                                                                                                                          - Sequence:
+                                                                                                                                                                                                              name: Level34
+                                                                                                                                                                                                              children:
+                                                                                                                                                                                                                - Sequence:
+                                                                                                                                                                                                                    name: Level35
+                                                                                                                                                                                                                    children:
+                                                                                                                                                                                                                      - Sequence:
+                                                                                                                                                                                                                          name: Level36
+                                                                                                                                                                                                                          children:
+                                                                                                                                                                                                                            - Sequence:
+                                                                                                                                                                                                                                name: Level37
+                                                                                                                                                                                                                                children:
+                                                                                                                                                                                                                                  - Sequence:
+                                                                                                                                                                                                                                      name: Level38
+                                                                                                                                                                                                                                      children:
+                                                                                                                                                                                                                                        - Sequence:
+                                                                                                                                                                                                                                            name: Level39
+                                                                                                                                                                                                                                            children:
+                                                                                                                                                                                                                                              - Sequence:
+                                                                                                                                                                                                                                                  name: Level40
+                                                                                                                                                                                                                                                  children:
+                                                                                                                                                                                                                                                    - Sequence:
+                                                                                                                                                                                                                                                        name: Level41
+                                                                                                                                                                                                                                                        children:
+                                                                                                                                                                                                                                                          - Sequence:
+                                                                                                                                                                                                                                                              name: Level42
+                                                                                                                                                                                                                                                              children:
+                                                                                                                                                                                                                                                                - Sequence:
+                                                                                                                                                                                                                                                                    name: Level43
+                                                                                                                                                                                                                                                                    children:
+                                                                                                                                                                                                                                                                      - Sequence:
+                                                                                                                                                                                                                                                                          name: Level44
+                                                                                                                                                                                                                                                                          children:
+                                                                                                                                                                                                                                                                            - Sequence:
+                                                                                                                                                                                                                                                                                name: Level45
+                                                                                                                                                                                                                                                                                children:
+                                                                                                                                                                                                                                                                                  - Sequence:
+                                                                                                                                                                                                                                                                                      name: Level46
+                                                                                                                                                                                                                                                                                      children:
+                                                                                                                                                                                                                                                                                        - Sequence:
+                                                                                                                                                                                                                                                                                            name: Level47
+                                                                                                                                                                                                                                                                                            children:
+                                                                                                                                                                                                                                                                                              - Sequence:
+                                                                                                                                                                                                                                                                                                  name: Level48
+                                                                                                                                                                                                                                                                                                  children:
+                                                                                                                                                                                                                                                                                                    - Sequence:
+                                                                                                                                                                                                                                                                                                        name: Level49
+                                                                                                                                                                                                                                                                                                        children:
+                                                                                                                                                                                                                                                                                                            - Success:
+                                                                                                                                                                                                                                                                                                                name: Leaf

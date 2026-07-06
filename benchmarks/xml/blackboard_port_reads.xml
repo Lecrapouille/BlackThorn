@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="PortReads">
+      <Script code="a_0:= 1; b_0:= 2; label_0:= 'entry-0'; a_1:= 2; b_1:= 4; label_1:= 'entry-1'; a_2:= 3; b_2:= 6; label_2:= 'entry-2'; a_3:= 4; b_3:= 8; label_3:= 'entry-3'; a_4:= 5; b_4:= 10; label_4:= 'entry-4'; a_5:= 6; b_5:= 12; label_5:= 'entry-5'; a_6:= 7; b_6:= 14; label_6:= 'entry-6'; a_7:= 8; b_7:= 16; label_7:= 'entry-7'; a_8:= 9; b_8:= 18; label_8:= 'entry-8'; a_9:= 10; b_9:= 20; label_9:= 'entry-9'; a_10:= 11; b_10:= 22; label_10:= 'entry-10'; a_11:= 12; b_11:= 24; label_11:= 'entry-11'; a_12:= 13; b_12:= 26; label_12:= 'entry-12'; a_13:= 14; b_13:= 28; label_13:= 'entry-13'; a_14:= 15; b_14:= 30; label_14:= 'entry-14'; a_15:= 16; b_15:= 32; label_15:= 'entry-15'; a_16:= 17; b_16:= 34; label_16:= 'entry-16'; a_17:= 18; b_17:= 36; label_17:= 'entry-17'; a_18:= 19; b_18:= 38; label_18:= 'entry-18'; a_19:= 20; b_19:= 40; label_19:= 'entry-19'; a_20:= 21; b_20:= 42; label_20:= 'entry-20'; a_21:= 22; b_21:= 44; label_21:= 'entry-21'; a_22:= 23; b_22:= 46; label_22:= 'entry-22'; a_23:= 24; b_23:= 48; label_23:= 'entry-23'; a_24:= 25; b_24:= 50; label_24:= 'entry-24'; a_25:= 26; b_25:= 52; label_25:= 'entry-25'; a_26:= 27; b_26:= 54; label_26:= 'entry-26'; a_27:= 28; b_27:= 56; label_27:= 'entry-27'; a_28:= 29; b_28:= 58; label_28:= 'entry-28'; a_29:= 30; b_29:= 60; label_29:= 'entry-29'"/>
+      <ReadPorts name="ReadPorts0" a="{a_0}" b="{b_0}" label="{label_0}"/>
+      <ReadPorts name="ReadPorts1" a="{a_1}" b="{b_1}" label="{label_1}"/>
+      <ReadPorts name="ReadPorts2" a="{a_2}" b="{b_2}" label="{label_2}"/>
+      <ReadPorts name="ReadPorts3" a="{a_3}" b="{b_3}" label="{label_3}"/>
+      <ReadPorts name="ReadPorts4" a="{a_4}" b="{b_4}" label="{label_4}"/>
+      <ReadPorts name="ReadPorts5" a="{a_5}" b="{b_5}" label="{label_5}"/>
+      <ReadPorts name="ReadPorts6" a="{a_6}" b="{b_6}" label="{label_6}"/>
+      <ReadPorts name="ReadPorts7" a="{a_7}" b="{b_7}" label="{label_7}"/>
+      <ReadPorts name="ReadPorts8" a="{a_8}" b="{b_8}" label="{label_8}"/>
+      <ReadPorts name="ReadPorts9" a="{a_9}" b="{b_9}" label="{label_9}"/>
+      <ReadPorts name="ReadPorts10" a="{a_10}" b="{b_10}" label="{label_10}"/>
+      <ReadPorts name="ReadPorts11" a="{a_11}" b="{b_11}" label="{label_11}"/>
+      <ReadPorts name="ReadPorts12" a="{a_12}" b="{b_12}" label="{label_12}"/>
+      <ReadPorts name="ReadPorts13" a="{a_13}" b="{b_13}" label="{label_13}"/>
+      <ReadPorts name="ReadPorts14" a="{a_14}" b="{b_14}" label="{label_14}"/>
+      <ReadPorts name="ReadPorts15" a="{a_15}" b="{b_15}" label="{label_15}"/>
+      <ReadPorts name="ReadPorts16" a="{a_16}" b="{b_16}" label="{label_16}"/>
+      <ReadPorts name="ReadPorts17" a="{a_17}" b="{b_17}" label="{label_17}"/>
+      <ReadPorts name="ReadPorts18" a="{a_18}" b="{b_18}" label="{label_18}"/>
+      <ReadPorts name="ReadPorts19" a="{a_19}" b="{b_19}" label="{label_19}"/>
+      <ReadPorts name="ReadPorts20" a="{a_20}" b="{b_20}" label="{label_20}"/>
+      <ReadPorts name="ReadPorts21" a="{a_21}" b="{b_21}" label="{label_21}"/>
+      <ReadPorts name="ReadPorts22" a="{a_22}" b="{b_22}" label="{label_22}"/>
+      <ReadPorts name="ReadPorts23" a="{a_23}" b="{b_23}" label="{label_23}"/>
+      <ReadPorts name="ReadPorts24" a="{a_24}" b="{b_24}" label="{label_24}"/>
+      <ReadPorts name="ReadPorts25" a="{a_25}" b="{b_25}" label="{label_25}"/>
+      <ReadPorts name="ReadPorts26" a="{a_26}" b="{b_26}" label="{label_26}"/>
+      <ReadPorts name="ReadPorts27" a="{a_27}" b="{b_27}" label="{label_27}"/>
+      <ReadPorts name="ReadPorts28" a="{a_28}" b="{b_28}" label="{label_28}"/>
+      <ReadPorts name="ReadPorts29" a="{a_29}" b="{b_29}" label="{label_29}"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

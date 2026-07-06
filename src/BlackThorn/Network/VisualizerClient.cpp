@@ -40,7 +40,7 @@ public:
             yaml << indent() << "- " << p_type << ":\n";
         }
         indent_level++;
-        yaml << indent() << "_id: " << p_node.id() << "\n";
+        yaml << indent() << "_id: " << p_node.visualizerId() << "\n";
         yaml << indent() << "name: " << p_node.name << "\n";
     }
 
@@ -67,9 +67,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -82,9 +82,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -97,9 +97,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -112,9 +112,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -127,9 +127,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -142,9 +142,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -157,9 +157,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -172,9 +172,9 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (auto const& child : p_node.getChildren())
+            for (uint32_t child_index : p_node.childIndices())
             {
-                child->accept(*this);
+                p_node.ownerTree()->node(child_index).accept(*this);
             }
             writeChildrenEnd();
         }
@@ -188,7 +188,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildrenStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildrenEnd();
         }
         writeNodeEnd();
@@ -200,7 +200,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildrenStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildrenEnd();
         }
         writeNodeEnd();
@@ -212,7 +212,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildrenStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildrenEnd();
         }
         writeNodeEnd();
@@ -224,7 +224,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildrenStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildrenEnd();
         }
         writeNodeEnd();
@@ -236,7 +236,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildrenStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildrenEnd();
         }
         writeNodeEnd();
@@ -248,7 +248,7 @@ public:
         if (p_node.hasChild())
         {
             writeChildrenStart();
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             writeChildrenEnd();
         }
         writeNodeEnd();
@@ -263,7 +263,7 @@ public:
         {
             yaml << indent() << "child:\n";
             indent_level++;
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             indent_level--;
         }
         writeNodeEnd();
@@ -278,7 +278,7 @@ public:
         {
             yaml << indent() << "child:\n";
             indent_level++;
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             indent_level--;
         }
         writeNodeEnd();
@@ -293,7 +293,7 @@ public:
         {
             yaml << indent() << "child:\n";
             indent_level++;
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             indent_level--;
         }
         writeNodeEnd();
@@ -306,7 +306,7 @@ public:
         {
             yaml << indent() << "child:\n";
             indent_level++;
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
             indent_level--;
         }
         writeNodeEnd();
@@ -331,13 +331,7 @@ public:
         writeNodeEnd();
     }
 
-    void visitAction(Action const& p_node) override
-    {
-        writeNodeStart("Action", p_node);
-        writeNodeEnd();
-    }
-
-    void visitSugarAction(SugarAction const& p_node) override
+    void visitCallback(CallbackLeaf const& p_node) override
     {
         writeNodeStart("Action", p_node);
         writeNodeEnd();
@@ -346,17 +340,13 @@ public:
     void visitSubTree(SubTreeNode const& p_node) override
     {
         writeNodeStart("SubTree", p_node);
-        if (p_node.handle())
+        yaml << indent() << "reference: " << p_node.reference() << "\n";
+        Tree const& subtree = p_node.subtree();
+        if (subtree.hasRoot())
         {
-            yaml << indent() << "reference: " << p_node.handle()->id() << "\n";
-            // Inline the subtree content as children for visualization
-            Tree const& subtree = p_node.handle()->tree();
-            if (subtree.hasRoot())
-            {
-                writeChildrenStart();
-                subtree.getRoot().accept(*this);
-                writeChildrenEnd();
-            }
+            writeChildrenStart();
+            subtree.getRoot().accept(*this);
+            writeChildrenEnd();
         }
         writeNodeEnd();
     }
@@ -441,6 +431,15 @@ void VisualizerClient::disconnect()
         std::cout << "VisualizerClient: Disconnected" << std::endl;
     }
 
+    m_stub_mode = false;
+    m_tree_sent = false;
+    m_last_states.clear();
+}
+
+// ----------------------------------------------------------------------------
+void VisualizerClient::enableStubMode(bool p_enabled)
+{
+    m_stub_mode = p_enabled;
     m_tree_sent = false;
     m_last_states.clear();
 }
@@ -448,12 +447,18 @@ void VisualizerClient::disconnect()
 // ----------------------------------------------------------------------------
 bool VisualizerClient::isConnected() const
 {
-    return m_socket != nullptr;
+    return m_stub_mode || m_socket != nullptr;
 }
 
 // ----------------------------------------------------------------------------
 bool VisualizerClient::send(std::string const& p_message)
 {
+    if (m_stub_mode)
+    {
+        (void)p_message;
+        return true;
+    }
+
     if (!m_socket)
     {
         return false;
@@ -495,8 +500,11 @@ void VisualizerClient::sendTree(Tree const& p_tree)
     if (send(message))
     {
         m_tree_sent = true;
-        std::cout << "VisualizerClient: Tree sent (" << yaml.size() << " bytes)"
-                  << std::endl;
+        if (!m_stub_mode)
+        {
+            std::cout << "VisualizerClient: Tree sent (" << yaml.size()
+                      << " bytes)" << std::endl;
+        }
     }
 }
 
@@ -517,9 +525,9 @@ public:
     void visitComposite(Composite const& p_node)
     {
         collectNode(p_node);
-        for (auto const& child : p_node.getChildren())
+        for (uint32_t child_index : p_node.childIndices())
         {
-            child->accept(*this);
+            p_node.ownerTree()->node(child_index).accept(*this);
         }
     }
 
@@ -528,7 +536,7 @@ public:
         collectNode(p_node);
         if (p_node.hasChild())
         {
-            p_node.getChild().accept(*this);
+            p_node.childNode().accept(*this);
         }
     }
 
@@ -618,25 +626,17 @@ public:
     {
         collectNode(p_node);
     }
-    void visitAction(Action const& p_node) override
-    {
-        collectNode(p_node);
-    }
-    void visitSugarAction(SugarAction const& p_node) override
+    void visitCallback(CallbackLeaf const& p_node) override
     {
         collectNode(p_node);
     }
     void visitSubTree(SubTreeNode const& p_node) override
     {
         collectNode(p_node);
-        // Also collect nodes from the subtree content
-        if (p_node.handle())
+        Tree const& subtree = p_node.subtree();
+        if (subtree.hasRoot())
         {
-            Tree const& subtree = p_node.handle()->tree();
-            if (subtree.hasRoot())
-            {
-                subtree.getRoot().accept(*this);
-            }
+            subtree.getRoot().accept(*this);
         }
     }
     void visitWait(Wait const& p_node) override
@@ -681,7 +681,7 @@ void VisualizerClient::sendStateChanges(Tree const& p_tree)
 
     for (Node const* node : collector.nodes)
     {
-        uint32_t node_id = node->id();
+        uint32_t node_id = node->visualizerId();
         auto current = int(node->status());
 
         // Check if state changed

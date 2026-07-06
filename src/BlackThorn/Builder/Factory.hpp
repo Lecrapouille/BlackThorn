@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Node.hpp"
-#include "BlackThorn/Nodes/Leaves/Action.hpp"
+#include "BlackThorn/Nodes/Node.hpp"
+#include "BlackThorn/Nodes/Leaves/Callback.hpp"
 #include "BlackThorn/Nodes/Leaves/Condition.hpp"
 
 #include <functional>
@@ -19,7 +19,55 @@ namespace bt {
 
 // ****************************************************************************
 //! \brief Factory class for creating behavior tree nodes.
-//! This class allows registering custom node types that can be created by name.
+//!
+//! NodeFactory maps YAML node names to C++ node types. Register your custom
+//! classes, lambdas, or conditions, then pass the factory to Builder so it can
+//! instantiate nodes referenced in YAML.
+//!
+//! Key features:
+//! - Register a node class by type (\c registerNode<T>).
+//! - Register actions and conditions from lambdas.
+//! - Optional blackboard injection for stateful nodes.
+//! - Lookup by name (\c createNode, \c hasNode).
+//!
+//! Usage example:
+//! \code
+//!   bt::NodeFactory factory;
+//!   auto bb = std::make_shared<bt::Blackboard>();
+//!
+//!   // 1. Register a custom node class
+//!   factory.registerNode<PatrolAction>("Patrol", bb);
+//!
+//!   // 2. Register a quick action from a lambda
+//!   factory.registerAction("OpenDoor", []() {
+//!       std::cout << "Door opened\n";
+//!       return bt::Status::SUCCESS;
+//!   });
+//!
+//!   // 3. Register a condition with blackboard access
+//!   factory.registerCondition(
+//!       "HasAmmo",
+//!       [bb]() {
+//!           return bb->getOrDefault<int>("ammo", 0) > 0
+//!                      ? bt::Status::SUCCESS
+//!                      : bt::Status::FAILURE;
+//!       },
+//!       bb);
+//!
+//!   // 4. Build a tree from YAML using registered names
+//!   std::string yaml = R"(
+//!   BehaviorTree:
+//!     Sequence:
+//!       children:
+//!         - Condition:
+//!             name: HasAmmo
+//!         - Action:
+//!             name: Patrol
+//!         - Action:
+//!             name: OpenDoor
+//!   )";
+//!   auto result = bt::Builder::fromText(factory, yaml, bb);
+//! \endcode
 // ****************************************************************************
 class NodeFactory
 {
@@ -43,7 +91,7 @@ public:
     template <typename T>
     void registerNode(std::string const& p_name)
     {
-        registerNode(p_name, []() { return Node::create<T>(); });
+        registerNode(p_name, []() { return std::make_unique<T>(); });
     }
 
     // ------------------------------------------------------------------------
@@ -56,7 +104,8 @@ public:
     void registerNode(std::string const& p_name, Blackboard::Ptr p_blackboard)
     {
         registerNode(
-            p_name, [p_blackboard]() { return Node::create<T>(p_blackboard); });
+            p_name,
+            [p_blackboard]() { return std::make_unique<T>(p_blackboard); });
     }
 
     // ------------------------------------------------------------------------
@@ -100,10 +149,10 @@ public:
     //! \param[in] p_func Lambda function implementing the action.
     // ------------------------------------------------------------------------
     void registerAction(std::string const& p_name,
-                        SugarAction::Function&& p_func)
+                        CallbackLeaf::Function&& p_func)
     {
         registerNode(p_name, [func = std::move(p_func)]() {
-            return Node::create<SugarAction>(func);
+            return std::make_unique<CallbackLeaf>(func);
         });
     }
 
@@ -114,11 +163,11 @@ public:
     //! \param[in] p_blackboard The blackboard to use.
     // ------------------------------------------------------------------------
     void registerAction(std::string const& p_name,
-                        SugarAction::Function&& p_func,
+                        CallbackLeaf::Function&& p_func,
                         Blackboard::Ptr p_blackboard)
     {
         registerNode(p_name, [func = std::move(p_func), p_blackboard]() {
-            return Node::create<SugarAction>(func, p_blackboard);
+            return std::make_unique<CallbackLeaf>(func, p_blackboard);
         });
     }
 
@@ -131,7 +180,7 @@ public:
                            Condition::Function&& p_func)
     {
         registerNode(p_name, [func = std::move(p_func)]() {
-            return Node::create<Condition>(func);
+            return std::make_unique<Condition>(func);
         });
     }
 
@@ -147,7 +196,7 @@ public:
                            Blackboard::Ptr p_blackboard)
     {
         registerNode(p_name, [func = std::move(p_func), p_blackboard]() {
-            return Node::create<Condition>(func, p_blackboard);
+            return std::make_unique<Condition>(func, p_blackboard);
         });
     }
 

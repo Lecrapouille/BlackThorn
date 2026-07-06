@@ -8,16 +8,15 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Leaf.hpp"
+#include "BlackThorn/Nodes/Leaves/Leaf.hpp"
 
 #include <functional>
 
 namespace bt {
 
 // ****************************************************************************
-//! \brief Condition node that can be used to evaluate a condition. This class
-//! should not be used directly: it is used internally to sugar the class Action
-//! by hiding inheritance.
+//! \brief Condition node that evaluates a user-provided predicate.
+//! Returns SUCCESS when the predicate is true, FAILURE otherwise.
 // ****************************************************************************
 class Condition final: public Leaf
 {
@@ -41,10 +40,7 @@ public:
     //! \brief Constructor taking a function to evaluate.
     //! \param[in] p_func The function to evaluate when the condition runs.
     // ------------------------------------------------------------------------
-    explicit Condition(Function p_func) : m_func(std::move(p_func))
-    {
-        m_type = toString();
-    }
+    explicit Condition(Function p_func) : m_func(std::move(p_func)) {}
 
     // ------------------------------------------------------------------------
     //! \brief Constructor taking a function and blackboard.
@@ -54,26 +50,34 @@ public:
     Condition(Function p_func, Blackboard::Ptr p_blackboard)
         : m_func(std::move(p_func))
     {
-        m_type = toString();
         setBlackboard(p_blackboard);
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Execute the condition.
-    //! \return SUCCESS if the condition is true, FAILURE otherwise.
+    //! \brief Copy predicate into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        return m_func() ? Status::SUCCESS : Status::FAILURE;
+        p_config.condition = m_func;
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Check if the leaf node is valid (not nullptr function).
-    //! \return True if the leaf node is valid, false otherwise.
+    //! \brief Return the node kind used when adopting factory-built nodes.
+    //! \return Always \ref NodeKind::Condition.
     // ------------------------------------------------------------------------
-    [[nodiscard]] bool isValid() const override
+    [[nodiscard]] NodeKind registrationKind() const override
     {
-        return m_func != nullptr;
+        return NodeKind::Condition;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Check whether the predicate callback is set.
+    //! \return True if a condition function was provided.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isValidCustom() const override
+    {
+        return static_cast<bool>(m_func);
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -87,8 +91,13 @@ public:
 
 private:
 
-    //! \brief The function to evaluate when the condition runs.
+    //! \brief Predicate evaluated by the tree interpreter on each tick.
     Function m_func = nullptr;
+};
+
+template <> struct NodeKindTraits<Condition>
+{
+    static constexpr NodeKind value = NodeKind::Condition;
 };
 
 } // namespace bt

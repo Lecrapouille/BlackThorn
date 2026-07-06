@@ -46,6 +46,7 @@ include $(M)/rules/Makefile
 #
 APPLICATIONS = $(PATH_APP_OAKULAR)/.
 EXAMPLES = $(sort $(dir $(wildcard $(P)/doc/examples/*/.)))
+BENCHMARKS = $(P)/benchmarks/.
 
 .PHONY: applications
 applications: $(DIRS_WITH_MAKEFILE)
@@ -63,4 +64,17 @@ examples: $(DIRS_WITH_MAKEFILE)
 		$(MAKE) -C $$i all;     \
 	done;
 
-post-build:: applications examples
+.PHONY: benchmarks
+benchmarks: $(DIRS_WITH_MAKEFILE)
+	@$(call print-from,"Compiling benchmarks",$(PROJECT_NAME),$(BENCHMARKS))
+	@$(MAKE) -C $(P)/benchmarks all
+
+.PHONY: benchmark
+benchmark: benchmarks
+	@$(P)/build/$(PROJECT_NAME)-Benchmark
+
+.PHONY: benchmark-save
+benchmark-save: benchmarks
+	@$(P)/benchmarks/save_results.sh
+
+post-build:: applications examples benchmarks

@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Decorator.hpp"
+#include "BlackThorn/Nodes/Decorators/Decorator.hpp"
 
 namespace bt {
 
@@ -28,16 +28,6 @@ public:
     [[nodiscard]] static constexpr char const* toString()
     {
         return "ForceSuccess";
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Run the succeeder.
-    //! \return The status of the succeeder.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        Status status = m_child->tick();
-        return (status == Status::RUNNING) ? Status::RUNNING : Status::SUCCESS;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -65,16 +55,6 @@ public:
     [[nodiscard]] static constexpr char const* toString()
     {
         return "ForceFailure";
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Run the failer.
-    //! \return The status of the failer.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        Status status = m_child->tick();
-        return (status == Status::RUNNING) ? Status::RUNNING : Status::FAILURE;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -105,25 +85,6 @@ public:
         return "Inverter";
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Run the inverter.
-    //! \return The status of the inverter.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        auto s = m_child->tick();
-        if (s == Status::SUCCESS)
-        {
-            return Status::FAILURE;
-        }
-        else if (s == Status::FAILURE)
-        {
-            return Status::SUCCESS;
-        }
-
-        return s;
-    }
-
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
     {
         p_visitor.visitInverter(*this);
@@ -135,9 +96,8 @@ public:
 };
 
 // ****************************************************************************
-//! \brief The RunOnce decorator executes its child only once and remembers
-//! the result. On subsequent ticks, it returns the cached result without
-//! re-executing the child.
+//! \brief The RunOnce decorator executes its child only once.
+//! Subsequent ticks return the cached status without re-running the child.
 // ****************************************************************************
 class RunOnce final: public Decorator
 {
@@ -152,51 +112,6 @@ public:
         return "RunOnce";
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Set up the RunOnce decorator.
-    //! \return Cached status if already executed, RUNNING otherwise.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
-    {
-        if (m_executed)
-        {
-            return m_cached_status;
-        }
-        return Status::RUNNING;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Run the RunOnce decorator.
-    //! \return The child's status (cached after first completion).
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        if (m_executed)
-        {
-            return m_cached_status;
-        }
-
-        Status status = m_child->tick();
-
-        if (status != Status::RUNNING)
-        {
-            m_executed = true;
-            m_cached_status = status;
-        }
-
-        return status;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Reset the RunOnce decorator to allow re-execution.
-    // ------------------------------------------------------------------------
-    void reset() override
-    {
-        Decorator::reset();
-        m_executed = false;
-        m_cached_status = Status::INVALID;
-    }
-
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
     {
         p_visitor.visitRunOnce(*this);
@@ -205,11 +120,23 @@ public:
     {
         p_visitor.visitRunOnce(*this);
     }
+};
 
-private:
-
-    bool m_executed = false;
-    Status m_cached_status = Status::INVALID;
+template <> struct NodeKindTraits<Inverter>
+{
+    static constexpr NodeKind value = NodeKind::Inverter;
+};
+template <> struct NodeKindTraits<ForceSuccess>
+{
+    static constexpr NodeKind value = NodeKind::ForceSuccess;
+};
+template <> struct NodeKindTraits<ForceFailure>
+{
+    static constexpr NodeKind value = NodeKind::ForceFailure;
+};
+template <> struct NodeKindTraits<RunOnce>
+{
+    static constexpr NodeKind value = NodeKind::RunOnce;
 };
 
 } // namespace bt

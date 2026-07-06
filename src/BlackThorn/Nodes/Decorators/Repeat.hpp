@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Decorator.hpp"
+#include "BlackThorn/Nodes/Decorators/Decorator.hpp"
 
 namespace bt {
 
@@ -17,8 +17,10 @@ namespace bt {
 //! of times (0 = infinite). Unlike BehaviorTree.CPP, this implementation
 //! does not use a while loop; the tree engine handles the tick() calls,
 //! allowing proper visualization and reactivity between iterations.
+//!
 //! The decorator ignores the child's SUCCESS/FAILURE status and continues
 //! repeating until the limit is reached.
+//!
 //! The number of repetitions can be read from the blackboard via port
 //! remapping.
 // ****************************************************************************
@@ -28,11 +30,11 @@ public:
 
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
-    //! \return The string "Repeater".
+    //! \return The string "Repeat" (YAML name; \c Repeater is also accepted).
     // ------------------------------------------------------------------------
     [[nodiscard]] static constexpr char const* toString()
     {
-        return "Repeater";
+        return "Repeat";
     }
 
     // ------------------------------------------------------------------------
@@ -42,7 +44,6 @@ public:
     explicit Repeater(size_t p_repetitions = 0)
         : m_default_repetitions(p_repetitions)
     {
-        m_type = toString();
     }
 
     // ------------------------------------------------------------------------
@@ -57,74 +58,30 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Set up the repeater.
-    //! Reads repetitions from blackboard if configured, otherwise uses default.
-    //! \return The status of the repeater.
+    //! \brief Copy default repetition count into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        // Try to read repetitions from blackboard (try int first, then size_t)
-        if (auto reps = getInput<int>("repetitions"); reps && *reps >= 0)
-        {
-            m_repetitions = static_cast<size_t>(*reps);
-        }
-        else if (auto reps2 = getInput<size_t>("repetitions"); reps2)
-        {
-            m_repetitions = *reps2;
-        }
-        else
-        {
-            m_repetitions = m_default_repetitions;
-        }
-        m_count = 0;
-        return Status::RUNNING;
+        p_config.repeater_default = m_default_repetitions;
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Run the repeater.
-    //! \return The status of the repeater.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        Status status = m_child->tick();
-
-        if (status == Status::RUNNING)
-        {
-            return Status::RUNNING;
-        }
-
-        // Child finished (SUCCESS or FAILURE), reset for next iteration
-        m_child->reset();
-
-        // Increment count and saturate to m_repetitions if limited
-        if (m_repetitions > 0)
-        {
-            ++m_count;
-            if (m_count >= m_repetitions)
-            {
-                m_count = m_repetitions;
-                return Status::SUCCESS;
-            }
-        }
-
-        // Continue (infinite or more iterations needed)
-        return Status::RUNNING;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Get the current count of repetitions.
+    //! \brief Get the number of completed repetitions.
+    //! \return Current repetition counter from runtime state.
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getCount() const
     {
-        return m_count;
+        return tree().runtime().counters[index()];
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get the limit number of repetitions.
+    //! \brief Get the configured repetition limit.
+    //! \return Maximum number of repetitions (0 = infinite).
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getRepetitions() const
     {
-        return m_repetitions;
+        return tree().runtime().limits[index()];
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -138,20 +95,16 @@ public:
 
 private:
 
-    size_t m_count = 0;
+    //! \brief Default repetition limit when no port remapping is provided.
     size_t m_default_repetitions;
-    size_t m_repetitions = 0;
 };
 
-// Backward compatibility alias
+//! \brief Backward compatibility alias for \ref Repeater.
 using Repeat = Repeater;
 
 // ****************************************************************************
-//! \brief The UntilSuccess decorator repeats until the child returns success
-//! and then returns success. Unlike BehaviorTree.CPP, this implementation
-//! does not use a while loop; the tree engine handles the tick() calls,
-//! allowing proper visualization and reactivity between iterations.
-//! The decorator can optionally limit the number of attempts (0 = infinite).
+//! \brief The UntilSuccess decorator repeats its child until it succeeds.
+//! An optional attempt limit can stop retries with FAILURE.
 // ****************************************************************************
 class UntilSuccess final: public Decorator
 {
@@ -167,72 +120,36 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Constructor taking an optional limit of attempts.
-    //! \param[in] p_attempts The maximum number of attempts (0 = infinite).
+    //! \brief Constructor taking a maximum number of attempts.
+    //! \param[in] p_attempts Maximum attempts (0 = infinite).
     // ------------------------------------------------------------------------
     explicit UntilSuccess(size_t p_attempts = 0) : m_attempts(p_attempts) {}
 
     // ------------------------------------------------------------------------
-    //! \brief Set up the until success decorator.
-    //! \return The status of the decorator.
+    //! \brief Copy attempt limit into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        m_count = 0;
-        return Status::RUNNING;
+        p_config.until_attempts = m_attempts;
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Run the until success decorator.
-    //! \return The status of the decorator.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        Status status = m_child->tick();
-
-        if (status == Status::SUCCESS)
-        {
-            return Status::SUCCESS;
-        }
-        else if (status == Status::RUNNING)
-        {
-            return Status::RUNNING;
-        }
-
-        // Child failed, reset for next iteration
-        m_child->reset();
-
-        // Increment count and check limit if attempts are limited
-        if (m_attempts > 0)
-        {
-            ++m_count;
-            if (m_count >= m_attempts)
-            {
-                m_count = m_attempts; // Saturate
-                return Status::FAILURE;
-            }
-        }
-
-        // Continue (infinite or more attempts needed)
-        return Status::RUNNING;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Get the current count of attempts.
-    //! \return The current count of attempts.
+    //! \brief Get the number of completed attempts.
+    //! \return Current attempt counter from runtime state.
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getCount() const
     {
-        return m_count;
+        return tree().runtime().counters[index()];
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get the limit number of attempts.
-    //! \return The limit number of attempts (0 = infinite).
+    //! \brief Get the configured attempt limit.
+    //! \return Maximum attempts (0 = infinite).
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getAttempts() const
     {
-        return m_attempts;
+        return tree().config(index()).until_attempts;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -246,16 +163,13 @@ public:
 
 private:
 
-    size_t m_count = 0;
+    //! \brief Maximum number of attempts before returning FAILURE.
     size_t m_attempts;
 };
 
 // ****************************************************************************
-//! \brief The UntilFailure decorator repeats until the child returns failure
-//! and then returns success. Unlike BehaviorTree.CPP, this implementation
-//! does not use a while loop; the tree engine handles the tick() calls,
-//! allowing proper visualization and reactivity between iterations.
-//! The decorator can optionally limit the number of attempts (0 = infinite).
+//! \brief The UntilFailure decorator repeats its child until it fails.
+//! An optional attempt limit can stop retries with FAILURE.
 // ****************************************************************************
 class UntilFailure final: public Decorator
 {
@@ -271,72 +185,36 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Constructor taking an optional limit of attempts.
-    //! \param[in] p_attempts The maximum number of attempts (0 = infinite).
+    //! \brief Constructor taking a maximum number of attempts.
+    //! \param[in] p_attempts Maximum attempts (0 = infinite).
     // ------------------------------------------------------------------------
     explicit UntilFailure(size_t p_attempts = 0) : m_attempts(p_attempts) {}
 
     // ------------------------------------------------------------------------
-    //! \brief Set up the until failure decorator.
-    //! \return The status of the decorator.
+    //! \brief Copy attempt limit into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        m_count = 0;
-        return Status::RUNNING;
+        p_config.until_attempts = m_attempts;
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Execute the decorator.
-    //! \return The status of the decorator.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        Status status = m_child->tick();
-
-        if (status == Status::FAILURE)
-        {
-            return Status::SUCCESS;
-        }
-        else if (status == Status::RUNNING)
-        {
-            return Status::RUNNING;
-        }
-
-        // Child succeeded, reset for next iteration
-        m_child->reset();
-
-        // Increment count and check limit if attempts are limited
-        if (m_attempts > 0)
-        {
-            ++m_count;
-            if (m_count >= m_attempts)
-            {
-                m_count = m_attempts; // Saturate
-                return Status::FAILURE;
-            }
-        }
-
-        // Continue (infinite or more attempts needed)
-        return Status::RUNNING;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Get the current count of attempts.
-    //! \return The current count of attempts.
+    //! \brief Get the number of completed attempts.
+    //! \return Current attempt counter from runtime state.
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getCount() const
     {
-        return m_count;
+        return tree().runtime().counters[index()];
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get the limit number of attempts.
-    //! \return The limit number of attempts (0 = infinite).
+    //! \brief Get the configured attempt limit.
+    //! \return Maximum attempts (0 = infinite).
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getAttempts() const
     {
-        return m_attempts;
+        return tree().config(index()).until_attempts;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -350,8 +228,21 @@ public:
 
 private:
 
-    size_t m_count = 0;
+    //! \brief Maximum number of attempts before returning FAILURE.
     size_t m_attempts;
+};
+
+template <> struct NodeKindTraits<Repeater>
+{
+    static constexpr NodeKind value = NodeKind::Repeater;
+};
+template <> struct NodeKindTraits<UntilSuccess>
+{
+    static constexpr NodeKind value = NodeKind::UntilSuccess;
+};
+template <> struct NodeKindTraits<UntilFailure>
+{
+    static constexpr NodeKind value = NodeKind::UntilFailure;
 };
 
 } // namespace bt

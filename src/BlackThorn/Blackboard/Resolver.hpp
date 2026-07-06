@@ -2,6 +2,9 @@
  * @file Resolver.hpp
  * @brief Variable resolver for blackboard references.
  *
+ * Provides utilities to substitute \c ${key} placeholders in strings and to
+ * resolve typed values from either blackboard references or literal text.
+ *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
  */
@@ -20,18 +23,56 @@ namespace bt {
 // ****************************************************************************
 //! \brief Class representing a variable resolver.
 //!
-//! The VariableResolver handles resolution of ${variable} syntax in strings
+//! The VariableResolver handles resolution of \c ${variable} syntax in strings
 //! and values, looking up the actual values from a Blackboard.
+//!
+//! Usage example:
+//! \code
+//!   Blackboard bb;
+//!   bb.set("target", std::string("enemy_42"));
+//!   bb.set("greeting", std::string("Hello"));
+//!
+//!   // String substitution (multiple placeholders supported)
+//!   auto msg = VariableResolver::resolve("Attack ${target}!", bb);
+//!   // msg == "Attack enemy_42!"
+//!
+//!   // Typed value: reference or literal
+//!   auto speed = VariableResolver::resolveValue<int>("${max_speed}", bb);
+//!   auto retries = VariableResolver::resolveValue<int>("3", bb); // literal
+//! \endcode
 // ****************************************************************************
 class VariableResolver
 {
 public:
 
     // ------------------------------------------------------------------------
-    //! \brief Resolve a variable.
-    //! \param[in] p_str The string to resolve.
-    //! \param[in] p_bb The blackboard to resolve the variable.
-    //! \return The resolved string.
+    //! \brief Resolve \c ${key} placeholders in a string.
+    //!
+    //! Each \c ${key} segment is replaced by the corresponding \c std::string
+    //! value from the blackboard. Unknown keys are left unchanged. Multiple
+    //! placeholders in the same string are all resolved.
+    //!
+    //! \param[in] p_str The string containing \c ${key} placeholders.
+    //! \param[in] p_bb The blackboard used for lookups.
+    //! \return The string with resolved placeholders.
+    //!
+    //! \code
+    //!   Blackboard bb;
+    //!   bb.set("name", std::string("Alice"));
+    //!   bb.set("role", std::string("guard"));
+    //!
+    //!   auto msg = VariableResolver::resolve("${name} is the ${role}", bb);
+    //!   // msg == "Alice is the guard"
+    //!
+    //!   auto msg = VariableResolver::resolve("No variables here", bb);
+    //!   // msg == "No variables here"
+    //!
+    //!   auto msg = VariableResolver::resolve("Missing ${unknown}", bb);
+    //!   // msg == "Missing ${unknown}"  (key not found, placeholder kept)
+    //!
+    //!   auto msg = VariableResolver::resolve("${greeting} ${name}!", bb);
+    //!   // with greeting="Hi" -> "Hi Alice!"
+    //! \endcode
     // ------------------------------------------------------------------------
     static std::string resolve(const std::string& p_str, const Blackboard& p_bb)
     {
@@ -67,10 +108,33 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Resolve a value.
-    //! \param[in] p_expr The expression to resolve.
-    //! \param[in] p_bb The blackboard to resolve the value.
-    //! \return The resolved value.
+    //! \brief Resolve a typed value from a reference or a literal.
+    //!
+    //! If \p p_expr matches \c ${key} exactly, the value is read from the
+    //! blackboard with type \c T. Otherwise, \p p_expr is parsed as a literal
+    //! (see parseLiteral()).
+    //!
+    //! \tparam T The expected type (\c int, \c double, \c bool, \c
+    //! std::string).
+    //! \param[in] p_expr A blackboard reference (\c ${key}) or a literal
+    //! string.
+    //! \param[in] p_bb The blackboard used for reference lookups.
+    //! \return The resolved value, or \c std::nullopt on failure.
+    //!
+    //! \code
+    //!   bb.set("health", 100);
+    //!   bb.set("enabled", true);
+    //!   bb.set("label", std::string("idle"));
+    //!
+    //!   resolveValue<int>("${health}", bb);   // -> 100
+    //!   resolveValue<int>("42", bb);          // -> 42 (literal)
+    //!   resolveValue<bool>("${enabled}", bb); // -> true
+    //!   resolveValue<bool>("false", bb);      // -> false (literal)
+    //!   resolveValue<std::string>("${label}", bb); // -> "idle"
+    //!   resolveValue<std::string>("raw text", bb); // -> "raw text"
+    //!   resolveValue<int>("${missing}", bb);  // -> std::nullopt
+    //!   resolveValue<int>("not_a_number", bb); // -> std::nullopt
+    //! \endcode
     // ------------------------------------------------------------------------
     template <typename T>
     static std::optional<T> resolveValue(const std::string& p_expr,
@@ -93,9 +157,27 @@ public:
 private:
 
     // ------------------------------------------------------------------------
-    //! \brief Parse a literal value.
-    //! \param[in] p_str The string to parse.
-    //! \return The parsed value.
+    //! \brief Parse a literal value from a raw string.
+    //!
+    //! Used internally when \p p_expr is not a \c ${key} reference.
+    //! Supported types and accepted formats:
+    //! - \c std::string : returned as-is
+    //! - \c int : decimal integer (e.g. \c "42", \c "-1")
+    //! - \c double : floating-point (e.g. \c "3.14")
+    //! - \c bool : \c "true"/\c "false" or \c "1"/\c "0"
+    //!
+    //! \tparam T The type to parse into.
+    //! \param[in] p_str The raw string to parse.
+    //! \return The parsed value, or \c std::nullopt if parsing fails.
+    //!
+    //! \code
+    //!   parseLiteral<std::string>("hello"); // -> "hello"
+    //!   parseLiteral<int>("42");            // -> 42
+    //!   parseLiteral<int>("abc");           // -> std::nullopt
+    //!   parseLiteral<double>("3.14");       // -> 3.14
+    //!   parseLiteral<bool>("true");         // -> true
+    //!   parseLiteral<bool>("0");            // -> false
+    //! \endcode
     // ------------------------------------------------------------------------
     template <typename T>
     static std::optional<T> parseLiteral(const std::string& p_str)

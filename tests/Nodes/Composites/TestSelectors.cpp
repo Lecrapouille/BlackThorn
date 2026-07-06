@@ -18,7 +18,7 @@
 
 namespace {
 
-class LambdaTestAction: public bt::Action
+class LambdaTestAction: public bt::CallbackLeaf
 {
 public:
 
@@ -26,28 +26,14 @@ public:
     using Reset = std::function<void()>;
 
     explicit LambdaTestAction(Tick tick, Reset reset = {})
-        : m_tick(std::move(tick)), m_reset(std::move(reset))
+        : CallbackLeaf(std::move(tick), std::move(reset))
     {
     }
 
-    bt::Status onRunning() override
+    explicit LambdaTestAction(std::pair<Tick, Reset> handlers)
+        : CallbackLeaf(std::move(handlers.first), std::move(handlers.second))
     {
-        return m_tick ? m_tick() : bt::Status::FAILURE;
     }
-
-    void reset() override
-    {
-        bt::Action::reset();
-        if (m_reset)
-        {
-            m_reset();
-        }
-    }
-
-private:
-
-    Tick m_tick;
-    Reset m_reset;
 };
 
 class CounterAction final: public LambdaTestAction
@@ -81,54 +67,59 @@ public:
 
 TEST(TestSelector, FirstChildSucceeds)
 {
-    auto selector = bt::Node::create<bt::Selector>();
-    selector->addChild(bt::Node::create<bt::Success>());
-    selector->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::Selector>();
+    selector.addChild<bt::Success>();
+    selector.addChild<bt::Failure>();
 
-    EXPECT_EQ(selector->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(selector.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestSelector, AllChildrenFail)
 {
-    auto selector = bt::Node::create<bt::Selector>();
-    selector->addChild(bt::Node::create<bt::Failure>());
-    selector->addChild(bt::Node::create<bt::Failure>());
-    selector->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::Selector>();
+    selector.addChild<bt::Failure>();
+    selector.addChild<bt::Failure>();
+    selector.addChild<bt::Failure>();
 
-    EXPECT_EQ(selector->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(selector.tick(), bt::Status::FAILURE);
 }
 
 TEST(TestSelector, MiddleChildSucceeds)
 {
     int counter = 0;
-    auto selector = bt::Node::create<bt::Selector>();
-    selector->addChild(bt::Node::create<bt::Failure>());
-    selector->addChild(bt::Node::create<CounterAction>(&counter));
-    selector->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::Selector>();
+    selector.addChild<bt::Failure>();
+    selector.addChild<CounterAction>(&counter);
+    selector.addChild<bt::Failure>();
 
-    EXPECT_EQ(selector->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(selector.tick(), bt::Status::SUCCESS);
     EXPECT_EQ(counter, 1);
 }
 
 TEST(TestSelector, ChildReturnsRunning)
 {
-    auto selector = bt::Node::create<bt::Selector>();
-    selector->addChild(bt::Node::create<bt::Failure>());
-    selector->addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
-    selector->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::Selector>();
+    selector.addChild<bt::Failure>();
+    selector.addChild<StatusAction>(bt::Status::RUNNING);
+    selector.addChild<bt::Success>();
 
-    EXPECT_EQ(selector->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(selector.tick(), bt::Status::RUNNING);
 }
 
 TEST(TestSelector, ExecutionStopsOnSuccess)
 {
     int counter = 0;
-    auto selector = bt::Node::create<bt::Selector>();
-    selector->addChild(bt::Node::create<bt::Failure>());
-    selector->addChild(bt::Node::create<bt::Success>());
-    selector->addChild(bt::Node::create<CounterAction>(&counter));
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::Selector>();
+    selector.addChild<bt::Failure>();
+    selector.addChild<bt::Success>();
+    selector.addChild<CounterAction>(&counter);
 
-    EXPECT_EQ(selector->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(selector.tick(), bt::Status::SUCCESS);
     EXPECT_EQ(counter, 0); // Third child never executed
 }
 
@@ -139,14 +130,15 @@ TEST(TestSelector, ExecutionStopsOnSuccess)
 TEST(TestReactiveSelector, RestartsOnEachTick)
 {
     int counter = 0;
-    auto selector = bt::Node::create<bt::ReactiveSelector>();
-    selector->addChild(bt::Node::create<bt::Failure>());
-    selector->addChild(bt::Node::create<CounterAction>(&counter));
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::ReactiveSelector>();
+    selector.addChild<bt::Failure>();
+    selector.addChild<CounterAction>(&counter);
 
-    EXPECT_EQ(selector->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(selector.tick(), bt::Status::SUCCESS);
     EXPECT_EQ(counter, 1);
 
-    EXPECT_EQ(selector->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(selector.tick(), bt::Status::SUCCESS);
     EXPECT_EQ(counter, 2); // Counter incremented again
 }
 
@@ -157,14 +149,15 @@ TEST(TestReactiveSelector, RestartsOnEachTick)
 TEST(TestSelectorWithMemory, RemembersProgress)
 {
     int counter = 0;
-    auto selector = bt::Node::create<bt::SelectorWithMemory>();
-    selector->addChild(bt::Node::create<bt::Failure>());
-    selector->addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
-    selector->addChild(bt::Node::create<CounterAction>(&counter));
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::SelectorWithMemory>();
+    selector.addChild<bt::Failure>();
+    selector.addChild<StatusAction>(bt::Status::RUNNING);
+    selector.addChild<CounterAction>(&counter);
 
-    EXPECT_EQ(selector->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(selector.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 0); // Third child not reached
 
-    EXPECT_EQ(selector->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(selector.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 0); // Still not reached
 }

@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Composite.hpp"
-
-#include <cassert>
+#include "BlackThorn/Nodes/Composites/Composite.hpp"
 
 namespace bt {
 
@@ -34,12 +32,22 @@ public:
 
     // ------------------------------------------------------------------------
     //! \brief Constructor taking minimum success and failure counts.
-    //! \param[in] p_minSuccess minimum successful children needed
-    //! \param[in] p_minFail minimum failed children needed
+    //! \param[in] p_minSuccess Minimum successful children needed.
+    //! \param[in] p_minFail Minimum failed children needed.
     // ------------------------------------------------------------------------
     Parallel(int p_minSuccess, int p_minFail)
         : m_minSuccess(p_minSuccess), m_minFail(p_minFail)
     {
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Copy thresholds into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
+    // ------------------------------------------------------------------------
+    void fillConfig(NodeConfig& p_config) const override
+    {
+        p_config.parallel_min_success = m_minSuccess;
+        p_config.parallel_min_fail = m_minFail;
     }
 
     // ------------------------------------------------------------------------
@@ -48,7 +56,7 @@ public:
     // ------------------------------------------------------------------------
     [[nodiscard]] int getMinSuccess() const
     {
-        return m_minSuccess;
+        return tree().config(index()).parallel_min_success;
     }
 
     // ------------------------------------------------------------------------
@@ -57,43 +65,7 @@ public:
     // ------------------------------------------------------------------------
     [[nodiscard]] int getMinFail() const
     {
-        return m_minFail;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Run the parallel composite.
-    //! \return The status of the parallel composite.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        assert(hasChildren() && "Composite has no children");
-
-        int total_success = 0;
-        int total_fail = 0;
-
-        for (auto const& child : m_children)
-        {
-            auto status = child->tick();
-            if (status == Status::SUCCESS)
-            {
-                total_success++;
-            }
-            if (status == Status::FAILURE)
-            {
-                total_fail++;
-            }
-        }
-
-        if (total_success >= m_minSuccess)
-        {
-            return Status::SUCCESS;
-        }
-        if (total_fail >= m_minFail)
-        {
-            return Status::FAILURE;
-        }
-
-        return Status::RUNNING;
+        return tree().config(index()).parallel_min_fail;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -107,13 +79,15 @@ public:
 
 private:
 
+    //! \brief Minimum number of successful children required.
     int m_minSuccess;
+    //! \brief Minimum number of failed children required.
     int m_minFail;
 };
 
 // ****************************************************************************
 //! \brief The ParallelAll composite runs all children simultaneously.
-//! It uses success/failure policies to determine its own status.
+//! Success and failure thresholds can require all children or just one.
 // ****************************************************************************
 class ParallelAll final: public Composite
 {
@@ -121,7 +95,7 @@ public:
 
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
-    //! \return The string "🪜 ParallelAll".
+    //! \return The string "ParallelAll".
     // ------------------------------------------------------------------------
     [[nodiscard]] static constexpr char const* toString()
     {
@@ -129,9 +103,9 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Constructor taking success and failure policies.
-    //! \param[in] p_successOnAll if true requires all children to succeed
-    //! \param[in] p_failOnAll if true requires all children to fail
+    //! \brief Constructor configuring all-or-one success/failure semantics.
+    //! \param[in] p_successOnAll If true, all children must succeed.
+    //! \param[in] p_failOnAll If true, all children must fail.
     // ------------------------------------------------------------------------
     explicit ParallelAll(bool p_successOnAll = true, bool p_failOnAll = true)
         : m_successOnAll(p_successOnAll), m_failOnAll(p_failOnAll)
@@ -139,60 +113,31 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Run the parallel all composite.
-    //! \return The status of the parallel all composite.
+    //! \brief Copy flags into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        assert(hasChildren() && "Composite has no children");
-
-        const size_t minimumSuccess = m_successOnAll ? m_children.size() : 1;
-        const size_t minimumFail = m_failOnAll ? m_children.size() : 1;
-
-        size_t total_success = 0;
-        size_t total_fail = 0;
-
-        for (auto const& child : m_children)
-        {
-            auto status = child->tick();
-            if (status == Status::SUCCESS)
-            {
-                total_success++;
-            }
-            if (status == Status::FAILURE)
-            {
-                total_fail++;
-            }
-        }
-
-        if (total_success >= minimumSuccess)
-        {
-            return Status::SUCCESS;
-        }
-        if (total_fail >= minimumFail)
-        {
-            return Status::FAILURE;
-        }
-
-        return Status::RUNNING;
+        p_config.parallel_success_on_all = m_successOnAll;
+        p_config.parallel_fail_on_all = m_failOnAll;
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get the success on all flag.
-    //! \return The success on all flag.
+    //! \brief Return whether all children must succeed.
+    //! \return True when success requires every child to succeed.
     // ------------------------------------------------------------------------
     [[nodiscard]] bool getSuccessOnAll() const
     {
-        return m_successOnAll;
+        return tree().config(index()).parallel_success_on_all;
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get the fail on all flag.
-    //! \return The fail on all flag.
+    //! \brief Return whether all children must fail.
+    //! \return True when failure requires every child to fail.
     // ------------------------------------------------------------------------
     [[nodiscard]] bool getFailOnAll() const
     {
-        return m_failOnAll;
+        return tree().config(index()).parallel_fail_on_all;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -206,8 +151,19 @@ public:
 
 private:
 
+    //! \brief If true, all children must succeed for SUCCESS.
     bool m_successOnAll;
+    //! \brief If true, all children must fail for FAILURE.
     bool m_failOnAll;
+};
+
+template <> struct NodeKindTraits<Parallel>
+{
+    static constexpr NodeKind value = NodeKind::Parallel;
+};
+template <> struct NodeKindTraits<ParallelAll>
+{
+    static constexpr NodeKind value = NodeKind::ParallelAll;
 };
 
 } // namespace bt

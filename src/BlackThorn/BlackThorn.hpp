@@ -8,13 +8,13 @@
 
 #pragma once
 
-// Core classes
-#include "BlackThorn/Core/Composite.hpp"
-#include "BlackThorn/Core/Decorator.hpp"
-#include "BlackThorn/Core/Leaf.hpp"
-#include "BlackThorn/Core/Node.hpp"
-#include "BlackThorn/Core/Status.hpp"
-#include "BlackThorn/Core/Tree.hpp"
+// Node infrastructure
+#include "BlackThorn/Nodes/Composites/Composite.hpp"
+#include "BlackThorn/Nodes/Decorators/Decorator.hpp"
+#include "BlackThorn/Nodes/Leaves/Leaf.hpp"
+#include "BlackThorn/Nodes/Node.hpp"
+#include "BlackThorn/Nodes/SubTree.hpp"
+#include "BlackThorn/Nodes/Tree.hpp"
 
 // Blackboard
 #include "BlackThorn/Blackboard/Blackboard.hpp"
@@ -38,8 +38,8 @@
 #include "BlackThorn/Nodes/Decorators/Temporal.hpp"
 
 // Leaf nodes
-#include "BlackThorn/Nodes/Leaves/Action.hpp"
 #include "BlackThorn/Nodes/Leaves/Basic.hpp"
+#include "BlackThorn/Nodes/Leaves/Callback.hpp"
 #include "BlackThorn/Nodes/Leaves/Condition.hpp"
 #include "BlackThorn/Nodes/Leaves/SetBlackboard.hpp"
 #include "BlackThorn/Nodes/Leaves/Wait.hpp"

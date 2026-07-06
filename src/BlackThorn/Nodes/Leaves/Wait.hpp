@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Leaf.hpp"
-
-#include <chrono>
+#include "BlackThorn/Nodes/Leaves/Leaf.hpp"
 
 namespace bt {
 
@@ -21,9 +19,6 @@ namespace bt {
 class Wait final: public Leaf
 {
 public:
-
-    using Clock = std::chrono::steady_clock;
-    using Duration = std::chrono::milliseconds;
 
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
@@ -39,35 +34,17 @@ public:
     //! \param[in] p_milliseconds The wait duration in milliseconds.
     // ------------------------------------------------------------------------
     explicit Wait(size_t p_milliseconds = 1000)
-        : m_duration(Duration(p_milliseconds))
+        : m_default_duration(p_milliseconds)
     {
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Set up the wait - records the start time.
-    //! \return RUNNING to continue with onRunning.
+    //! \brief Copy default duration into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        m_start_time = Clock::now();
-        return Status::RUNNING;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Run the wait leaf.
-    //! \return RUNNING until duration has passed, then SUCCESS.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        auto elapsed =
-            std::chrono::duration_cast<Duration>(Clock::now() - m_start_time);
-
-        if (elapsed >= m_duration)
-        {
-            return Status::SUCCESS;
-        }
-
-        return Status::RUNNING;
+        p_config.duration_ms = m_default_duration;
     }
 
     // ------------------------------------------------------------------------
@@ -76,7 +53,7 @@ public:
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getMilliseconds() const
     {
-        return static_cast<size_t>(m_duration.count());
+        return tree().config(index()).duration_ms;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -90,8 +67,13 @@ public:
 
 private:
 
-    Duration m_duration;
-    Clock::time_point m_start_time;
+    //! \brief Default wait duration when no port remapping is provided.
+    size_t m_default_duration;
+};
+
+template <> struct NodeKindTraits<Wait>
+{
+    static constexpr NodeKind value = NodeKind::Wait;
 };
 
 } // namespace bt

@@ -36,8 +36,7 @@ class RunOnce;
 class Success;
 class Failure;
 class Condition;
-class Action;
-class SugarAction;
+class CallbackLeaf;
 class Wait;
 class SetBlackboard;
 
@@ -91,8 +90,7 @@ public:
     virtual void visitSuccess(Success const& p_node) = 0;
     virtual void visitFailure(Failure const& p_node) = 0;
     virtual void visitCondition(Condition const& p_node) = 0;
-    virtual void visitAction(Action const& p_node) = 0;
-    virtual void visitSugarAction(SugarAction const& p_node) = 0;
+    virtual void visitCallback(CallbackLeaf const& p_node) = 0;
     virtual void visitSubTree(SubTreeNode const& p_node) = 0;
     virtual void visitWait(Wait const& p_node) = 0;
     virtual void visitSetBlackboard(SetBlackboard const& p_node) = 0;
@@ -151,8 +149,7 @@ public:
     virtual void visitSuccess(Success& p_node) = 0;
     virtual void visitFailure(Failure& p_node) = 0;
     virtual void visitCondition(Condition& p_node) = 0;
-    virtual void visitAction(Action& p_node) = 0;
-    virtual void visitSugarAction(SugarAction& p_node) = 0;
+    virtual void visitCallback(CallbackLeaf& p_node) = 0;
     virtual void visitSubTree(SubTreeNode& p_node) = 0;
     virtual void visitWait(Wait& p_node) = 0;
     virtual void visitSetBlackboard(SetBlackboard& p_node) = 0;

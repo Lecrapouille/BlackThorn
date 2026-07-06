@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Leaf.hpp"
+#include "BlackThorn/Nodes/Leaves/Leaf.hpp"
 
 #include <string>
 
@@ -40,7 +40,6 @@ public:
     SetBlackboard(std::string p_key, std::string p_value)
         : m_key(std::move(p_key)), m_value(std::move(p_value))
     {
-        m_type = toString();
     }
 
     // ------------------------------------------------------------------------
@@ -54,26 +53,22 @@ public:
                   Blackboard::Ptr p_blackboard)
         : m_key(std::move(p_key)), m_value(std::move(p_value))
     {
-        m_type = toString();
         setBlackboard(p_blackboard);
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Run the SetBlackboard leaf.
-    //! \return SUCCESS after setting the value.
+    //! \brief Copy key/value into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        if (m_blackboard)
-        {
-            m_blackboard->set(m_key, m_value);
-        }
-        return Status::SUCCESS;
+        p_config.set_blackboard_key = m_key;
+        p_config.set_blackboard_value = m_value;
     }
 
     // ------------------------------------------------------------------------
     //! \brief Get the key that will be set.
-    //! \return The blackboard key.
+    //! \return Blackboard key.
     // ------------------------------------------------------------------------
     [[nodiscard]] std::string const& getKey() const
     {
@@ -81,8 +76,8 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get the value that will be set.
-    //! \return The value as string.
+    //! \brief Get the value that will be written.
+    //! \return String value written to the blackboard.
     // ------------------------------------------------------------------------
     [[nodiscard]] std::string const& getValue() const
     {
@@ -100,8 +95,15 @@ public:
 
 private:
 
+    //! \brief Blackboard key written on tick.
     std::string m_key;
+    //! \brief Value written to the blackboard on tick.
     std::string m_value;
+};
+
+template <> struct NodeKindTraits<SetBlackboard>
+{
+    static constexpr NodeKind value = NodeKind::SetBlackboard;
 };
 
 } // namespace bt

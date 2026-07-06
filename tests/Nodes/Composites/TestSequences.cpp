@@ -23,41 +23,22 @@ namespace {
 //! \details Allows flexible testing by accepting custom tick and reset
 //!          functions via lambdas.
 // ****************************************************************************
-class LambdaTestAction: public bt::Action
+class LambdaTestAction: public bt::CallbackLeaf
 {
 public:
 
     using Tick = std::function<bt::Status()>;
     using Reset = std::function<void()>;
 
-    // ------------------------------------------------------------------------
-    //! \brief Create a lambda-based action with custom tick and reset handlers.
-    //! \param[in] tick The function to execute on tick.
-    //! \param[in] reset The function to execute on reset (optional).
-    // ------------------------------------------------------------------------
     explicit LambdaTestAction(Tick tick, Reset reset = {})
-        : m_tick(std::move(tick)), m_reset(std::move(reset))
+        : CallbackLeaf(std::move(tick), std::move(reset))
     {
     }
 
-    bt::Status onRunning() override
+    explicit LambdaTestAction(std::pair<Tick, Reset> handlers)
+        : CallbackLeaf(std::move(handlers.first), std::move(handlers.second))
     {
-        return m_tick ? m_tick() : bt::Status::FAILURE;
     }
-
-    void reset() override
-    {
-        bt::Action::reset();
-        if (m_reset)
-        {
-            m_reset();
-        }
-    }
-
-private:
-
-    Tick m_tick;
-    Reset m_reset;
 };
 
 // ****************************************************************************
@@ -115,77 +96,83 @@ public:
 TEST(TestSequence, AllChildrenSuccess)
 {
     // GIVEN: A sequence with all success children
-    auto sequence = bt::Node::create<bt::Sequence>();
-    sequence->addChild(bt::Node::create<bt::Success>());
-    sequence->addChild(bt::Node::create<bt::Success>());
-    sequence->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::Sequence>();
+    sequence.addChild<bt::Success>();
+    sequence.addChild<bt::Success>();
+    sequence.addChild<bt::Success>();
 
     // WHEN: Ticking the sequence
     // THEN: EXPECT the sequence is valid and returns SUCCESS
-    EXPECT_TRUE(sequence->isValid());
-    EXPECT_EQ(sequence->tick(), bt::Status::SUCCESS);
+    EXPECT_TRUE(sequence.isValid());
+    EXPECT_EQ(sequence.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestSequence, FirstChildFails)
 {
-    auto sequence = bt::Node::create<bt::Sequence>();
-    sequence->addChild(bt::Node::create<bt::Failure>());
-    sequence->addChild(bt::Node::create<bt::Success>());
-    sequence->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::Sequence>();
+    sequence.addChild<bt::Failure>();
+    sequence.addChild<bt::Success>();
+    sequence.addChild<bt::Success>();
 
-    EXPECT_EQ(sequence->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(sequence.tick(), bt::Status::FAILURE);
 }
 
 TEST(TestSequence, MiddleChildFails)
 {
     int counter = 0;
-    auto sequence = bt::Node::create<bt::Sequence>();
-    sequence->addChild(bt::Node::create<CounterAction>(&counter));
-    sequence->addChild(bt::Node::create<bt::Failure>());
-    sequence->addChild(bt::Node::create<CounterAction>(&counter));
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::Sequence>();
+    sequence.addChild<CounterAction>(&counter);
+    sequence.addChild<bt::Failure>();
+    sequence.addChild<CounterAction>(&counter);
 
-    EXPECT_EQ(sequence->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(sequence.tick(), bt::Status::FAILURE);
     EXPECT_EQ(counter, 1); // Only first child executed
 }
 
 TEST(TestSequence, ChildReturnsRunning)
 {
-    auto sequence = bt::Node::create<bt::Sequence>();
-    sequence->addChild(bt::Node::create<bt::Success>());
-    sequence->addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
-    sequence->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::Sequence>();
+    sequence.addChild<bt::Success>();
+    sequence.addChild<StatusAction>(bt::Status::RUNNING);
+    sequence.addChild<bt::Success>();
 
-    EXPECT_EQ(sequence->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(sequence.tick(), bt::Status::RUNNING);
 
     // On next tick, should resume from RUNNING child
-    EXPECT_EQ(sequence->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(sequence.tick(), bt::Status::RUNNING);
 }
 
 TEST(TestSequence, EmptySequenceFails)
 {
-    auto sequence = bt::Node::create<bt::Sequence>();
-    EXPECT_FALSE(sequence->isValid());
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::Sequence>();
+    EXPECT_FALSE(sequence.isValid());
 }
 
 TEST(TestSequence, ExecutionOrder)
 {
     std::vector<int> execution_order;
-    auto sequence = bt::Node::create<bt::Sequence>();
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::Sequence>();
 
-    sequence->addChild(bt::Node::create<bt::SugarAction>([&execution_order]() {
+    sequence.addChild<bt::CallbackLeaf>([&execution_order]() {
         execution_order.push_back(1);
         return bt::Status::SUCCESS;
-    }));
-    sequence->addChild(bt::Node::create<bt::SugarAction>([&execution_order]() {
+    });
+    sequence.addChild<bt::CallbackLeaf>([&execution_order]() {
         execution_order.push_back(2);
         return bt::Status::SUCCESS;
-    }));
-    sequence->addChild(bt::Node::create<bt::SugarAction>([&execution_order]() {
+    });
+    sequence.addChild<bt::CallbackLeaf>([&execution_order]() {
         execution_order.push_back(3);
         return bt::Status::SUCCESS;
-    }));
+    });
 
-    EXPECT_EQ(sequence->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(sequence.tick(), bt::Status::SUCCESS);
     EXPECT_EQ(execution_order.size(), 3);
     EXPECT_EQ(execution_order[0], 1);
     EXPECT_EQ(execution_order[1], 2);
@@ -199,24 +186,26 @@ TEST(TestSequence, ExecutionOrder)
 TEST(TestReactiveSequence, RestartsOnEachTick)
 {
     int counter = 0;
-    auto sequence = bt::Node::create<bt::ReactiveSequence>();
-    sequence->addChild(bt::Node::create<CounterAction>(&counter));
-    sequence->addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::ReactiveSequence>();
+    sequence.addChild<CounterAction>(&counter);
+    sequence.addChild<StatusAction>(bt::Status::RUNNING);
 
-    EXPECT_EQ(sequence->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(sequence.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 1);
 
-    EXPECT_EQ(sequence->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(sequence.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 2); // First child executed again
 }
 
 TEST(TestReactiveSequence, AllSuccess)
 {
-    auto sequence = bt::Node::create<bt::ReactiveSequence>();
-    sequence->addChild(bt::Node::create<bt::Success>());
-    sequence->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::ReactiveSequence>();
+    sequence.addChild<bt::Success>();
+    sequence.addChild<bt::Success>();
 
-    EXPECT_EQ(sequence->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(sequence.tick(), bt::Status::SUCCESS);
 }
 
 // ===========================================================================
@@ -226,14 +215,15 @@ TEST(TestReactiveSequence, AllSuccess)
 TEST(TestSequenceWithMemory, RemembersProgress)
 {
     int counter = 0;
-    auto sequence = bt::Node::create<bt::SequenceWithMemory>();
-    sequence->addChild(bt::Node::create<CounterAction>(&counter));
-    sequence->addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
-    sequence->addChild(bt::Node::create<CounterAction>(&counter));
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::SequenceWithMemory>();
+    sequence.addChild<CounterAction>(&counter);
+    sequence.addChild<StatusAction>(bt::Status::RUNNING);
+    sequence.addChild<CounterAction>(&counter);
 
-    EXPECT_EQ(sequence->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(sequence.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 1); // First child executed
 
-    EXPECT_EQ(sequence->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(sequence.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 1); // First child NOT executed again
 }

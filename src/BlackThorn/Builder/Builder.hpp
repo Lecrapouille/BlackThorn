@@ -11,7 +11,7 @@
 
 #include "BlackThorn/Builder/Factory.hpp"
 #include "BlackThorn/Common/Return.hpp"
-#include "BlackThorn/Core/Tree.hpp"
+#include "BlackThorn/Nodes/Tree.hpp"
 
 namespace YAML {
 class Node;
@@ -25,15 +25,47 @@ struct SubTreeRegistry;
 //! \brief Builder class for creating behavior trees from YAML.
 //!
 //! The builder is a utility class that is used to create behavior trees from
-//! YAML file or a YAML text.
+//! a YAML file or a YAML text string:
+//!   - Create a behavior tree from a YAML file or a YAML text.
+//!   - Parse a YAML node into a behavior tree node.
+//!   - Support for builtin nodes (Sequence, Selector, Success, SubTree, ...).
+//!   - Support for custom nodes via NodeFactory.
+//!   - Support for blackboard population and \c ${key} resolution.
+//!   - Support for reusable subtrees (\c SubTrees section).
 //!
-//! Key features:
-//! - Create a behavior tree from a YAML file or a YAML text.
-//! - Parse a YAML node into a behavior tree node.
-//! - Support for builtin nodes.
-//! - Support for custom nodes (it must access to your classes to create them).
-//! - Support for blackboard.
-//! - Support for subtrees.
+//! Usage example 1: Builtin nodes only (from YAML text)
+//! \code
+//!   bt::NodeFactory factory;
+//!   std::string yaml = R"(
+//!   BehaviorTree:
+//!     Sequence:
+//!       children:
+//!         - Success:
+//!             name: OpenDoor
+//!         - Success:
+//!             name: Walk
+//!   )";
+//!
+//!   auto result = bt::Builder::fromText(factory, yaml);
+//!   if (result.isSuccess()) {
+//!       auto tree = result.moveValue();
+//!       tree->tick();
+//!   }
+//! \endcode
+//!
+//! Usage example 2: Custom nodes + blackboard (from YAML file)
+//! \code
+//!   auto bb = std::make_shared<bt::Blackboard>();
+//!   factory.registerNode<PatrolAction>("Patrol", bb);
+//!   factory.registerNode<AttackAction>("Attack", bb);
+//!
+//!   auto loaded = bt::Builder::fromFile(factory, "Patrol.yaml", bb);
+//!   if (loaded.isSuccess()) {
+//!       auto tree = loaded.moveValue();
+//!       tree->setBlackboard(bb);
+//!       tree->tick();
+//!   }
+//! \endcode
 // ****************************************************************************
 class Builder
 {
@@ -64,28 +96,20 @@ public:
              Blackboard::Ptr p_blackboard = nullptr);
 
     // --------------------------------------------------------------------------
-    //! \brief Parse a YAML node into a behavior tree node.
-    //! \param[in] p_factory The factory to create custom nodes.
-    //! \param[in] p_node The YAML node to parse.
-    //! \return Return object containing the node or an error message.
-    // --------------------------------------------------------------------------
-    static robotik::Return<Node::Ptr>
-    parseYAMLNode(NodeFactory const& p_factory, YAML::Node const& p_node);
-
-private:
-
-    // --------------------------------------------------------------------------
-    //! \brief Internal parseYAMLNode with blackboard support.
+    //! \brief Parse a YAML node into a behavior tree, returning the root index.
+    //! \param[in,out] p_tree The tree to populate with parsed nodes.
     //! \param[in] p_factory The factory to create custom nodes.
     //! \param[in] p_node The YAML node to parse.
     //! \param[in] p_blackboard Optional blackboard for parameter resolution.
-    //! \return Return object containing the node or an error message.
+    //! \param[in] p_subtrees Optional reusable subtree definitions.
+    //! \return Return object containing the root node index or an error message.
     // --------------------------------------------------------------------------
-    static robotik::Return<Node::Ptr>
-    parseYAMLNode(NodeFactory const& p_factory,
+    static robotik::Return<uint32_t>
+    parseYAMLNode(Tree& p_tree,
+                  NodeFactory const& p_factory,
                   YAML::Node const& p_node,
-                  Blackboard::Ptr p_blackboard,
-                  SubTreeRegistry const* p_subtrees);
+                  Blackboard::Ptr p_blackboard = nullptr,
+                  SubTreeRegistry const* p_subtrees = nullptr);
 };
 
 } // namespace bt

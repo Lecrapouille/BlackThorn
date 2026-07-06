@@ -29,37 +29,33 @@ struct ParsingContext
     NodeFactory const& factory;
     Blackboard::Ptr blackboard;
     SubTreeRegistry const* subtrees = nullptr;
-    mutable uint32_t next_id = 1; // Auto-increment ID counter
+    Tree* tree = nullptr;
 };
 
 // ----------------------------------------------------------------------------
-//! \brief Assign ID to a node from YAML _id field or auto-generate
+//! \brief Assign visualizer ID from YAML _id field or auto-generate
 // ----------------------------------------------------------------------------
-static void assignNodeId(Node& p_node,
+static void assignNodeId(uint32_t p_node_index,
                          ParsingContext const& p_context,
                          YAML::Node const& p_content)
 {
     if (p_content["_id"])
     {
-        p_node.setId(p_content["_id"].as<uint32_t>());
-        // Update counter to avoid collisions with auto-generated IDs
-        if (p_content["_id"].as<uint32_t>() >= p_context.next_id)
-        {
-            p_context.next_id = p_content["_id"].as<uint32_t>() + 1;
-        }
+        p_context.tree->metadata().setVisualizerId(
+            p_node_index, p_content["_id"].as<uint32_t>());
     }
     else
     {
-        p_node.setId(p_context.next_id++);
+        p_context.tree->metadata().assignVisualizerId(p_node_index);
     }
 }
 
 using NodeCreatorMap = std::unordered_map<
     std::string,
-    std::function<robotik::Return<Node::Ptr>(ParsingContext const&,
+    std::function<robotik::Return<uint32_t>(ParsingContext const&,
                                              YAML::Node const&)>>;
 
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 parseYAMLNodeInternal(ParsingContext const& p_context,
                       YAML::Node const& p_node);
 
@@ -130,45 +126,44 @@ static void loadLiteralParameters(Blackboard& p_bb,
 // ----------------------------------------------------------------------------
 //! \brief Parse children nodes from YAML content
 // ----------------------------------------------------------------------------
-static robotik::Return<std::vector<Node::Ptr>>
+static robotik::Return<std::vector<uint32_t>>
 parseChildren(ParsingContext const& p_context,
               YAML::Node const& p_content,
               std::string const& p_field_name)
 {
     if (!p_content[p_field_name])
     {
-        return robotik::Return<std::vector<Node::Ptr>>::error(
+        return robotik::Return<std::vector<uint32_t>>::error(
             "Node '" + getNodeName(p_content) + "' missing '" + p_field_name +
             "' field");
     }
 
     if (!p_content[p_field_name].IsSequence())
     {
-        return robotik::Return<std::vector<Node::Ptr>>::error(
+        return robotik::Return<std::vector<uint32_t>>::error(
             "Node '" + getNodeName(p_content) + "': '" + p_field_name +
             "' field must be a sequence");
     }
 
     if (p_content[p_field_name].size() == 0)
     {
-        return robotik::Return<std::vector<Node::Ptr>>::error(
+        return robotik::Return<std::vector<uint32_t>>::error(
             "Node '" + getNodeName(p_content) +
             "' must have at least one child");
     }
 
-    std::vector<Node::Ptr> children;
+    std::vector<uint32_t> children;
     for (auto const& child : p_content[p_field_name])
     {
         auto result = parseYAMLNodeInternal(p_context, child);
         if (!result)
         {
-            return robotik::Return<std::vector<Node::Ptr>>::error(
+            return robotik::Return<std::vector<uint32_t>>::error(
                 result.getError());
         }
-        children.push_back(result.moveValue());
+        children.push_back(result.getValue());
     }
-    return robotik::Return<std::vector<Node::Ptr>>::success(
-        std::move(children));
+    return robotik::Return<std::vector<uint32_t>>::success(std::move(children));
 }
 
 // ----------------------------------------------------------------------------
@@ -202,45 +197,45 @@ buildSubTreeRegistry(YAML::Node const& p_root)
 // ----------------------------------------------------------------------------
 //! \brief Static creator functions for each node type
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createSequence(ParsingContext const& p_context, YAML::Node const& p_content)
 {
-    auto node = Node::create<Sequence>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<Sequence>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "children");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
-    for (auto& child : children.getValue())
+        return robotik::Return<uint32_t>::error(children.getError());
+    for (uint32_t child_idx : children.getValue())
     {
-        node->addChild(std::move(child));
+        node.addChildIndex(child_idx);
     }
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a selector node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createSelector(ParsingContext const& p_context, YAML::Node const& p_content)
 {
-    auto node = Node::create<Selector>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<Selector>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "children");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
-    for (auto& child : children.getValue())
+        return robotik::Return<uint32_t>::error(children.getError());
+    for (uint32_t child_idx : children.getValue())
     {
-        node->addChild(std::move(child));
+        node.addChildIndex(child_idx);
     }
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a parallel node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
 {
     bool has_policies = p_content["success_on_all"] || p_content["fail_on_all"];
@@ -249,16 +244,16 @@ createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
 
     if (has_policies && has_thresholds)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Cannot specify both policies and thresholds");
     }
     if (!has_policies && !has_thresholds)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Missing policies or thresholds");
     }
 
-    Node::Ptr par;
+    Composite* composite = nullptr;
     if (has_policies)
     {
         bool success_on_all = p_content["success_on_all"]
@@ -267,7 +262,9 @@ createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
         bool fail_on_all = p_content["fail_on_all"]
                                ? p_content["fail_on_all"].as<bool>()
                                : true;
-        par = Node::create<ParallelAll>(success_on_all, fail_on_all);
+        auto& par =
+            p_context.tree->emplaceNode<ParallelAll>(success_on_all, fail_on_all);
+        composite = &par;
     }
     else
     {
@@ -279,192 +276,196 @@ createParallel(ParsingContext const& p_context, YAML::Node const& p_content)
             p_content["failure_threshold"]
                 ? p_content["failure_threshold"].as<size_t>()
                 : 1;
-        par = Node::create<Parallel>(success_threshold, failure_threshold);
+        auto& par = p_context.tree->emplaceNode<Parallel>(success_threshold,
+                                                          failure_threshold);
+        composite = &par;
     }
 
-    par->name = getNodeName(p_content);
-    assignNodeId(*par, p_context, p_content);
+    composite->name = getNodeName(p_content);
+    assignNodeId(composite->index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "children");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
 
-    auto* composite = reinterpret_cast<Composite*>(par.get());
-    for (auto& child : children.getValue())
+    for (uint32_t child_idx : children.getValue())
     {
-        composite->addChild(std::move(child));
+        composite->addChildIndex(child_idx);
     }
 
-    return robotik::Return<Node::Ptr>::success(std::move(par));
+    return robotik::Return<uint32_t>::success(composite->index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create an inverter node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createInverter(ParsingContext const& p_context, YAML::Node const& p_content)
 {
-    auto node = Node::create<Inverter>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<Inverter>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
     if (children.getValue().size() != 1)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Decorator must have exactly one child");
     }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a repeater node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createRepeater(ParsingContext const& p_context, YAML::Node const& p_content)
 {
     size_t times = p_content["times"] ? p_content["times"].as<size_t>() : 0;
-    auto node = Node::create<Repeater>(times);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<Repeater>(times);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
 
     // Set blackboard for port access
-    node->setBlackboard(p_context.blackboard);
+    node.setBlackboard(p_context.blackboard);
 
     // Configure port remapping if parameters are present
     if (p_content["parameters"])
     {
-        node->setPortRemapping(extractPortRemapping(p_content["parameters"]));
+        node.setPortRemapping(extractPortRemapping(p_content["parameters"]));
     }
 
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
     if (children.getValue().size() != 1)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Decorator must have exactly one child");
     }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a repeat until success node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createRepeatUntilSuccess(ParsingContext const& p_context,
                          YAML::Node const& p_content)
 {
     size_t attempts =
         p_content["attempts"] ? p_content["attempts"].as<size_t>() : 0;
-    auto node = Node::create<UntilSuccess>(attempts);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<UntilSuccess>(attempts);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
     if (children.getValue().size() != 1)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Decorator must have exactly one child");
     }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a repeat until failure node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createRepeatUntilFailure(ParsingContext const& p_context,
                          YAML::Node const& p_content)
 {
     size_t attempts =
         p_content["attempts"] ? p_content["attempts"].as<size_t>() : 0;
-    auto node = Node::create<UntilFailure>(attempts);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<UntilFailure>(attempts);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
     if (children.getValue().size() != 1)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Decorator must have exactly one child");
     }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a force success node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createForceSuccess(ParsingContext const& p_context, YAML::Node const& p_content)
 {
-    auto node = Node::create<ForceSuccess>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<ForceSuccess>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
     if (children.getValue().size() != 1)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Decorator must have exactly one child");
     }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a force failure node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createForceFailure(ParsingContext const& p_context, YAML::Node const& p_content)
 {
-    auto node = Node::create<ForceFailure>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<ForceFailure>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
     if (children.getValue().size() != 1)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Decorator must have exactly one child");
     }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create an action node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createAction(ParsingContext const& p_context,
-                                               YAML::Node const& p_content)
+static robotik::Return<uint32_t> createAction(ParsingContext const& p_context,
+                                              YAML::Node const& p_content)
 {
     if (!p_content["name"])
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             p_content.begin()->first.as<std::string>() +
             " node missing 'name' field");
     }
 
     std::string name = p_content["name"].as<std::string>();
 
-    auto node = p_context.factory.createNode(name);
-    if (!node)
+    auto node_ptr = p_context.factory.createNode(name);
+    if (!node_ptr)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Failed to create " + p_content.begin()->first.as<std::string>() +
             " node: " + name);
     }
 
+    uint32_t node_index = p_context.tree->adoptNode(std::move(node_ptr));
+    Node& node = p_context.tree->node(node_index);
+
     // Set the blackboard for the node (now on Node base class)
-    node->setBlackboard(p_context.blackboard);
+    node.setBlackboard(p_context.blackboard);
 
     // Handle local parameters if present
     if (p_context.blackboard && p_content["parameters"])
@@ -474,18 +475,18 @@ static robotik::Return<Node::Ptr> createAction(ParsingContext const& p_context,
         loadLiteralParameters(*p_context.blackboard, p_content["parameters"]);
 
         // Configure port remapping for all parameters
-        node->setPortRemapping(extractPortRemapping(p_content["parameters"]));
+        node.setPortRemapping(extractPortRemapping(p_content["parameters"]));
     }
 
-    node->name = name;
-    assignNodeId(*node, p_context, p_content);
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.name = name;
+    assignNodeId(node_index, p_context, p_content);
+    return robotik::Return<uint32_t>::success(node_index);
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a condition node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createCondition(ParsingContext const& p_context, YAML::Node const& p_content)
 {
     return createAction(p_context, p_content);
@@ -494,25 +495,25 @@ createCondition(ParsingContext const& p_context, YAML::Node const& p_content)
 // ----------------------------------------------------------------------------
 //! \brief Create a success node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createSuccess(ParsingContext const& p_context,
-                                                YAML::Node const& p_content)
+static robotik::Return<uint32_t> createSuccess(ParsingContext const& p_context,
+                                               YAML::Node const& p_content)
 {
-    auto node = Node::create<Success>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    auto& node = p_context.tree->emplaceNode<Success>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a failure node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createFailure(ParsingContext const& p_context,
-                                                YAML::Node const& p_content)
+static robotik::Return<uint32_t> createFailure(ParsingContext const& p_context,
+                                               YAML::Node const& p_content)
 {
-    auto node = Node::create<Failure>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    auto& node = p_context.tree->emplaceNode<Failure>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
@@ -569,18 +570,18 @@ static void applySubTreePortRemapping(
 // ----------------------------------------------------------------------------
 //! \brief Create a subtree node referencing another behavior tree
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createSubTree(ParsingContext const& p_context,
-                                                YAML::Node const& p_content)
+static robotik::Return<uint32_t> createSubTree(ParsingContext const& p_context,
+                                               YAML::Node const& p_content)
 {
     if (!p_context.subtrees)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "SubTree node encountered but no 'SubTrees' section was provided");
     }
 
     if (!p_content["reference"])
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "SubTree node missing 'reference' field");
     }
 
@@ -588,11 +589,14 @@ static robotik::Return<Node::Ptr> createSubTree(ParsingContext const& p_context,
     auto it = p_context.subtrees->definitions.find(reference);
     if (it == p_context.subtrees->definitions.end())
     {
-        return robotik::Return<Node::Ptr>::error("Unknown subtree reference: " +
-                                                 reference);
+        return robotik::Return<uint32_t>::error("Unknown subtree reference: " +
+                                                reference);
     }
 
+    auto subtree = Tree::create();
+
     ParsingContext nested = p_context;
+    nested.tree = subtree.get();
     if (p_context.blackboard)
     {
         nested.blackboard = p_context.blackboard->createChild();
@@ -625,14 +629,13 @@ static robotik::Return<Node::Ptr> createSubTree(ParsingContext const& p_context,
     auto subtreeRoot = parseYAMLNodeInternal(nested, it->second);
     if (!subtreeRoot)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Failed to instantiate subtree '" + reference +
             "': " + subtreeRoot.getError());
     }
 
-    auto subtree = Tree::create();
     subtree->setBlackboard(nested.blackboard);
-    subtree->setRoot(subtreeRoot.moveValue());
+    subtree->setRootIndex(subtreeRoot.getValue());
 
     // Store output remapping and parent blackboard for later propagation
     if (!outputRemapping.empty())
@@ -641,158 +644,157 @@ static robotik::Return<Node::Ptr> createSubTree(ParsingContext const& p_context,
         subtree->setParentBlackboard(p_context.blackboard);
     }
 
-    auto handle =
-        std::make_shared<SubTreeHandle>(reference, std::move(subtree));
-
-    auto node = Node::create<SubTreeNode>(handle);
-    node->name =
+    auto& node =
+        p_context.tree->emplaceNode<SubTreeNode>(reference, std::move(subtree));
+    node.name =
         p_content["name"] ? p_content["name"].as<std::string>() : reference;
-    assignNodeId(*node, p_context, p_content);
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    assignNodeId(node.index(), p_context, p_content);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a timeout decorator node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createTimeout(ParsingContext const& p_context,
-                                                YAML::Node const& p_content)
+static robotik::Return<uint32_t> createTimeout(ParsingContext const& p_context,
+                                               YAML::Node const& p_content)
 {
     size_t ms = p_content["milliseconds"]
                     ? p_content["milliseconds"].as<size_t>()
                     : 1000;
-    auto node = Node::create<Timeout>(ms);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
+    auto& node = p_context.tree->emplaceNode<Timeout>(ms);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
 
     // Set blackboard for port access
-    node->setBlackboard(p_context.blackboard);
+    node.setBlackboard(p_context.blackboard);
 
     // Configure port remapping if parameters are present
     if (p_content["parameters"])
     {
-        node->setPortRemapping(extractPortRemapping(p_content["parameters"]));
+        node.setPortRemapping(extractPortRemapping(p_content["parameters"]));
     }
 
     auto children = parseChildren(p_context, p_content, "child");
     if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
+        return robotik::Return<uint32_t>::error(children.getError());
     if (children.getValue().size() != 1)
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "Timeout must have exactly one child");
     }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a delay decorator node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createDelay(ParsingContext const& p_context,
-                                              YAML::Node const& p_content)
-{
-    size_t ms = p_content["milliseconds"]
-                    ? p_content["milliseconds"].as<size_t>()
-                    : 1000;
-    auto node = Node::create<Delay>(ms);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
-    auto children = parseChildren(p_context, p_content, "child");
-    if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
-    if (children.getValue().size() != 1)
-    {
-        return robotik::Return<Node::Ptr>::error(
-            "Delay must have exactly one child");
-    }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
-}
-
-// ----------------------------------------------------------------------------
-//! \brief Create a cooldown decorator node
-// ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
-createCooldown(ParsingContext const& p_context, YAML::Node const& p_content)
-{
-    size_t ms = p_content["milliseconds"]
-                    ? p_content["milliseconds"].as<size_t>()
-                    : 1000;
-    auto node = Node::create<Cooldown>(ms);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
-    auto children = parseChildren(p_context, p_content, "child");
-    if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
-    if (children.getValue().size() != 1)
-    {
-        return robotik::Return<Node::Ptr>::error(
-            "Cooldown must have exactly one child");
-    }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
-}
-
-// ----------------------------------------------------------------------------
-//! \brief Create a run once decorator node
-// ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createRunOnce(ParsingContext const& p_context,
-                                                YAML::Node const& p_content)
-{
-    auto node = Node::create<RunOnce>();
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
-    auto children = parseChildren(p_context, p_content, "child");
-    if (!children)
-        return robotik::Return<Node::Ptr>::error(children.getError());
-    if (children.getValue().size() != 1)
-    {
-        return robotik::Return<Node::Ptr>::error(
-            "RunOnce must have exactly one child");
-    }
-    node->setChild(std::move(children.getValue()[0]));
-    return robotik::Return<Node::Ptr>::success(std::move(node));
-}
-
-// ----------------------------------------------------------------------------
-//! \brief Create a wait leaf node
-// ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr> createWait(ParsingContext const& p_context,
+static robotik::Return<uint32_t> createDelay(ParsingContext const& p_context,
                                              YAML::Node const& p_content)
 {
     size_t ms = p_content["milliseconds"]
                     ? p_content["milliseconds"].as<size_t>()
                     : 1000;
-    auto node = Node::create<Wait>(ms);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    auto& node = p_context.tree->emplaceNode<Delay>(ms);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    auto children = parseChildren(p_context, p_content, "child");
+    if (!children)
+        return robotik::Return<uint32_t>::error(children.getError());
+    if (children.getValue().size() != 1)
+    {
+        return robotik::Return<uint32_t>::error(
+            "Delay must have exactly one child");
+    }
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Create a cooldown decorator node
+// ----------------------------------------------------------------------------
+static robotik::Return<uint32_t>
+createCooldown(ParsingContext const& p_context, YAML::Node const& p_content)
+{
+    size_t ms = p_content["milliseconds"]
+                    ? p_content["milliseconds"].as<size_t>()
+                    : 1000;
+    auto& node = p_context.tree->emplaceNode<Cooldown>(ms);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    auto children = parseChildren(p_context, p_content, "child");
+    if (!children)
+        return robotik::Return<uint32_t>::error(children.getError());
+    if (children.getValue().size() != 1)
+    {
+        return robotik::Return<uint32_t>::error(
+            "Cooldown must have exactly one child");
+    }
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Create a run once decorator node
+// ----------------------------------------------------------------------------
+static robotik::Return<uint32_t> createRunOnce(ParsingContext const& p_context,
+                                               YAML::Node const& p_content)
+{
+    auto& node = p_context.tree->emplaceNode<RunOnce>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    auto children = parseChildren(p_context, p_content, "child");
+    if (!children)
+        return robotik::Return<uint32_t>::error(children.getError());
+    if (children.getValue().size() != 1)
+    {
+        return robotik::Return<uint32_t>::error(
+            "RunOnce must have exactly one child");
+    }
+    node.setChildIndex(children.getValue()[0]);
+    return robotik::Return<uint32_t>::success(node.index());
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Create a wait leaf node
+// ----------------------------------------------------------------------------
+static robotik::Return<uint32_t> createWait(ParsingContext const& p_context,
+                                            YAML::Node const& p_content)
+{
+    size_t ms = p_content["milliseconds"]
+                    ? p_content["milliseconds"].as<size_t>()
+                    : 1000;
+    auto& node = p_context.tree->emplaceNode<Wait>(ms);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
 //! \brief Create a set blackboard leaf node
 // ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
+static robotik::Return<uint32_t>
 createSetBlackboard(ParsingContext const& p_context,
                     YAML::Node const& p_content)
 {
     if (!p_content["key"])
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "SetBlackboard node missing 'key' field");
     }
     if (!p_content["value"])
     {
-        return robotik::Return<Node::Ptr>::error(
+        return robotik::Return<uint32_t>::error(
             "SetBlackboard node missing 'value' field");
     }
 
     std::string key = p_content["key"].as<std::string>();
     std::string value = p_content["value"].as<std::string>();
-    auto node = Node::create<SetBlackboard>(key, value, p_context.blackboard);
-    node->name = getNodeName(p_content);
-    assignNodeId(*node, p_context, p_content);
-    return robotik::Return<Node::Ptr>::success(std::move(node));
+    auto& node =
+        p_context.tree->emplaceNode<SetBlackboard>(key, value, p_context.blackboard);
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    return robotik::Return<uint32_t>::success(node.index());
 }
 
 // ----------------------------------------------------------------------------
@@ -806,7 +808,7 @@ static NodeCreatorMap& getNodeCreators()
         {Parallel::toString(), createParallel},
         {Inverter::toString(), createInverter},
         {Repeater::toString(), createRepeater},
-        {"Repeat", createRepeater}, // Backward compatibility alias
+        {"Repeater", createRepeater},
         {UntilSuccess::toString(), createRepeatUntilSuccess},
         {UntilFailure::toString(), createRepeatUntilFailure},
         {ForceSuccess::toString(), createForceSuccess},
@@ -815,7 +817,7 @@ static NodeCreatorMap& getNodeCreators()
         {Delay::toString(), createDelay},
         {Cooldown::toString(), createCooldown},
         {RunOnce::toString(), createRunOnce},
-        {Action::toString(), createAction},
+        {CallbackLeaf::toString(), createAction},
         {Condition::toString(), createCondition},
         {Success::toString(), createSuccess},
         {Failure::toString(), createFailure},
@@ -824,6 +826,37 @@ static NodeCreatorMap& getNodeCreators()
         {SubTreeNode::toString(), createSubTree},
     };
     return creators;
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Internal helper to parse YAML node with context
+// ----------------------------------------------------------------------------
+static robotik::Return<uint32_t>
+parseYAMLNodeInternal(ParsingContext const& p_context, YAML::Node const& p_node)
+{
+    if (!p_node.IsMap())
+    {
+        return robotik::Return<uint32_t>::error(
+            "Invalid node format: must be a map");
+    }
+
+    auto it = p_node.begin();
+    if (it == p_node.end())
+    {
+        return robotik::Return<uint32_t>::error(
+            "Empty YAML node: a node must contain at least one key defining "
+            "its type (e.g. Sequence, Selector, Action)");
+    }
+
+    std::string type = it->first.as<std::string>();
+    auto const& creators = getNodeCreators();
+    auto fn_it = creators.find(type);
+    if (fn_it == creators.end())
+    {
+        return robotik::Return<uint32_t>::error("Unknown node type: " + type);
+    }
+
+    return fn_it->second(p_context, it->second);
 }
 
 //-----------------------------------------------------------------------------
@@ -858,16 +891,17 @@ robotik::Return<Tree::Ptr> Builder::fromFile(NodeFactory const& p_factory,
         SubTreeRegistry const* registryPtr =
             registry.definitions.empty() ? nullptr : &registry;
 
+        auto tree = Tree::create();
+        tree->setBlackboard(blackboard);
+
         auto nodeResult = parseYAMLNode(
-            p_factory, root["BehaviorTree"], blackboard, registryPtr);
+            *tree, p_factory, root["BehaviorTree"], blackboard, registryPtr);
         if (!nodeResult)
         {
             return robotik::Return<Tree::Ptr>::error(nodeResult.getError());
         }
 
-        Tree::Ptr tree = Tree::create();
-        tree->setBlackboard(blackboard);
-        tree->setRoot(nodeResult.moveValue());
+        tree->setRootIndex(nodeResult.getValue());
         return robotik::Return<Tree::Ptr>::success(std::move(tree));
     }
     catch (const YAML::Exception& e)
@@ -914,16 +948,17 @@ robotik::Return<Tree::Ptr> Builder::fromText(NodeFactory const& p_factory,
         SubTreeRegistry const* registryPtr =
             registry.definitions.empty() ? nullptr : &registry;
 
+        auto tree = Tree::create();
+        tree->setBlackboard(blackboard);
+
         auto nodeResult = parseYAMLNode(
-            p_factory, root["BehaviorTree"], blackboard, registryPtr);
+            *tree, p_factory, root["BehaviorTree"], blackboard, registryPtr);
         if (!nodeResult)
         {
             return robotik::Return<Tree::Ptr>::error(nodeResult.getError());
         }
 
-        auto tree = Tree::create();
-        tree->setBlackboard(blackboard);
-        tree->setRoot(nodeResult.moveValue());
+        tree->setRootIndex(nodeResult.getValue());
         return robotik::Return<Tree::Ptr>::success(std::move(tree));
     }
     catch (const YAML::Exception& e)
@@ -938,55 +973,16 @@ robotik::Return<Tree::Ptr> Builder::fromText(NodeFactory const& p_factory,
     }
 }
 
-// ----------------------------------------------------------------------------
-//! \brief Internal helper to parse YAML node with context
-// ----------------------------------------------------------------------------
-static robotik::Return<Node::Ptr>
-parseYAMLNodeInternal(ParsingContext const& p_context, YAML::Node const& p_node)
-{
-    if (!p_node.IsMap())
-    {
-        return robotik::Return<Node::Ptr>::error(
-            "Invalid node format: must be a map");
-    }
-
-    auto it = p_node.begin();
-    if (it == p_node.end())
-    {
-        return robotik::Return<Node::Ptr>::error(
-            "Empty YAML node: a node must contain at least one key defining "
-            "its type (e.g. Sequence, Selector, Action)");
-    }
-
-    std::string type = it->first.as<std::string>();
-    auto const& creators = getNodeCreators();
-    auto fn_it = creators.find(type);
-    if (fn_it == creators.end())
-    {
-        return robotik::Return<Node::Ptr>::error("Unknown node type: " + type);
-    }
-
-    return fn_it->second(p_context, it->second);
-}
-
 //-----------------------------------------------------------------------------
-// Private version with blackboard/subtree support
-robotik::Return<Node::Ptr>
-Builder::parseYAMLNode(NodeFactory const& p_factory,
+robotik::Return<uint32_t>
+Builder::parseYAMLNode(Tree& p_tree,
+                       NodeFactory const& p_factory,
                        YAML::Node const& p_node,
                        Blackboard::Ptr p_blackboard,
                        SubTreeRegistry const* p_subtrees)
 {
-    ParsingContext context{p_factory, p_blackboard, p_subtrees};
+    ParsingContext context{p_factory, p_blackboard, p_subtrees, &p_tree};
     return parseYAMLNodeInternal(context, p_node);
-}
-
-//-----------------------------------------------------------------------------
-// Public version for backward compatibility
-robotik::Return<Node::Ptr> Builder::parseYAMLNode(NodeFactory const& p_factory,
-                                                  YAML::Node const& p_node)
-{
-    return parseYAMLNode(p_factory, p_node, nullptr, nullptr);
 }
 
 } // namespace bt

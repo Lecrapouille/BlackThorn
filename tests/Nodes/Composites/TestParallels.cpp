@@ -18,22 +18,22 @@
 
 namespace {
 
-class LambdaTestAction: public bt::Action
+class LambdaTestAction: public bt::CallbackLeaf
 {
 public:
 
     using Tick = std::function<bt::Status()>;
+    using Reset = std::function<void()>;
 
-    explicit LambdaTestAction(Tick tick) : m_tick(std::move(tick)) {}
-
-    bt::Status onRunning() override
+    explicit LambdaTestAction(Tick tick, Reset reset = {})
+        : CallbackLeaf(std::move(tick), std::move(reset))
     {
-        return m_tick ? m_tick() : bt::Status::FAILURE;
     }
 
-private:
-
-    Tick m_tick;
+    explicit LambdaTestAction(std::pair<Tick, Reset> handlers)
+        : CallbackLeaf(std::move(handlers.first), std::move(handlers.second))
+    {
+    }
 };
 
 class CounterAction final: public LambdaTestAction
@@ -67,55 +67,59 @@ public:
 
 TEST(TestParallel, ThresholdSuccess)
 {
-    auto parallel =
-        bt::Node::create<bt::Parallel>(2, 2); // Need 2 success or 2 failures
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::Parallel>(2, 2); // Need 2 success or 2 failures
+    parallel.addChild<bt::Success>();
+    parallel.addChild<bt::Success>();
+    parallel.addChild<bt::Failure>();
 
-    EXPECT_EQ(parallel->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(parallel.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestParallel, ThresholdFailure)
 {
-    auto parallel = bt::Node::create<bt::Parallel>(3, 2);
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<bt::Failure>());
-    parallel->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::Parallel>(3, 2);
+    parallel.addChild<bt::Success>();
+    parallel.addChild<bt::Failure>();
+    parallel.addChild<bt::Failure>();
 
-    EXPECT_EQ(parallel->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(parallel.tick(), bt::Status::FAILURE);
 }
 
 TEST(TestParallel, StillRunning)
 {
-    auto parallel = bt::Node::create<bt::Parallel>(2, 2);
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
-    parallel->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::Parallel>(2, 2);
+    parallel.addChild<bt::Success>();
+    parallel.addChild<StatusAction>(bt::Status::RUNNING);
+    parallel.addChild<bt::Failure>();
 
-    EXPECT_EQ(parallel->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(parallel.tick(), bt::Status::RUNNING);
 }
 
 TEST(TestParallel, AllChildrenExecuted)
 {
     int counter = 0;
-    auto parallel = bt::Node::create<bt::Parallel>(1, 3);
-    parallel->addChild(bt::Node::create<CounterAction>(&counter));
-    parallel->addChild(bt::Node::create<CounterAction>(&counter));
-    parallel->addChild(bt::Node::create<CounterAction>(&counter));
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::Parallel>(1, 3);
+    parallel.addChild<CounterAction>(&counter);
+    parallel.addChild<CounterAction>(&counter);
+    parallel.addChild<CounterAction>(&counter);
 
     EXPECT_EQ(counter, 0);
     // 3 successes >= 1 required
-    EXPECT_EQ(parallel->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(parallel.tick(), bt::Status::SUCCESS);
     // All children executed
     EXPECT_EQ(counter, 3);
 }
 
 TEST(TestParallel, GetThresholds)
 {
-    auto parallel = bt::Node::create<bt::Parallel>(3, 2);
-    EXPECT_EQ(parallel->getMinSuccess(), 3);
-    EXPECT_EQ(parallel->getMinFail(), 2);
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::Parallel>(3, 2);
+    EXPECT_EQ(parallel.getMinSuccess(), 3);
+    EXPECT_EQ(parallel.getMinFail(), 2);
 }
 
 // ===========================================================================
@@ -124,46 +128,51 @@ TEST(TestParallel, GetThresholds)
 
 TEST(TestParallelAll, SuccessOnAll)
 {
-    auto parallel = bt::Node::create<bt::ParallelAll>(true, true);
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::ParallelAll>(true, true);
+    parallel.addChild<bt::Success>();
+    parallel.addChild<bt::Success>();
+    parallel.addChild<bt::Success>();
 
-    EXPECT_EQ(parallel->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(parallel.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestParallelAll, SuccessOnAllWithOneFailure)
 {
-    auto parallel = bt::Node::create<bt::ParallelAll>(true, true);
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<bt::Failure>());
-    parallel->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::ParallelAll>(true, true);
+    parallel.addChild<bt::Success>();
+    parallel.addChild<bt::Failure>();
+    parallel.addChild<bt::Success>();
 
-    EXPECT_EQ(parallel->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(parallel.tick(), bt::Status::RUNNING);
 }
 
 TEST(TestParallelAll, SuccessOnAny)
 {
-    auto parallel = bt::Node::create<bt::ParallelAll>(false, true);
-    parallel->addChild(bt::Node::create<bt::Success>());
-    parallel->addChild(bt::Node::create<bt::Failure>());
-    parallel->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::ParallelAll>(false, true);
+    parallel.addChild<bt::Success>();
+    parallel.addChild<bt::Failure>();
+    parallel.addChild<bt::Failure>();
 
-    EXPECT_EQ(parallel->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(parallel.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestParallelAll, FailOnAll)
 {
-    auto parallel = bt::Node::create<bt::ParallelAll>(true, true);
-    parallel->addChild(bt::Node::create<bt::Failure>());
-    parallel->addChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::ParallelAll>(true, true);
+    parallel.addChild<bt::Failure>();
+    parallel.addChild<bt::Failure>();
 
-    EXPECT_EQ(parallel->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(parallel.tick(), bt::Status::FAILURE);
 }
 
 TEST(TestParallelAll, GetPolicies)
 {
-    auto parallel = bt::Node::create<bt::ParallelAll>(true, false);
-    EXPECT_TRUE(parallel->getSuccessOnAll());
-    EXPECT_FALSE(parallel->getFailOnAll());
+    auto tree = bt::Tree::create();
+    auto& parallel = tree->createRoot<bt::ParallelAll>(true, false);
+    EXPECT_TRUE(parallel.getSuccessOnAll());
+    EXPECT_FALSE(parallel.getFailOnAll());
 }

@@ -97,6 +97,13 @@ public:
     // ------------------------------------------------------------------------
     void sendStateChanges(Tree const& p_tree);
 
+    // ------------------------------------------------------------------------
+    //! \brief Simulate a connected client without TCP (benchmarks/tests).
+    //! \param[in] p_enabled When true, \ref isConnected() returns true and
+    //! sends are discarded.
+    // ------------------------------------------------------------------------
+    void enableStubMode(bool p_enabled = true);
+
 private:
 
     // ------------------------------------------------------------------------
@@ -124,6 +131,9 @@ private:
     //! \brief Cache of last sent states for delta detection (node_id -> status
     //! as int)
     std::unordered_map<uint32_t, int> m_last_states;
+
+    //! \brief When set, behaves as connected without a socket.
+    bool m_stub_mode = false;
 };
 
 } // namespace bt

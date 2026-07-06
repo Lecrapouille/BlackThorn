@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Decorator.hpp"
+#include "BlackThorn/Nodes/Decorators/Decorator.hpp"
 
 #include <chrono>
 
@@ -19,14 +19,12 @@ namespace bt {
 //! If the child does not complete within the specified time, it returns
 //! FAILURE and halts the child. This is useful for preventing long-running
 //! actions from blocking the tree.
+//!
 //! The timeout duration can be read from the blackboard via port remapping.
 // ****************************************************************************
 class Timeout final: public Decorator
 {
 public:
-
-    using Clock = std::chrono::steady_clock;
-    using Duration = std::chrono::milliseconds;
 
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
@@ -44,7 +42,6 @@ public:
     explicit Timeout(size_t p_milliseconds = 1000)
         : m_default_timeout(p_milliseconds)
     {
-        m_type = toString();
     }
 
     // ------------------------------------------------------------------------
@@ -59,59 +56,21 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Set up the timeout - records the start time.
-    //! Reads timeout from blackboard if configured, otherwise uses default.
-    //! \return RUNNING to continue with onRunning.
+    //! \brief Copy default timeout into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        // Try to read timeout from blackboard (try int first, then size_t)
-        if (auto ms = getInput<int>("milliseconds"); ms && *ms >= 0)
-        {
-            m_timeout = Duration(static_cast<size_t>(*ms));
-        }
-        else if (auto ms2 = getInput<size_t>("milliseconds"); ms2)
-        {
-            m_timeout = Duration(*ms2);
-        }
-        else
-        {
-            m_timeout = Duration(m_default_timeout);
-        }
-        m_start_time = Clock::now();
-        return Status::RUNNING;
+        p_config.duration_ms = m_default_timeout;
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Run the timeout decorator.
-    //! \return FAILURE if timeout expired, child's status otherwise.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        auto elapsed =
-            std::chrono::duration_cast<Duration>(Clock::now() - m_start_time);
-
-        if (elapsed >= m_timeout)
-        {
-            // Timeout expired, halt child if running
-            if (m_child->status() == Status::RUNNING)
-            {
-                m_child->halt();
-            }
-            return Status::FAILURE;
-        }
-
-        // Still have time, tick child
-        return m_child->tick();
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Get the timeout duration in milliseconds.
-    //! \return The timeout duration.
+    //! \brief Get the active timeout duration in milliseconds.
+    //! \return Runtime timeout after port remapping is applied.
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getMilliseconds() const
     {
-        return static_cast<size_t>(m_timeout.count());
+        return tree().runtime().duration_ms_runtime[index()];
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -125,30 +84,25 @@ public:
 
 private:
 
+    //! \brief Default timeout when no port remapping is provided.
     size_t m_default_timeout;
-    Duration m_timeout;
-    Clock::time_point m_start_time;
 };
 
 // ****************************************************************************
-//! \brief The Delay decorator waits for a specified duration before
-//! starting to tick its child. Once the delay has passed, it ticks the child
-//! and returns its status.
+//! \brief The Delay decorator waits before ticking its child.
+//! Returns RUNNING until the delay elapses, then forwards to the child.
 // ****************************************************************************
 class Delay final: public Decorator
 {
 public:
 
-    using Clock = std::chrono::steady_clock;
-    using Duration = std::chrono::milliseconds;
-
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
-    //! \return The string "⏳ Delay".
+    //! \return The string "Delay".
     // ------------------------------------------------------------------------
     [[nodiscard]] static constexpr char const* toString()
     {
-        return "⏳ Delay";
+        return "Delay";
     }
 
     // ------------------------------------------------------------------------
@@ -156,50 +110,26 @@ public:
     //! \param[in] p_milliseconds The delay duration in milliseconds.
     // ------------------------------------------------------------------------
     explicit Delay(size_t p_milliseconds = 1000)
-        : m_delay(Duration(p_milliseconds))
+        : m_default_delay(p_milliseconds)
     {
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Set up the delay - records the start time.
-    //! \return RUNNING to continue with onRunning.
+    //! \brief Copy default delay into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        m_start_time = Clock::now();
-        m_delay_passed = false;
-        return Status::RUNNING;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Run the delay decorator.
-    //! \return RUNNING during delay, child's status after delay.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        if (!m_delay_passed)
-        {
-            auto elapsed = std::chrono::duration_cast<Duration>(Clock::now() -
-                                                                m_start_time);
-
-            if (elapsed < m_delay)
-            {
-                return Status::RUNNING;
-            }
-            m_delay_passed = true;
-        }
-
-        // Delay passed, tick child
-        return m_child->tick();
+        p_config.duration_ms = m_default_delay;
     }
 
     // ------------------------------------------------------------------------
     //! \brief Get the delay duration in milliseconds.
-    //! \return The delay duration.
+    //! \return Configured delay duration.
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getMilliseconds() const
     {
-        return static_cast<size_t>(m_delay.count());
+        return tree().config(index()).duration_ms;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -213,31 +143,25 @@ public:
 
 private:
 
-    Duration m_delay;
-    Clock::time_point m_start_time;
-    bool m_delay_passed = false;
+    //! \brief Default delay when no port remapping is provided.
+    size_t m_default_delay;
 };
 
 // ****************************************************************************
-//! \brief The Cooldown decorator prevents the child from being executed
-//! more frequently than the specified interval. After the child completes
-//! (SUCCESS or FAILURE), subsequent ticks return FAILURE until the cooldown
-//! period has elapsed.
+//! \brief The Cooldown decorator blocks re-execution for a duration after the
+//! child completes. While cooling down, the decorator returns FAILURE.
 // ****************************************************************************
 class Cooldown final: public Decorator
 {
 public:
 
-    using Clock = std::chrono::steady_clock;
-    using Duration = std::chrono::milliseconds;
-
     // ------------------------------------------------------------------------
     //! \brief Get the string representation of the node type.
-    //! \return The string "❄️ Cooldown".
+    //! \return The string "Cooldown".
     // ------------------------------------------------------------------------
     [[nodiscard]] static constexpr char const* toString()
     {
-        return "❄️ Cooldown";
+        return "Cooldown";
     }
 
     // ------------------------------------------------------------------------
@@ -245,56 +169,26 @@ public:
     //! \param[in] p_milliseconds The cooldown duration in milliseconds.
     // ------------------------------------------------------------------------
     explicit Cooldown(size_t p_milliseconds = 1000)
-        : m_cooldown(Duration(p_milliseconds))
+        : m_default_cooldown(p_milliseconds)
     {
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Set up the cooldown decorator.
-    //! \return RUNNING or FAILURE depending on cooldown state.
+    //! \brief Copy default cooldown into the tree configuration slot.
+    //! \param[in,out] p_config Configuration slot to populate.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onSetUp() override
+    void fillConfig(NodeConfig& p_config) const override
     {
-        // Check if we're still in cooldown
-        if (m_in_cooldown)
-        {
-            auto elapsed = std::chrono::duration_cast<Duration>(
-                Clock::now() - m_cooldown_start);
-
-            if (elapsed < m_cooldown)
-            {
-                return Status::FAILURE; // Still in cooldown
-            }
-            m_in_cooldown = false;
-        }
-        return Status::RUNNING;
-    }
-
-    // ------------------------------------------------------------------------
-    //! \brief Run the cooldown decorator.
-    //! \return The child's status.
-    // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
-    {
-        Status status = m_child->tick();
-
-        if (status != Status::RUNNING)
-        {
-            // Child finished, start cooldown
-            m_cooldown_start = Clock::now();
-            m_in_cooldown = true;
-        }
-
-        return status;
+        p_config.duration_ms = m_default_cooldown;
     }
 
     // ------------------------------------------------------------------------
     //! \brief Get the cooldown duration in milliseconds.
-    //! \return The cooldown duration.
+    //! \return Configured cooldown duration.
     // ------------------------------------------------------------------------
     [[nodiscard]] size_t getMilliseconds() const
     {
-        return static_cast<size_t>(m_cooldown.count());
+        return tree().config(index()).duration_ms;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -308,9 +202,21 @@ public:
 
 private:
 
-    Duration m_cooldown;
-    Clock::time_point m_cooldown_start;
-    bool m_in_cooldown = false;
+    //! \brief Default cooldown when no port remapping is provided.
+    size_t m_default_cooldown;
+};
+
+template <> struct NodeKindTraits<Timeout>
+{
+    static constexpr NodeKind value = NodeKind::Timeout;
+};
+template <> struct NodeKindTraits<Delay>
+{
+    static constexpr NodeKind value = NodeKind::Delay;
+};
+template <> struct NodeKindTraits<Cooldown>
+{
+    static constexpr NodeKind value = NodeKind::Cooldown;
 };
 
 } // namespace bt

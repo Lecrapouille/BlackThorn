@@ -1230,29 +1230,29 @@ int IDE::buildNodesFromTreeRecursive(bt::Node& p_node, int p_parent_id)
     int node_id = getNextNodeId();
     IDE::Node editor_node;
     editor_node.id = node_id;
-    editor_node.type = p_node.type();
+    editor_node.type = p_node.typeName();
     editor_node.name = p_node.name;
     editor_node.parent = p_parent_id;
 
     // Pour Composite nodes, récupérer les enfants
     if (auto composite = dynamic_cast<bt::Composite*>(&p_node))
     {
-        for (auto& child : composite->getChildren())
+        for (uint32_t child_index : composite->childIndices())
         {
-            int child_id = buildNodesFromTreeRecursive(*child, node_id);
+            int child_id = buildNodesFromTreeRecursive(
+                composite->ownerTree()->node(child_index), node_id);
             if (child_id >= 0)
             {
                 editor_node.children.push_back(child_id);
             }
         }
     }
-    // Pour Decorator nodes
     else if (auto decorator = dynamic_cast<bt::Decorator*>(&p_node))
     {
         if (decorator->hasChild())
         {
-            int child_id =
-                buildNodesFromTreeRecursive(decorator->getChild(), node_id);
+            int child_id = buildNodesFromTreeRecursive(decorator->childNode(),
+                                                       node_id);
             if (child_id >= 0)
             {
                 editor_node.children.push_back(child_id);

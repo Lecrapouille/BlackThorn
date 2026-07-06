@@ -1,0 +1,30 @@
+XML: "/home/qq/MyGithub/BlackThorn/benchmarks/xml"
+
+--- XML load (createTreeFromFile) ---
+[BTCPP] load.parallel_100_success               200       13.621       ms  (68.10 us/op)
+[BTCPP] load.sequence_depth_50                  200       13.551       ms  (67.76 us/op)
+[BTCPP] load.patrol                             200       3.378        ms  (16.89 us/op)
+[BTCPP] load.game_state                         200       2.582        ms  (12.91 us/op)
+
+--- Tick + reset ---
+[BTCPP] tick.parallel_100_success               50000     318.031      ms  (6.36 us/op)
+[BTCPP] tick.sequence_depth_50                  50000     271.799      ms  (5.44 us/op)
+[BTCPP] tick.patrol                             50000     58.950       ms  (1.18 us/op)
+[BTCPP] tick.game_state                         50000     34.436       ms  (0.69 us/op)
+
+--- Blackboard ---
+[BTCPP] load.blackboard_writes                  200       10.112       ms  (50.56 us/op)
+[BTCPP] load.blackboard_port_reads              200       15.372       ms  (76.86 us/op)
+[BTCPP] load.blackboard_subtree_remap           200       11.771       ms  (58.85 us/op)
+[BTCPP] load.blackboard_large                   200       15.953       ms  (79.77 us/op)
+[BTCPP] tick.blackboard_writes                  50000     360.158      ms  (7.20 us/op)
+[BTCPP] tick.blackboard_port_reads              50000     589.573      ms  (11.79 us/op)
+[BTCPP] tick.blackboard_subtree_remap           50000     342.857      ms  (6.86 us/op)
+[BTCPP] tick.blackboard_large                   50000     633.761      ms  (12.68 us/op)
+
+--- Reset only ---
+[BTCPP] reset.patrol x1000                      1000      0.419        ms  (0.42 us/op)
+
+--- Observer OFF vs ON ---
+[BTCPP] tick.patrol.observer_off                50000     59.228       ms  (1.18 us/op)
+[BTCPP] tick.patrol.observer_on                 50000     68.036       ms  (1.36 us/op)

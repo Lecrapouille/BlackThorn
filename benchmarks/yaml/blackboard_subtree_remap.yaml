@@ -1,0 +1,113 @@
+# Benchmark: SubTree port remapping with child blackboard scopes.
+Blackboard:
+  payload_0: 1
+  tag_0: "tag-0"
+  payload_1: 2
+  tag_1: "tag-1"
+  payload_2: 3
+  tag_2: "tag-2"
+  payload_3: 4
+  tag_3: "tag-3"
+  payload_4: 5
+  tag_4: "tag-4"
+  payload_5: 6
+  tag_5: "tag-5"
+  payload_6: 7
+  tag_6: "tag-6"
+  payload_7: 8
+  tag_7: "tag-7"
+  payload_8: 9
+  tag_8: "tag-8"
+  payload_9: 10
+  tag_9: "tag-9"
+
+BehaviorTree:
+  Sequence:
+    name: RemapChain
+    children:
+      - SubTree:
+          name: CopyPayload0
+          reference: CopyPayload
+          parameters:
+            a: ${payload_0}
+            b: ${payload_0}
+            label: ${tag_0}
+      - SubTree:
+          name: CopyPayload1
+          reference: CopyPayload
+          parameters:
+            a: ${payload_1}
+            b: ${payload_1}
+            label: ${tag_1}
+      - SubTree:
+          name: CopyPayload2
+          reference: CopyPayload
+          parameters:
+            a: ${payload_2}
+            b: ${payload_2}
+            label: ${tag_2}
+      - SubTree:
+          name: CopyPayload3
+          reference: CopyPayload
+          parameters:
+            a: ${payload_3}
+            b: ${payload_3}
+            label: ${tag_3}
+      - SubTree:
+          name: CopyPayload4
+          reference: CopyPayload
+          parameters:
+            a: ${payload_4}
+            b: ${payload_4}
+            label: ${tag_4}
+      - SubTree:
+          name: CopyPayload5
+          reference: CopyPayload
+          parameters:
+            a: ${payload_5}
+            b: ${payload_5}
+            label: ${tag_5}
+      - SubTree:
+          name: CopyPayload6
+          reference: CopyPayload
+          parameters:
+            a: ${payload_6}
+            b: ${payload_6}
+            label: ${tag_6}
+      - SubTree:
+          name: CopyPayload7
+          reference: CopyPayload
+          parameters:
+            a: ${payload_7}
+            b: ${payload_7}
+            label: ${tag_7}
+      - SubTree:
+          name: CopyPayload8
+          reference: CopyPayload
+          parameters:
+            a: ${payload_8}
+            b: ${payload_8}
+            label: ${tag_8}
+      - SubTree:
+          name: CopyPayload9
+          reference: CopyPayload
+          parameters:
+            a: ${payload_9}
+            b: ${payload_9}
+            label: ${tag_9}
+      - Success:
+          name: Done
+
+SubTrees:
+  CopyPayload:
+    Sequence:
+      name: CopyPayload
+      children:
+        - Action:
+            name: ReadPorts
+            parameters:
+              a: ${a}
+              b: ${b}
+              label: ${label}
+        - Success:
+            name: Copied

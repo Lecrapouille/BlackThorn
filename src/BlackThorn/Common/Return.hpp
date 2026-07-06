@@ -84,12 +84,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Default constructor creates a failed Return.
-    // ------------------------------------------------------------------------
-    Return() : m_has_value(false), m_error("Uninitialized Return") {}
-
-    // ------------------------------------------------------------------------
-     //! \brief Check if the Return contains a success value.
+    //! \brief Check if the Return contains a success value.
     //! \return True if successful, false if error.
     // ------------------------------------------------------------------------
     [[nodiscard]] bool isSuccess() const
@@ -116,7 +111,7 @@ public:
     }
 
     // ------------------------------------------------------------------------
- //! \brief Get the success value.
+    //! \brief Get the success value.
     //! \return Reference to the success value.
     //! \throw std::runtime_error if called on an error Return.
     // ------------------------------------------------------------------------
@@ -182,9 +177,9 @@ public:
 
 private:
 
-    bool m_has_value;
     T m_value;
-    std::string m_error;
+    std::string m_error = "Uninitialized Return";
+    bool m_has_value = false;
 };
 
 } // namespace robotik

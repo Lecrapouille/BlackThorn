@@ -18,43 +18,47 @@
 
 TEST(TestLeafNodes, SuccessNode)
 {
-    auto node = bt::Node::create<bt::Success>();
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::Success>();
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestLeafNodes, FailureNode)
 {
-    auto node = bt::Node::create<bt::Failure>();
-    EXPECT_EQ(node->tick(), bt::Status::FAILURE);
-    EXPECT_EQ(node->tick(), bt::Status::FAILURE);
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::Failure>();
+    EXPECT_EQ(node.tick(), bt::Status::FAILURE);
+    EXPECT_EQ(node.tick(), bt::Status::FAILURE);
 }
 
 // ===========================================================================
-// Action Tests (Action.hpp)
+// Callback tests (Callback.hpp)
 // ===========================================================================
 
-TEST(TestLeafNodes, SugarAction)
+TEST(TestLeafNodes, CallbackLeaf)
 {
     int counter = 0;
-    auto node = bt::Node::create<bt::SugarAction>([&counter]() {
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::CallbackLeaf>([&counter]() {
         counter++;
         return bt::Status::SUCCESS;
     });
 
-    EXPECT_TRUE(node->isValid());
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_TRUE(node.isValid());
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
     EXPECT_EQ(counter, 1);
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
     EXPECT_EQ(counter, 2);
 }
 
-TEST(TestLeafNodes, SugarActionWithBlackboard)
+TEST(TestLeafNodes, CallbackLeafWithBlackboard)
 {
     auto bb = std::make_shared<bt::Blackboard>();
     bb->set("value", 42);
 
-    auto node = bt::Node::create<bt::SugarAction>(
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::CallbackLeaf>(
         [bb]() {
             auto val = bb->get<int>("value");
             if (val && *val == 42)
@@ -63,13 +67,14 @@ TEST(TestLeafNodes, SugarActionWithBlackboard)
         },
         bb);
 
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
 }
 
-TEST(TestLeafNodes, InvalidSugarAction)
+TEST(TestLeafNodes, InvalidCallback)
 {
-    auto node = bt::Node::create<bt::SugarAction>(nullptr);
-    EXPECT_FALSE(node->isValid());
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::CallbackLeaf>(nullptr);
+    EXPECT_FALSE(node.isValid());
 }
 
 // ===========================================================================
@@ -79,13 +84,14 @@ TEST(TestLeafNodes, InvalidSugarAction)
 TEST(TestLeafNodes, Condition)
 {
     bool flag = false;
-    auto node = bt::Node::create<bt::Condition>([&flag]() { return flag; });
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::Condition>([&flag]() { return flag; });
 
-    EXPECT_TRUE(node->isValid());
-    EXPECT_EQ(node->tick(), bt::Status::FAILURE);
+    EXPECT_TRUE(node.isValid());
+    EXPECT_EQ(node.tick(), bt::Status::FAILURE);
 
     flag = true;
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestLeafNodes, ConditionWithBlackboard)
@@ -93,15 +99,16 @@ TEST(TestLeafNodes, ConditionWithBlackboard)
     auto bb = std::make_shared<bt::Blackboard>();
     bb->set("enabled", true);
 
-    auto node = bt::Node::create<bt::Condition>(
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::Condition>(
         [bb]() {
             auto enabled = bb->get<bool>("enabled");
             return enabled.value_or(false);
         },
         bb);
 
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
 
     bb->set("enabled", false);
-    EXPECT_EQ(node->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(node.tick(), bt::Status::FAILURE);
 }

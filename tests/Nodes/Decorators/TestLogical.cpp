@@ -19,20 +19,14 @@
 
 namespace {
 
-class StatusAction final: public bt::Action
+class StatusAction final: public bt::CallbackLeaf
 {
 public:
 
-    explicit StatusAction(bt::Status status) : m_status(status) {}
-
-    bt::Status onRunning() override
+    explicit StatusAction(bt::Status status)
+        : CallbackLeaf([status]() { return status; })
     {
-        return m_status;
     }
-
-private:
-
-    bt::Status m_status;
 };
 
 } // anonymous namespace
@@ -43,32 +37,36 @@ private:
 
 TEST(TestInverter, InvertSuccess)
 {
-    auto inverter = bt::Node::create<bt::Inverter>();
-    inverter->setChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& inverter = tree->createRoot<bt::Inverter>();
+    inverter.createChild<bt::Success>();
 
-    EXPECT_EQ(inverter->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
 }
 
 TEST(TestInverter, InvertFailure)
 {
-    auto inverter = bt::Node::create<bt::Inverter>();
-    inverter->setChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& inverter = tree->createRoot<bt::Inverter>();
+    inverter.createChild<bt::Failure>();
 
-    EXPECT_EQ(inverter->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestInverter, KeepRunning)
 {
-    auto inverter = bt::Node::create<bt::Inverter>();
-    inverter->setChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
+    auto tree = bt::Tree::create();
+    auto& inverter = tree->createRoot<bt::Inverter>();
+    inverter.createChild<StatusAction>(bt::Status::RUNNING);
 
-    EXPECT_EQ(inverter->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
 }
 
 TEST(TestInverter, NoChildInvalid)
 {
-    auto inverter = bt::Node::create<bt::Inverter>();
-    EXPECT_FALSE(inverter->isValid());
+    auto tree = bt::Tree::create();
+    auto& inverter = tree->createRoot<bt::Inverter>();
+    EXPECT_FALSE(inverter.isValid());
 }
 
 // ===========================================================================
@@ -77,26 +75,29 @@ TEST(TestInverter, NoChildInvalid)
 
 TEST(TestForceSuccess, SuccessStaysSuccess)
 {
-    auto force = bt::Node::create<bt::ForceSuccess>();
-    force->setChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& force = tree->createRoot<bt::ForceSuccess>();
+    force.createChild<bt::Success>();
 
-    EXPECT_EQ(force->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestForceSuccess, FailureBecomesSuccess)
 {
-    auto force = bt::Node::create<bt::ForceSuccess>();
-    force->setChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& force = tree->createRoot<bt::ForceSuccess>();
+    force.createChild<bt::Failure>();
 
-    EXPECT_EQ(force->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
 }
 
 TEST(TestForceSuccess, RunningStaysRunning)
 {
-    auto force = bt::Node::create<bt::ForceSuccess>();
-    force->setChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
+    auto tree = bt::Tree::create();
+    auto& force = tree->createRoot<bt::ForceSuccess>();
+    force.createChild<StatusAction>(bt::Status::RUNNING);
 
-    EXPECT_EQ(force->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
 }
 
 // ===========================================================================
@@ -105,24 +106,27 @@ TEST(TestForceSuccess, RunningStaysRunning)
 
 TEST(TestForceFailure, SuccessBecomesFailure)
 {
-    auto force = bt::Node::create<bt::ForceFailure>();
-    force->setChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& force = tree->createRoot<bt::ForceFailure>();
+    force.createChild<bt::Success>();
 
-    EXPECT_EQ(force->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
 }
 
 TEST(TestForceFailure, FailureStaysFailure)
 {
-    auto force = bt::Node::create<bt::ForceFailure>();
-    force->setChild(bt::Node::create<bt::Failure>());
+    auto tree = bt::Tree::create();
+    auto& force = tree->createRoot<bt::ForceFailure>();
+    force.createChild<bt::Failure>();
 
-    EXPECT_EQ(force->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
 }
 
 TEST(TestForceFailure, RunningStaysRunning)
 {
-    auto force = bt::Node::create<bt::ForceFailure>();
-    force->setChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
+    auto tree = bt::Tree::create();
+    auto& force = tree->createRoot<bt::ForceFailure>();
+    force.createChild<StatusAction>(bt::Status::RUNNING);
 
-    EXPECT_EQ(force->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
 }

@@ -76,27 +76,27 @@ namespace {
 //! \brief Test leaf node that reads a message from the blackboard.
 //! \details Used for testing blackboard integration with node ports.
 // ****************************************************************************
-class PrintMessage: public bt::Leaf
+class PrintMessage: public bt::CallbackLeaf
 {
 public:
 
-    PrintMessage() = default;
+    PrintMessage()
+        : CallbackLeaf([this]() {
+              if (auto msg = getInput<std::string>("message"); msg)
+              {
+                  m_last_message = *msg;
+                  return bt::Status::SUCCESS;
+              }
+              return bt::Status::FAILURE;
+          })
+    {
+    }
 
     bt::PortList providedPorts() const override
     {
         bt::PortList ports;
         ports.addInput<std::string>("message");
         return ports;
-    }
-
-    bt::Status onRunning() override
-    {
-        if (auto msg = getInput<std::string>("message"); msg)
-        {
-            m_last_message = *msg;
-            return bt::Status::SUCCESS;
-        }
-        return bt::Status::FAILURE;
     }
 
     std::string m_last_message;
@@ -109,11 +109,24 @@ public:
 //! \brief Test leaf node that performs addition using blackboard ports.
 //! \details Used for testing input/output port integration with blackboard.
 // ****************************************************************************
-class Calculate: public bt::Leaf
+class Calculate: public bt::CallbackLeaf
 {
 public:
 
-    Calculate() = default;
+    Calculate()
+        : CallbackLeaf([this]() {
+              auto a = getInput<int>("a");
+              auto b = getInput<int>("b");
+              if (a && b)
+              {
+                  int result = *a + *b;
+                  setOutput("result", result);
+                  return bt::Status::SUCCESS;
+              }
+              return bt::Status::FAILURE;
+          })
+    {
+    }
 
     bt::PortList providedPorts() const override
     {
@@ -124,20 +137,6 @@ public:
         return ports;
     }
 
-    bt::Status onRunning() override
-    {
-        auto a = getInput<int>("a");
-        auto b = getInput<int>("b");
-        if (a && b)
-        {
-            int result = *a + *b;
-            setOutput("result", result);
-            return bt::Status::SUCCESS;
-        }
-
-        return bt::Status::FAILURE;
-    }
-
     void accept(bt::ConstBehaviorTreeVisitor&) const override {}
     void accept(bt::BehaviorTreeVisitor&) override {}
 };
@@ -146,11 +145,23 @@ public:
 //! \brief Test leaf node that processes Position structs from blackboard.
 //! \details Used for testing custom struct types with blackboard ports.
 // ****************************************************************************
-class MoveToPosition: public bt::Leaf
+class MoveToPosition: public bt::CallbackLeaf
 {
 public:
 
-    MoveToPosition() = default;
+    MoveToPosition()
+        : CallbackLeaf([this]() {
+              auto target = getInput<Position>("target");
+              if (target)
+              {
+                  Position current{target->x / 2, target->y / 2, target->z / 2};
+                  setOutput("current_pos", current);
+                  return bt::Status::SUCCESS;
+              }
+              return bt::Status::FAILURE;
+          })
+    {
+    }
 
     bt::PortList providedPorts() const override
     {
@@ -158,20 +169,6 @@ public:
         ports.addInput<Position>("target");
         ports.addOutput<Position>("current_pos");
         return ports;
-    }
-
-    bt::Status onRunning() override
-    {
-        auto target = getInput<Position>("target");
-        if (target)
-        {
-            // Simulate movement (integer division)
-            Position current{target->x / 2, target->y / 2, target->z / 2};
-            setOutput("current_pos", current);
-            return bt::Status::SUCCESS;
-        }
-
-        return bt::Status::FAILURE;
     }
 
     void accept(bt::ConstBehaviorTreeVisitor&) const override {}
@@ -182,11 +179,23 @@ public:
 //! \brief Test leaf node that processes Enemy structs from blackboard.
 //! \details Used for testing complex custom struct types with blackboard.
 // ****************************************************************************
-class ProcessEnemy: public bt::Leaf
+class ProcessEnemy: public bt::CallbackLeaf
 {
 public:
 
-    ProcessEnemy() = default;
+    ProcessEnemy()
+        : CallbackLeaf([this]() {
+              auto enemy = getInput<Enemy>("enemy");
+              if (enemy)
+              {
+                  bool dead = enemy->health <= 0;
+                  setOutput("is_dead", dead);
+                  return bt::Status::SUCCESS;
+              }
+              return bt::Status::FAILURE;
+          })
+    {
+    }
 
     bt::PortList providedPorts() const override
     {
@@ -194,19 +203,6 @@ public:
         ports.addInput<Enemy>("enemy");
         ports.addOutput<bool>("is_dead");
         return ports;
-    }
-
-    bt::Status onRunning() override
-    {
-        auto enemy = getInput<Enemy>("enemy");
-        if (enemy)
-        {
-            bool dead = enemy->health <= 0;
-            setOutput("is_dead", dead);
-            return bt::Status::SUCCESS;
-        }
-
-        return bt::Status::FAILURE;
     }
 
     void accept(bt::ConstBehaviorTreeVisitor&) const override {}
@@ -611,19 +607,21 @@ TEST(TestNodeWithBlackboard, PrintMessage)
     auto bb = std::make_shared<bt::Blackboard>();
     bb->set("msg", std::string("Hello from Blackboard"));
 
-    auto node = std::make_unique<PrintMessage>();
-    node->setBlackboard(bb);
+    auto tree = bt::Tree::create();
+    tree->setBlackboard(bb);
+    auto& node = tree->emplaceNode<PrintMessage>();
+    node.setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["message"] = "${msg}";
-    node->setPortRemapping(config);
+    node.setPortRemapping(config);
 
-    bt::Status status = node->tick();
+    bt::Status status = node.tick();
 
     // THEN: EXPECT the message is read correctly from the blackboard
     EXPECT_EQ(status, bt::Status::SUCCESS);
-    EXPECT_EQ(node->m_last_message, "Hello from Blackboard");
+    EXPECT_EQ(node.m_last_message, "Hello from Blackboard");
 }
 
 // ------------------------------------------------------------------------
@@ -639,17 +637,19 @@ TEST(TestNodeWithBlackboard, CalculateWithInputs)
     bb->set("value_a", 10);
     bb->set("value_b", 32);
 
-    auto node = std::make_unique<Calculate>();
-    node->setBlackboard(bb);
+    auto tree = bt::Tree::create();
+    tree->setBlackboard(bb);
+    auto& node = tree->emplaceNode<Calculate>();
+    node.setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["a"] = "${value_a}";
     config["b"] = "${value_b}";
     config["result"] = "${sum}";
-    node->setPortRemapping(config);
+    node.setPortRemapping(config);
 
-    bt::Status status = node->tick();
+    bt::Status status = node.tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);
 
     // THEN: EXPECT the calculation result is written to the blackboard
@@ -671,16 +671,18 @@ TEST(TestNodeWithBlackboard, MoveToPositionStruct)
     Position target{100, 200, 300};
     bb->set("target_pos", target);
 
-    auto node = std::make_unique<MoveToPosition>();
-    node->setBlackboard(bb);
+    auto tree = bt::Tree::create();
+    tree->setBlackboard(bb);
+    auto& node = tree->emplaceNode<MoveToPosition>();
+    node.setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["target"] = "${target_pos}";
     config["current_pos"] = "${current}";
-    node->setPortRemapping(config);
+    node.setPortRemapping(config);
 
-    bt::Status status = node->tick();
+    bt::Status status = node.tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);
 
     // THEN: EXPECT the struct is processed and result is written correctly
@@ -704,16 +706,18 @@ TEST(TestNodeWithBlackboard, ProcessEnemyComplex)
     Enemy enemy{"Orc", 0, {5, 0, 10}};
     bb->set("current_enemy", enemy);
 
-    auto node = std::make_unique<ProcessEnemy>();
-    node->setBlackboard(bb);
+    auto tree = bt::Tree::create();
+    tree->setBlackboard(bb);
+    auto& node = tree->emplaceNode<ProcessEnemy>();
+    node.setBlackboard(bb);
 
     // WHEN: Configuring and executing the node
     std::unordered_map<std::string, std::string> config;
     config["enemy"] = "${current_enemy}";
     config["is_dead"] = "${dead}";
-    node->setPortRemapping(config);
+    node.setPortRemapping(config);
 
-    bt::Status status = node->tick();
+    bt::Status status = node.tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);
 
     // THEN: EXPECT the complex struct is processed and result is written
@@ -733,17 +737,19 @@ TEST(TestNodeWithBlackboard, LiteralValues)
     // GIVEN: A node configured with literal values
     auto bb = std::make_shared<bt::Blackboard>();
 
-    auto node = std::make_unique<Calculate>();
-    node->setBlackboard(bb);
+    auto tree = bt::Tree::create();
+    tree->setBlackboard(bb);
+    auto& node = tree->emplaceNode<Calculate>();
+    node.setBlackboard(bb);
 
     // WHEN: Configuring with literal values and executing the node
     std::unordered_map<std::string, std::string> config;
     config["a"] = "5";
     config["b"] = "7";
     config["result"] = "${output}";
-    node->setPortRemapping(config);
+    node.setPortRemapping(config);
 
-    bt::Status status = node->tick();
+    bt::Status status = node.tick();
     EXPECT_EQ(status, bt::Status::SUCCESS);
 
     // THEN: EXPECT the literal values are parsed and result is written

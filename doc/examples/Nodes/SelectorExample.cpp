@@ -4,25 +4,29 @@
 
 #include <iostream>
 
-class ScanPrimary final: public bt::Action
+class ScanPrimary final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    ScanPrimary()
+        : CallbackLeaf([]() {
+              std::cout << "[Selector] Scanning primary sector ... not found\n";
+              return bt::Status::FAILURE;
+          })
     {
-        std::cout << "[Selector] Scanning primary sector ... not found\n";
-        return bt::Status::FAILURE;
     }
 };
 
-class ScanFallback final: public bt::Action
+class ScanFallback final: public bt::CallbackLeaf
 {
 public:
 
-    bt::Status onRunning() override
+    ScanFallback()
+        : CallbackLeaf([]() {
+              std::cout << "[Selector] Fallback scan succeeded\n";
+              return bt::Status::SUCCESS;
+          })
     {
-        std::cout << "[Selector] Fallback scan succeeded\n";
-        return bt::Status::SUCCESS;
     }
 };
 
@@ -30,12 +34,10 @@ int selector_example()
 {
     using namespace bt;
 
-    auto selector = Node::create<Selector>();
-    selector->addChild(Node::create<ScanPrimary>());
-    selector->addChild(Node::create<ScanFallback>());
-
     auto tree = Tree::create();
-    tree->setRoot(std::move(selector));
+    auto& selector = tree->createRoot<Selector>();
+    selector.addChild<ScanPrimary>();
+    selector.addChild<ScanFallback>();
 
     Status status = tree->tick();
     std::cout << "[Selector] Result: " << to_string(status) << '\n';

@@ -2,7 +2,7 @@
  * @file TestCore.cpp
  * @brief Unit tests for Core components: Node, Tree, Status, and lifecycle.
  *
- * Corresponds to src/BlackThorn/Core/
+ * Corresponds to src/BlackThorn/Nodes/
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -23,51 +23,22 @@ namespace {
 //! \details Allows flexible testing by accepting custom tick and reset
 //!          functions via lambdas.
 // ****************************************************************************
-class LambdaTestAction: public bt::Action
+class LambdaTestAction: public bt::CallbackLeaf
 {
 public:
 
     using Tick = std::function<bt::Status()>;
     using Reset = std::function<void()>;
 
-    // ------------------------------------------------------------------------
-    //! \brief Create a lambda-based action with custom tick and reset handlers.
-    //! \param[in] tick The function to execute on tick.
-    //! \param[in] reset The function to execute on reset (optional).
-    // ------------------------------------------------------------------------
     explicit LambdaTestAction(Tick tick, Reset reset = {})
-        : m_tick(std::move(tick)), m_reset(std::move(reset))
+        : CallbackLeaf(std::move(tick), std::move(reset))
     {
     }
 
-    // ------------------------------------------------------------------------
-    //! \brief Create a lambda-based action from a pair of handlers.
-    //! \param[in] handlers A pair containing tick and reset handlers.
-    // ------------------------------------------------------------------------
     explicit LambdaTestAction(std::pair<Tick, Reset> handlers)
-        : LambdaTestAction(std::move(handlers.first),
-                           std::move(handlers.second))
+        : CallbackLeaf(std::move(handlers.first), std::move(handlers.second))
     {
     }
-
-    bt::Status onRunning() override
-    {
-        return m_tick ? m_tick() : bt::Status::FAILURE;
-    }
-
-    void reset() override
-    {
-        bt::Action::reset();
-        if (m_reset)
-        {
-            m_reset();
-        }
-    }
-
-private:
-
-    Tick m_tick;
-    Reset m_reset;
 };
 
 // ****************************************************************************
@@ -153,7 +124,7 @@ TEST(TestTree, CreateAndSetRoot)
     EXPECT_FALSE(tree->isValid());
 
     // WHEN: Setting a root node
-    tree->setRoot(bt::Node::create<bt::Success>());
+    tree->createRoot<bt::Success>();
 
     // THEN: EXPECT the tree has a root and is valid
     EXPECT_TRUE(tree->hasRoot());
@@ -188,8 +159,8 @@ TEST(TestTree, TickTree)
     // GIVEN: A tree with a sequence containing success children
     auto tree = bt::Tree::create();
     auto& seq = tree->createRoot<bt::Sequence>();
-    seq.addChild(bt::Node::create<bt::Success>());
-    seq.addChild(bt::Node::create<bt::Success>());
+    seq.addChild<bt::Success>();
+    seq.addChild<bt::Success>();
 
     // WHEN: Ticking the tree
     // THEN: EXPECT the tree is valid and returns SUCCESS
@@ -243,7 +214,7 @@ TEST(TestTree, ResetTree)
     // GIVEN: A tree that has been executed successfully
     auto tree = bt::Tree::create();
     auto& seq = tree->createRoot<bt::Sequence>();
-    seq.addChild(bt::Node::create<bt::Success>());
+    seq.addChild<bt::Success>();
 
     EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
     EXPECT_EQ(tree->status(), bt::Status::SUCCESS);
@@ -265,7 +236,7 @@ TEST(TestTree, HaltTree)
     // GIVEN: A tree with a running child node
     auto tree = bt::Tree::create();
     auto& seq = tree->createRoot<bt::Sequence>();
-    seq.addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
+    seq.addChild<StatusAction>(bt::Status::RUNNING);
 
     EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
     EXPECT_EQ(tree->status(), bt::Status::RUNNING);
@@ -309,15 +280,16 @@ TEST(TestTree, TreeWithBlackboard)
 TEST(TestNodeLifecycle, ResetNode)
 {
     // GIVEN: A node that has been executed
-    auto node = bt::Node::create<bt::Success>();
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
-    EXPECT_EQ(node->status(), bt::Status::SUCCESS);
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::Success>();
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(node.status(), bt::Status::SUCCESS);
 
     // WHEN: Resetting the node
-    node->reset();
+    node.reset();
 
     // THEN: EXPECT the node status becomes INVALID
-    EXPECT_EQ(node->status(), bt::Status::INVALID);
+    EXPECT_EQ(node.status(), bt::Status::INVALID);
 }
 
 // ------------------------------------------------------------------------
@@ -328,15 +300,16 @@ TEST(TestNodeLifecycle, ResetNode)
 TEST(TestNodeLifecycle, HaltRunningNode)
 {
     // GIVEN: A running node
-    auto node = bt::Node::create<StatusAction>(bt::Status::RUNNING);
-    EXPECT_EQ(node->tick(), bt::Status::RUNNING);
-    EXPECT_EQ(node->status(), bt::Status::RUNNING);
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<StatusAction>(bt::Status::RUNNING);
+    EXPECT_EQ(node.tick(), bt::Status::RUNNING);
+    EXPECT_EQ(node.status(), bt::Status::RUNNING);
 
     // WHEN: Halting the node
-    node->halt();
+    node.halt();
 
     // THEN: EXPECT the node status becomes INVALID
-    EXPECT_EQ(node->status(), bt::Status::INVALID);
+    EXPECT_EQ(node.status(), bt::Status::INVALID);
 }
 
 // ------------------------------------------------------------------------
@@ -347,15 +320,16 @@ TEST(TestNodeLifecycle, HaltRunningNode)
 TEST(TestNodeLifecycle, HaltNonRunningNode)
 {
     // GIVEN: A node that has completed (not running)
-    auto node = bt::Node::create<bt::Success>();
-    EXPECT_EQ(node->tick(), bt::Status::SUCCESS);
-    EXPECT_EQ(node->status(), bt::Status::SUCCESS);
+    auto tree = bt::Tree::create();
+    auto& node = tree->emplaceNode<bt::Success>();
+    EXPECT_EQ(node.tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(node.status(), bt::Status::SUCCESS);
 
     // WHEN: Halting the node
-    node->halt();
+    node.halt();
 
     // THEN: EXPECT the node status becomes INVALID
-    EXPECT_EQ(node->status(), bt::Status::INVALID);
+    EXPECT_EQ(node.status(), bt::Status::INVALID);
 }
 
 // ------------------------------------------------------------------------
@@ -367,20 +341,21 @@ TEST(TestNodeLifecycle, HaltNonRunningNode)
 TEST(TestNodeLifecycle, ResetComposite)
 {
     // GIVEN: A composite node that has been executed
-    auto seq = bt::Node::create<bt::Sequence>();
-    seq->addChild(bt::Node::create<bt::Success>());
-    seq->addChild(bt::Node::create<bt::Success>());
+    auto tree = bt::Tree::create();
+    auto& seq = tree->createRoot<bt::Sequence>();
+    seq.addChild<bt::Success>();
+    seq.addChild<bt::Success>();
 
-    EXPECT_EQ(seq->tick(), bt::Status::SUCCESS);
-    EXPECT_EQ(seq->status(), bt::Status::SUCCESS);
+    EXPECT_EQ(seq.tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(seq.status(), bt::Status::SUCCESS);
 
     // WHEN: Resetting the composite
-    seq->reset();
-    EXPECT_EQ(seq->status(), bt::Status::INVALID);
+    seq.reset();
+    EXPECT_EQ(seq.status(), bt::Status::INVALID);
 
     // THEN: EXPECT children are also reset and can be executed again
-    EXPECT_EQ(seq->tick(), bt::Status::SUCCESS);
-    EXPECT_EQ(seq->status(), bt::Status::SUCCESS);
+    EXPECT_EQ(seq.tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(seq.status(), bt::Status::SUCCESS);
 }
 
 // ------------------------------------------------------------------------
@@ -391,16 +366,17 @@ TEST(TestNodeLifecycle, ResetComposite)
 TEST(TestNodeLifecycle, HaltComposite)
 {
     // GIVEN: A running composite node
-    auto seq = bt::Node::create<bt::Sequence>();
-    seq->addChild(bt::Node::create<bt::Success>());
-    seq->addChild(bt::Node::create<StatusAction>(bt::Status::RUNNING));
+    auto tree = bt::Tree::create();
+    auto& seq = tree->createRoot<bt::Sequence>();
+    seq.addChild<bt::Success>();
+    seq.addChild<StatusAction>(bt::Status::RUNNING);
 
-    EXPECT_EQ(seq->tick(), bt::Status::RUNNING);
-    EXPECT_EQ(seq->status(), bt::Status::RUNNING);
+    EXPECT_EQ(seq.tick(), bt::Status::RUNNING);
+    EXPECT_EQ(seq.status(), bt::Status::RUNNING);
 
     // WHEN: Halting the composite
-    seq->halt();
+    seq.halt();
 
     // THEN: EXPECT the composite status becomes INVALID
-    EXPECT_EQ(seq->status(), bt::Status::INVALID);
+    EXPECT_EQ(seq.status(), bt::Status::INVALID);
 }

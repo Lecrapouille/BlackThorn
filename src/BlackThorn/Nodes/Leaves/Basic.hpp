@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BlackThorn/Core/Leaf.hpp"
+#include "BlackThorn/Nodes/Leaves/Leaf.hpp"
 
 namespace bt {
 
@@ -29,12 +29,12 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Run the always success leaf.
-    //! \return The status of the always success leaf.
+    //! \brief Return the node kind used when adopting factory-built nodes.
+    //! \return Always \ref NodeKind::Success.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
+    [[nodiscard]] NodeKind registrationKind() const override
     {
-        return Status::SUCCESS;
+        return NodeKind::Success;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -64,12 +64,12 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Run the always failure leaf.
-    //! \return The status of the always failure leaf.
+    //! \brief Return the node kind used when adopting factory-built nodes.
+    //! \return Always \ref NodeKind::Failure.
     // ------------------------------------------------------------------------
-    [[nodiscard]] Status onRunning() override
+    [[nodiscard]] NodeKind registrationKind() const override
     {
-        return Status::FAILURE;
+        return NodeKind::Failure;
     }
 
     void accept(ConstBehaviorTreeVisitor& p_visitor) const override
@@ -80,6 +80,15 @@ public:
     {
         p_visitor.visitFailure(*this);
     }
+};
+
+template <> struct NodeKindTraits<Success>
+{
+    static constexpr NodeKind value = NodeKind::Success;
+};
+template <> struct NodeKindTraits<Failure>
+{
+    static constexpr NodeKind value = NodeKind::Failure;
 };
 
 } // namespace bt
