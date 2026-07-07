@@ -39,6 +39,12 @@ enum class PortDirection
 template <typename T>
 struct Port
 {
+    // ------------------------------------------------------------------------
+    //! \brief Construct a port descriptor.
+    //! \param[in] p_name Port name declared in YAML.
+    //! \param[in] p_direction Input, output, or bidirectional.
+    //! \param[in] p_default_value Optional default when unset in YAML.
+    // ------------------------------------------------------------------------
     Port(std::string p_name,
          PortDirection p_direction,
          std::optional<T> p_default_value = std::nullopt);
@@ -60,11 +66,21 @@ Port<T>::Port(std::string p_name,
 
 // ****************************************************************************
 //! \brief Registry of input and output ports declared by a node type.
+//!
+//! Key features:
+//! - Declare typed inputs with optional defaults.
+//! - Declare typed outputs.
+//! - Query port direction by name at runtime.
 // ****************************************************************************
 class PortList
 {
 public:
 
+    // ------------------------------------------------------------------------
+    //! \brief Register an input port.
+    //! \param[in] p_name Port name.
+    //! \param[in] p_default_value Optional default used when YAML omits the port.
+    // ------------------------------------------------------------------------
     template <typename T>
     void addInput(std::string const& p_name,
                   std::optional<T> p_default_value = std::nullopt)
@@ -72,44 +88,51 @@ public:
         m_inputs[p_name] = PortInfo{typeid(T), p_default_value.has_value()};
     }
 
+    // ------------------------------------------------------------------------
+    //! \brief Register an output port.
+    //! \param[in] p_name Port name.
+    // ------------------------------------------------------------------------
     template <typename T>
     void addOutput(std::string const& p_name)
     {
         m_outputs[p_name] = PortInfo{typeid(T), false};
     }
 
-    [[nodiscard]] bool isInput(std::string const& p_name) const
-    {
-        return m_inputs.find(p_name) != m_inputs.end();
-    }
+    // ------------------------------------------------------------------------
+    //! \brief Whether \p p_name is a declared input port.
+    //! \param[in] p_name Port name to query.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isInput(std::string const& p_name) const;
 
-    [[nodiscard]] bool isOutput(std::string const& p_name) const
-    {
-        return m_outputs.find(p_name) != m_outputs.end();
-    }
+    // ------------------------------------------------------------------------
+    //! \brief Whether \p p_name is a declared output port.
+    //! \param[in] p_name Port name to query.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isOutput(std::string const& p_name) const;
 
 private:
 
+    // ------------------------------------------------------------------------
+    //! \brief Type-erased port metadata stored in the registry.
+    //!
+    //! \ref PortList keeps only the declared C++ type and whether a default
+    //! value was provided; actual defaults live in \ref Port<T>.
+    // ------------------------------------------------------------------------
     struct PortInfo
     {
         PortInfo();
         PortInfo(std::type_index p_type, bool p_has_default);
 
+        //! \brief Declared C++ type of the port (\c typeid(T)).
         std::type_index type;
+        //! \brief Whether the port was registered with a default value.
         bool has_default;
     };
 
+    //! \brief Registered input ports keyed by YAML parameter name.
     std::unordered_map<std::string, PortInfo> m_inputs;
+    //! \brief Registered output ports keyed by YAML parameter name.
     std::unordered_map<std::string, PortInfo> m_outputs;
 };
-
-inline PortList::PortInfo::PortInfo() : type(typeid(void)), has_default(false)
-{
-}
-
-inline PortList::PortInfo::PortInfo(std::type_index p_type, bool p_has_default)
-    : type(p_type), has_default(p_has_default)
-{
-}
 
 } // namespace bt

@@ -36,8 +36,8 @@ int selector_example()
 
     auto tree = Tree::create();
     auto& selector = tree->createRoot<Selector>();
-    selector.addChild<ScanPrimary>();
-    selector.addChild<ScanFallback>();
+    static_cast<void>(selector.addChild<ScanPrimary>());
+    static_cast<void>(selector.addChild<ScanFallback>());
 
     Status status = tree->tick();
     std::cout << "[Selector] Result: " << to_string(status) << '\n';

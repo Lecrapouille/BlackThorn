@@ -181,7 +181,7 @@ void Renderer::drawBehaviorTree(std::unordered_map<ID, IDE::Node>& p_nodes,
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::drawNode(IDE::Node const& p_node, bool p_is_top_to_bottom)
+void Renderer::drawNode(IDE::Node const& p_node, bool /*p_is_top_to_bottom*/)
 {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     NodeVisual const& visual = m_node_visuals[p_node.id];
@@ -578,7 +578,7 @@ void Renderer::handleLinkCreation(IDE::Node const& p_node, bool p_is_edit_mode)
 
 // ----------------------------------------------------------------------------
 void Renderer::handleSelection(std::unordered_map<ID, IDE::Node> const& nodes,
-                               std::vector<IDE::Link> const& p_links)
+                               std::vector<IDE::Link> const& /*p_links*/)
 {
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     {

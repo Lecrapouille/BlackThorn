@@ -24,7 +24,7 @@ ORCHESTRATOR_MODE := 1
 
 include $(M)/project/Makefile
 
-###################################################
+###############################################################################
 # Internal libs to compile in the correct order
 #
 LIB_BEHAVIOR_TREE := $(call internal-lib,behavior-tree)
@@ -35,19 +35,21 @@ PATH_APP_OAKULAR := $(P)/applications/Oakular
 DIRS_WITH_MAKEFILE := $(PATH_SRC_BLACKTHORN) $(PATH_SRC_OAKULAR)
 $(PATH_SRC_OAKULAR): $(PATH_SRC_BLACKTHORN)
 
-###################################################
+###############################################################################
 # Generic Makefile rules
 #
 include $(M)/rules/Makefile
 
-###################################################
-# Extra rules: compile applications after everything
-# Application depends on the Oakular library
+###############################################################################
+# Extra rules: compile applications, examples and benchmarks
 #
 APPLICATIONS = $(PATH_APP_OAKULAR)/.
 EXAMPLES = $(sort $(dir $(wildcard $(P)/doc/examples/*/.)))
 BENCHMARKS = $(P)/benchmarks/.
 
+###############################################################################
+# Rules: compile applications
+#
 .PHONY: applications
 applications: $(DIRS_WITH_MAKEFILE)
 	@$(call print-from,"Compiling applications",$(PROJECT_NAME),$(APPLICATIONS))
@@ -56,6 +58,9 @@ applications: $(DIRS_WITH_MAKEFILE)
 		$(MAKE) -C $$i all;        \
 	done;
 
+###############################################################################
+# Rules: compile examples
+#
 .PHONY: examples
 examples: $(DIRS_WITH_MAKEFILE)
 	@$(call print-from,"Compiling examples",$(PROJECT_NAME),$(EXAMPLES))
@@ -64,15 +69,24 @@ examples: $(DIRS_WITH_MAKEFILE)
 		$(MAKE) -C $$i all;     \
 	done;
 
+###############################################################################
+# Rules: compile benchmarks
+#
 .PHONY: benchmarks
 benchmarks: $(DIRS_WITH_MAKEFILE)
 	@$(call print-from,"Compiling benchmarks",$(PROJECT_NAME),$(BENCHMARKS))
 	@$(MAKE) -C $(P)/benchmarks all
 
+###############################################################################
+# Rules: run benchmark
+#
 .PHONY: benchmark
 benchmark: benchmarks
 	@$(P)/build/$(PROJECT_NAME)-Benchmark
 
+###############################################################################
+# Rules: save benchmark results
+#
 .PHONY: benchmark-save
 benchmark-save: benchmarks
 	@$(P)/benchmarks/save_results.sh

@@ -9,14 +9,17 @@
 #include "IDE.hpp"
 #include "Renderer.hpp"
 
+#include "BlackThorn/Blackboard/Serializer.hpp"
+#include "BlackThorn/Builder/Yaml.hpp"
+
 #include <ImGuiFileDialog.h>
 #include <imgui_stdlib.h>
-#include <yaml-cpp/yaml.h>
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 // ----------------------------------------------------------------------------
 //! \brief Extract the filename without extension from a file path.
@@ -44,6 +47,53 @@ static std::string extractFileNameWithoutExtension(std::string const& filepath)
                          ? filepath.length()
                          : last_dot;
         return filepath.substr(start, end - start);
+    }
+}
+
+// ----------------------------------------------------------------------------
+static void appendYamlIndent(std::ostringstream& p_out, int p_indent)
+{
+    p_out << std::string(static_cast<std::size_t>(p_indent) * 2U, ' ');
+}
+
+// ----------------------------------------------------------------------------
+static void appendYamlScalar(std::ostringstream& p_out, std::string const& p_value)
+{
+    bool needs_quote = p_value.empty();
+    if (!needs_quote)
+    {
+        for (char ch : p_value)
+        {
+            if (ch == ':' || ch == '#' || ch == '\n' || ch == '"' || ch == '\'')
+            {
+                needs_quote = true;
+                break;
+            }
+        }
+        if (!needs_quote
+            && (p_value.front() == ' ' || p_value.back() == ' ' || p_value == "true"
+                || p_value == "false"))
+        {
+            needs_quote = true;
+        }
+    }
+
+    if (needs_quote)
+    {
+        p_out << '"';
+        for (char ch : p_value)
+        {
+            if (ch == '"' || ch == '\\')
+            {
+                p_out << '\\';
+            }
+            p_out << ch;
+        }
+        p_out << '"';
+    }
+    else
+    {
+        p_out << p_value;
     }
 }
 
@@ -866,148 +916,133 @@ void IDE::loadFromYaml(const std::string& p_filepath)
 {
     std::cout << "Loading tree from: " << p_filepath << std::endl;
 
-    try
+    auto doc = bt::YamlDocument::parseFile(p_filepath);
+    if (!doc)
     {
-        YAML::Node yaml = YAML::LoadFile(p_filepath);
+        std::cerr << "YAML parsing error: " << doc.getError() << std::endl;
+        return;
+    }
 
-        // Clear existing data
-        m_nodes.clear();
-        m_tree_views.clear();
-        m_unique_node_id = 1;
-        m_selected_node_id = -1;
-        m_active_tree_name.clear();
-        m_dfs_node_order.clear();
+    bt::YamlDocument yaml_doc = doc.moveValue();
+    bt::YamlNode const root = yaml_doc.root();
 
-        // Create a fresh blackboard and parse the Blackboard section
-        m_blackboard = std::make_shared<bt::Blackboard>();
-        if (yaml["Blackboard"])
+    // Clear existing data
+    m_nodes.clear();
+    m_tree_views.clear();
+    m_unique_node_id = 1;
+    m_selected_node_id = -1;
+    m_active_tree_name.clear();
+    m_dfs_node_order.clear();
+
+    // Create a fresh blackboard and parse the Blackboard section
+    m_blackboard = std::make_shared<bt::Blackboard>();
+    if (root.hasKey("Blackboard"))
+    {
+        bt::BlackboardSerializer::load(*m_blackboard, root.child("Blackboard"));
+        std::cout << "Loaded Blackboard with variables" << std::endl;
+    }
+
+    // Parse the BehaviorTree section
+    if (root.hasKey("BehaviorTree"))
+    {
+        bt::YamlNode tree_node = root.child("BehaviorTree");
+        int root_id = parseYamlNode(tree_node, -1);
+
+        if (root_id < 0)
         {
-            bt::BlackboardSerializer::load(*m_blackboard, yaml["Blackboard"]);
-            std::cout << "Loaded Blackboard with variables" << std::endl;
+            std::cerr << "Failed to parse BehaviorTree section" << std::endl;
+            return;
         }
 
-        // Parse the BehaviorTree section
-        if (yaml["BehaviorTree"])
-        {
-            YAML::Node tree_node = yaml["BehaviorTree"];
-            int root_id = parseYamlNode(tree_node, -1);
+        // Extract filename without extension for the tree name
+        std::string tree_name = extractFileNameWithoutExtension(p_filepath);
 
-            if (root_id < 0)
+        // Add main tree to views
+        m_tree_views[tree_name] = {
+            tree_name, false, root_id, LayoutDirection::TopToBottom, {}};
+        m_active_tree_name = tree_name;
+    }
+    else
+    {
+        std::cerr << "No BehaviorTree section found in YAML" << std::endl;
+        return;
+    }
+
+    // Parse SubTrees section
+    if (root.hasKey("SubTrees"))
+    {
+        root.child("SubTrees").forEachMap([&](std::string_view p_subtree_name,
+                                        bt::YamlNode p_subtree_def) {
+            std::string subtree_name(p_subtree_name);
+            int subtree_root_id = parseYamlNode(p_subtree_def, -1);
+
+            if (subtree_root_id < 0)
             {
-                std::cerr << "Failed to parse BehaviorTree section"
+                std::cerr << "Failed to parse SubTree: " << subtree_name
                           << std::endl;
                 return;
             }
 
-            // Extract filename without extension for the tree name
-            std::string tree_name = extractFileNameWithoutExtension(p_filepath);
+            m_tree_views[subtree_name] = {subtree_name,
+                                          true,
+                                          subtree_root_id,
+                                          LayoutDirection::TopToBottom,
+                                          {}};
 
-            // Add main tree to views
-            m_tree_views[tree_name] = {
-                tree_name, false, root_id, LayoutDirection::TopToBottom, {}};
-            m_active_tree_name = tree_name;
-        }
-        else
-        {
-            std::cerr << "No BehaviorTree section found in YAML" << std::endl;
-            return;
-        }
-
-        // Parse SubTrees section
-        if (yaml["SubTrees"])
-        {
-            YAML::Node subtrees = yaml["SubTrees"];
-            for (auto it = subtrees.begin(); it != subtrees.end(); ++it)
-            {
-                std::string subtree_name = it->first.as<std::string>();
-                YAML::Node subtree_def = it->second;
-
-                // Parse the subtree
-                int subtree_root_id = parseYamlNode(subtree_def, -1);
-
-                if (subtree_root_id < 0)
-                {
-                    std::cerr << "Failed to parse SubTree: " << subtree_name
-                              << std::endl;
-                    continue;
-                }
-
-                // Add subtree to views
-                m_tree_views[subtree_name] = {subtree_name,
-                                              true,
-                                              subtree_root_id,
-                                              LayoutDirection::TopToBottom,
-                                              {}};
-
-                std::cout << "Loaded SubTree: " << subtree_name << std::endl;
-            }
-        }
-
-        // Link SubTree nodes to their definitions
-        for (auto& [id, node] : m_nodes)
-        {
-            if (node.type == "SubTree" && !node.subtree_reference.empty())
-            {
-                // Subtree reference already set during parsing
-                std::cout << "SubTree node '" << node.name
-                          << "' references: " << node.subtree_reference
-                          << std::endl;
-            }
-        }
-
-        // Auto-layout the nodes for each tree view
-        // Save the current active name to restore it later
-        std::string saved_active_name = m_active_tree_name;
-
-        for (auto& [name, view] : m_tree_views)
-        {
-            // Switch to this view temporarily to layout its nodes
-            m_active_tree_name = name;
-            autoLayoutNodes();
-
-            // Positions are already saved in node_positions by
-            // setNodePosition() called in autoLayoutNodes(). We just need to
-            // sync node.position for consistency with the Renderer
-            std::unordered_set<ID> visible_nodes;
-            if (view.root_id >= 0)
-            {
-                collectVisibleNodes(view.root_id, visible_nodes);
-            }
-            for (ID id : visible_nodes)
-            {
-                auto node_it = m_nodes.find(id);
-                auto pos_it = view.node_positions.find(id);
-                if (node_it != m_nodes.end() &&
-                    pos_it != view.node_positions.end())
-                {
-                    // Sync node.position from node_positions (for Renderer
-                    // compatibility)
-                    node_it->second.position = pos_it->second;
-                }
-            }
-        }
-
-        // Restore the original active name
-        m_active_tree_name = saved_active_name;
-
-        m_is_modified = false;
-        m_behavior_tree_filepath = p_filepath;
-
-        // Count subtrees
-        size_t subtree_count = 0;
-        for (const auto& [name, view] : m_tree_views)
-        {
-            if (view.is_subtree)
-                subtree_count++;
-        }
-
-        std::cout << "Tree loaded successfully: " << m_nodes.size()
-                  << " nodes, " << subtree_count << " subtrees" << std::endl;
+            std::cout << "Loaded SubTree: " << subtree_name << std::endl;
+        });
     }
-    catch (const YAML::Exception& e)
+
+    // Link SubTree nodes to their definitions
+    for (auto& [id, node] : m_nodes)
     {
-        std::cerr << "YAML parsing error: " << e.what() << std::endl;
+        if (node.type == "SubTree" && !node.subtree_reference.empty())
+        {
+            std::cout << "SubTree node '" << node.name
+                      << "' references: " << node.subtree_reference
+                      << std::endl;
+        }
     }
+
+    // Auto-layout the nodes for each tree view
+    std::string saved_active_name = m_active_tree_name;
+
+    for (auto& [name, view] : m_tree_views)
+    {
+        m_active_tree_name = name;
+        autoLayoutNodes();
+
+        std::unordered_set<ID> visible_nodes;
+        if (view.root_id >= 0)
+        {
+            collectVisibleNodes(view.root_id, visible_nodes);
+        }
+        for (ID id : visible_nodes)
+        {
+            auto node_it = m_nodes.find(id);
+            auto pos_it = view.node_positions.find(id);
+            if (node_it != m_nodes.end() &&
+                pos_it != view.node_positions.end())
+            {
+                node_it->second.position = pos_it->second;
+            }
+        }
+    }
+
+    m_active_tree_name = saved_active_name;
+
+    m_is_modified = false;
+    m_behavior_tree_filepath = p_filepath;
+
+    size_t subtree_count = 0;
+    for (const auto& [name, view] : m_tree_views)
+    {
+        if (view.is_subtree)
+            subtree_count++;
+    }
+
+    std::cout << "Tree loaded successfully: " << m_nodes.size()
+              << " nodes, " << subtree_count << " subtrees" << std::endl;
 }
 
 // ----------------------------------------------------------------------------
@@ -1015,106 +1050,93 @@ void IDE::loadFromYamlString(const std::string& p_yaml_content)
 {
     std::cout << "Loading tree from YAML string" << std::endl;
 
-    try
+    auto doc = bt::YamlDocument::parseText(p_yaml_content);
+    if (!doc)
     {
-        YAML::Node yaml = YAML::Load(p_yaml_content);
+        std::cerr << "YAML parsing error: " << doc.getError() << std::endl;
+        return;
+    }
 
-        // Clear existing data
-        m_nodes.clear();
-        m_tree_views.clear();
-        m_unique_node_id = 1;
-        m_selected_node_id = -1;
-        m_active_tree_name.clear();
-        m_dfs_node_order.clear();
+    bt::YamlDocument yaml_doc = doc.moveValue();
+    bt::YamlNode const root = yaml_doc.root();
 
-        // Create a fresh blackboard
-        m_blackboard = std::make_shared<bt::Blackboard>();
-        if (yaml["Blackboard"])
-        {
-            bt::BlackboardSerializer::load(*m_blackboard, yaml["Blackboard"]);
-            std::cout << "Loaded Blackboard with variables" << std::endl;
-        }
+    m_nodes.clear();
+    m_tree_views.clear();
+    m_unique_node_id = 1;
+    m_selected_node_id = -1;
+    m_active_tree_name.clear();
+    m_dfs_node_order.clear();
 
-        // Parse SubTrees section first (so they exist when linking)
-        if (yaml["SubTrees"])
-        {
-            YAML::Node subtrees = yaml["SubTrees"];
-            for (auto it = subtrees.begin(); it != subtrees.end(); ++it)
+    m_blackboard = std::make_shared<bt::Blackboard>();
+    if (root.hasKey("Blackboard"))
+    {
+        bt::BlackboardSerializer::load(*m_blackboard, root.child("Blackboard"));
+        std::cout << "Loaded Blackboard with variables" << std::endl;
+    }
+
+    if (root.hasKey("SubTrees"))
+    {
+        root.child("SubTrees").forEachMap([&](std::string_view p_subtree_name,
+                                        bt::YamlNode p_subtree_def) {
+            std::string subtree_name(p_subtree_name);
+            int subtree_root_id = parseYamlNode(p_subtree_def, -1);
+
+            if (subtree_root_id < 0)
             {
-                std::string subtree_name = it->first.as<std::string>();
-                YAML::Node subtree_def = it->second;
-
-                // Parse the subtree
-                int subtree_root_id = parseYamlNode(subtree_def, -1);
-
-                if (subtree_root_id < 0)
-                {
-                    std::cerr << "Failed to parse SubTree: " << subtree_name
-                              << std::endl;
-                    continue;
-                }
-
-                // Add subtree to views
-                m_tree_views[subtree_name] = {subtree_name,
-                                              true,
-                                              subtree_root_id,
-                                              LayoutDirection::TopToBottom,
-                                              {}};
-
-                std::cout << "Loaded SubTree: " << subtree_name << std::endl;
-            }
-        }
-
-        // Parse the BehaviorTree section
-        if (yaml["BehaviorTree"])
-        {
-            YAML::Node tree_node = yaml["BehaviorTree"];
-            int root_id = parseYamlNode(tree_node, -1);
-
-            if (root_id < 0)
-            {
-                std::cerr << "Failed to parse BehaviorTree section"
+                std::cerr << "Failed to parse SubTree: " << subtree_name
                           << std::endl;
                 return;
             }
 
-            // Use "Visualizer" as the tree name
-            std::string tree_name = "Visualizer";
+            m_tree_views[subtree_name] = {subtree_name,
+                                          true,
+                                          subtree_root_id,
+                                          LayoutDirection::TopToBottom,
+                                          {}};
 
-            // Add main tree to views
-            m_tree_views[tree_name] = {
-                tree_name, false, root_id, LayoutDirection::TopToBottom, {}};
-            m_active_tree_name = tree_name;
-        }
-        else
+            std::cout << "Loaded SubTree: " << subtree_name << std::endl;
+        });
+    }
+
+    if (root.hasKey("BehaviorTree"))
+    {
+        bt::YamlNode tree_node = root.child("BehaviorTree");
+        int root_id = parseYamlNode(tree_node, -1);
+
+        if (root_id < 0)
         {
-            std::cerr << "No BehaviorTree section found in YAML" << std::endl;
+            std::cerr << "Failed to parse BehaviorTree section" << std::endl;
             return;
         }
 
-        // Link SubTree nodes to their definitions
-        for (auto& [id, node] : m_nodes)
-        {
-            if (node.type == "SubTree" && !node.subtree_reference.empty())
-            {
-                std::cout << "SubTree node '" << node.name
-                          << "' references: " << node.subtree_reference
-                          << std::endl;
-            }
-        }
+        std::string tree_name = "Visualizer";
 
-        // Auto-layout the nodes
-        autoLayoutNodes();
-
-        m_is_modified = false;
-
-        std::cout << "Tree loaded from string: " << m_nodes.size() << " nodes, "
-                  << m_dfs_node_order.size() << " in DFS order" << std::endl;
+        m_tree_views[tree_name] = {
+            tree_name, false, root_id, LayoutDirection::TopToBottom, {}};
+        m_active_tree_name = tree_name;
     }
-    catch (const YAML::Exception& e)
+    else
     {
-        std::cerr << "YAML parsing error: " << e.what() << std::endl;
+        std::cerr << "No BehaviorTree section found in YAML" << std::endl;
+        return;
     }
+
+    for (auto& [id, node] : m_nodes)
+    {
+        if (node.type == "SubTree" && !node.subtree_reference.empty())
+        {
+            std::cout << "SubTree node '" << node.name
+                      << "' references: " << node.subtree_reference
+                      << std::endl;
+        }
+    }
+
+    autoLayoutNodes();
+
+    m_is_modified = false;
+
+    std::cout << "Tree loaded from string: " << m_nodes.size() << " nodes, "
+              << m_dfs_node_order.size() << " in DFS order" << std::endl;
 }
 
 void IDE::saveToYaml(const std::string& p_filepath)
@@ -1143,28 +1165,27 @@ void IDE::saveToYaml(const std::string& p_filepath)
         return;
     }
 
-    YAML::Emitter out;
+    std::ostringstream out;
 
-    // Save main BehaviorTree
-    out << YAML::BeginMap;
-
-    // Save Blackboard section using the serializer
     if (m_blackboard)
     {
-        YAML::Node blackboard_yaml =
+        std::string const blackboard_yaml =
             bt::BlackboardSerializer::dump(*m_blackboard);
-        if (blackboard_yaml.size() > 0)
+        if (!blackboard_yaml.empty())
         {
-            out << YAML::Key << "Blackboard";
-            out << YAML::Value << blackboard_yaml;
+            out << "Blackboard:\n";
+            std::istringstream lines(blackboard_yaml);
+            std::string line;
+            while (std::getline(lines, line))
+            {
+                out << "  " << line << '\n';
+            }
         }
     }
 
-    out << YAML::Key << "BehaviorTree";
-    out << YAML::Value;
-    serializeNodeToYaml(out, root);
+    out << "BehaviorTree:\n";
+    serializeNodeToYaml(out, root, 1, false, false);
 
-    // Save SubTrees if any
     bool has_subtrees = false;
     for (const auto& [name, view] : m_tree_views)
     {
@@ -1177,8 +1198,7 @@ void IDE::saveToYaml(const std::string& p_filepath)
 
     if (has_subtrees)
     {
-        out << YAML::Key << "SubTrees";
-        out << YAML::Value << YAML::BeginMap;
+        out << "SubTrees:\n";
 
         for (const auto& [name, view] : m_tree_views)
         {
@@ -1187,20 +1207,14 @@ void IDE::saveToYaml(const std::string& p_filepath)
                 Node* subtree_root = findNode(view.root_id);
                 if (subtree_root)
                 {
-                    out << YAML::Key << name;
-                    out << YAML::Value;
-                    // Pass true to indicate this is a subtree definition
-                    serializeNodeToYaml(out, subtree_root, true);
+                    out << "  " << name << ":\n";
+                    serializeNodeToYaml(out, subtree_root, 2, true, false);
                 }
             }
         }
-
-        out << YAML::EndMap;
     }
 
-    out << YAML::EndMap;
-
-    file << out.c_str();
+    file << out.str();
     file.close();
 
     m_is_modified = false;
@@ -1272,65 +1286,74 @@ int IDE::buildNodesFromTreeRecursive(bt::Node& p_node, int p_parent_id)
     return node_id;
 }
 
-void IDE::serializeNodeToYaml(YAML::Emitter& p_out,
+void IDE::serializeNodeToYaml(std::ostringstream& p_out,
                               IDE::Node* p_node,
-                              bool is_subtree_definition)
+                              int p_indent,
+                              bool is_subtree_definition,
+                              bool p_sequence_item)
 {
     if (!p_node)
         return;
 
-    p_out << YAML::BeginMap;
-    p_out << YAML::Key << p_node->type;
-    p_out << YAML::Value << YAML::BeginMap;
-    p_out << YAML::Key << "name" << YAML::Value << p_node->name;
+    appendYamlIndent(p_out, p_indent);
+    if (p_sequence_item)
+    {
+        p_out << "- ";
+    }
+    p_out << p_node->type << ":\n";
 
-    // For SubTree nodes, save the reference (only in main tree, not in
-    // definitions)
+    int const inner = p_indent + 1;
+    appendYamlIndent(p_out, inner);
+    p_out << "name: ";
+    appendYamlScalar(p_out, p_node->name);
+    p_out << '\n';
+
     if (p_node->type == "SubTree" && !p_node->subtree_reference.empty() &&
         !is_subtree_definition)
     {
-        p_out << YAML::Key << "reference" << YAML::Value
-              << p_node->subtree_reference;
+        appendYamlIndent(p_out, inner);
+        p_out << "reference: ";
+        appendYamlScalar(p_out, p_node->subtree_reference);
+        p_out << '\n';
     }
 
-    // Save inputs as parameters with ${variable} reference format
     if (!p_node->inputs.empty())
     {
-        p_out << YAML::Key << "inputs" << YAML::Value << YAML::BeginMap;
+        appendYamlIndent(p_out, inner);
+        p_out << "inputs:\n";
         for (const auto& input : p_node->inputs)
         {
-            p_out << YAML::Key << input << YAML::Value << ("${" + input + "}");
+            appendYamlIndent(p_out, inner + 1);
+            p_out << input << ": ";
+            appendYamlScalar(p_out, "${" + input + "}");
+            p_out << '\n';
         }
-        p_out << YAML::EndMap;
     }
 
-    // Save outputs as separate section
     if (!p_node->outputs.empty())
     {
-        p_out << YAML::Key << "outputs" << YAML::Value << YAML::BeginMap;
+        appendYamlIndent(p_out, inner);
+        p_out << "outputs:\n";
         for (const auto& output : p_node->outputs)
         {
-            p_out << YAML::Key << output << YAML::Value
-                  << ("${" + output + "}");
+            appendYamlIndent(p_out, inner + 1);
+            p_out << output << ": ";
+            appendYamlScalar(p_out, "${" + output + "}");
+            p_out << '\n';
         }
-        p_out << YAML::EndMap;
     }
 
-    // Collect children to save
     std::vector<int> children_to_save;
     for (int child_id : p_node->children)
     {
         Node* child = findNode(child_id);
         if (child)
         {
-            // When serializing subtree definitions, save all children
-            // When serializing main tree, skip expanded inline subtree children
             bool skip_child = false;
 
             if (!is_subtree_definition && p_node->type == "SubTree" &&
                 p_node->is_expanded)
             {
-                // Check if this child is the expanded subtree root
                 auto subtree_it = m_tree_views.find(p_node->subtree_reference);
                 if (subtree_it != m_tree_views.end() &&
                     subtree_it->second.root_id == child_id)
@@ -1348,46 +1371,36 @@ void IDE::serializeNodeToYaml(YAML::Emitter& p_out,
 
     if (!children_to_save.empty())
     {
-        p_out << YAML::Key << "children" << YAML::Value << YAML::BeginSeq;
+        appendYamlIndent(p_out, inner);
+        p_out << "children:\n";
         for (int child_id : children_to_save)
         {
             Node* child = findNode(child_id);
             if (child)
             {
-                // Propagate the is_subtree_definition flag to children
-                serializeNodeToYaml(p_out, child, is_subtree_definition);
+                serializeNodeToYaml(
+                    p_out, child, inner + 1, is_subtree_definition, true);
             }
         }
-        p_out << YAML::EndSeq;
     }
-
-    p_out << YAML::EndMap;
-    p_out << YAML::EndMap;
 }
 
 // ----------------------------------------------------------------------------
-int IDE::parseYamlNode(const YAML::Node& p_yaml_node, int p_parent_id)
+int IDE::parseYamlNode(bt::YamlNode const& p_yaml_node, int p_parent_id)
 {
-    if (!p_yaml_node.IsMap())
+    if (!p_yaml_node.isMap())
         return -1;
 
-    // The YAML node should have exactly one key which is the node type
-    if (p_yaml_node.size() == 0)
+    auto const [node_type, node_data] = p_yaml_node.typeEntry();
+    if (node_type.empty() || !node_data.valid())
         return -1;
 
-    // Get the first (and should be only) key-value pair
-    auto it = p_yaml_node.begin();
-    std::string node_type = it->first.as<std::string>();
-    YAML::Node node_data = it->second;
-
-    // Create the editor node
     int node_id = getNextNodeId();
     std::string node_name = node_type;
 
-    // Extract name if provided
-    if (node_data["name"])
+    if (node_data.hasKey("name"))
     {
-        node_name = node_data["name"].as<std::string>();
+        node_name = node_data.child("name").scalar();
     }
 
     IDE::Node editor_node;
@@ -1396,82 +1409,64 @@ int IDE::parseYamlNode(const YAML::Node& p_yaml_node, int p_parent_id)
     editor_node.name = node_name;
     editor_node.parent = p_parent_id;
 
-    // Add to DFS order immediately after creation (for visualizer mode)
     m_dfs_node_order.push_back(node_id);
 
-    // For SubTree nodes, extract reference
-    if (editor_node.type == "SubTree" && node_data["reference"])
+    if (editor_node.type == "SubTree" && node_data.hasKey("reference"))
     {
-        editor_node.subtree_reference =
-            node_data["reference"].as<std::string>();
+        editor_node.subtree_reference = node_data.child("reference").scalar();
     }
 
-    // Extract inputs
-    if (node_data["inputs"])
+    if (node_data.hasKey("inputs"))
     {
-        YAML::Node inputs = node_data["inputs"];
-        for (auto input_it = inputs.begin(); input_it != inputs.end();
-             ++input_it)
-        {
-            std::string input_name = input_it->first.as<std::string>();
-            editor_node.inputs.push_back(input_name);
-        }
+        node_data.child("inputs").forEachMap([&](std::string_view p_input_name,
+                                           bt::YamlNode) {
+            editor_node.inputs.emplace_back(p_input_name);
+        });
     }
 
-    // Extract outputs
-    if (node_data["outputs"])
+    if (node_data.hasKey("outputs"))
     {
-        YAML::Node outputs = node_data["outputs"];
-        for (auto output_it = outputs.begin(); output_it != outputs.end();
-             ++output_it)
-        {
-            std::string output_name = output_it->first.as<std::string>();
-            editor_node.outputs.push_back(output_name);
-        }
+        node_data.child("outputs").forEachMap([&](std::string_view p_output_name,
+                                            bt::YamlNode) {
+            editor_node.outputs.emplace_back(p_output_name);
+        });
     }
 
-    // Legacy: Extract parameters as inputs (for backward compatibility)
-    if (node_data["parameters"])
+    if (node_data.hasKey("parameters"))
     {
-        YAML::Node params = node_data["parameters"];
-        for (auto param_it = params.begin(); param_it != params.end();
-             ++param_it)
-        {
-            std::string param_name = param_it->first.as<std::string>();
-            // Only add if not already in inputs
+        node_data.child("parameters").forEachMap([&](std::string_view p_param_name,
+                                               bt::YamlNode) {
+            std::string param_name(p_param_name);
             if (std::find(editor_node.inputs.begin(),
                           editor_node.inputs.end(),
                           param_name) == editor_node.inputs.end())
             {
                 editor_node.inputs.push_back(param_name);
             }
-        }
+        });
     }
 
-    // Process children
-    if (node_data["children"])
+    if (node_data.hasKey("children"))
     {
-        YAML::Node children = node_data["children"];
-        if (children.IsSequence())
+        bt::YamlNode children = node_data.child("children");
+        if (children.isSeq())
         {
-            for (size_t i = 0; i < children.size(); ++i)
-            {
-                int child_id = parseYamlNode(children[i], node_id);
+            children.forEachSeq([&](bt::YamlNode p_child) {
+                int child_id = parseYamlNode(p_child, node_id);
                 if (child_id >= 0)
                 {
                     editor_node.children.push_back(child_id);
                 }
-            }
+            });
         }
     }
 
-    // Process child (for decorators)
-    if (node_data["child"])
+    if (node_data.hasKey("child"))
     {
-        YAML::Node child = node_data["child"];
-        if (child.IsSequence() && child.size() > 0)
+        bt::YamlNode child = node_data.child("child");
+        if (child.isSeq() && child.size() > 0)
         {
-            int child_id = parseYamlNode(child[0], node_id);
+            int child_id = parseYamlNode(child.child(0), node_id);
             if (child_id >= 0)
             {
                 editor_node.children.push_back(child_id);
@@ -1479,7 +1474,6 @@ int IDE::parseYamlNode(const YAML::Node& p_yaml_node, int p_parent_id)
         }
     }
 
-    // Add node to the map
     m_nodes.emplace(node_id, std::move(editor_node));
 
     return node_id;

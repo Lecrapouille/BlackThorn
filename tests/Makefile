@@ -48,7 +48,7 @@ USER_CXXFLAGS += -Wno-noexcept
 ###################################################
 # Set Libraries.
 #
-PKG_LIBS += yaml-cpp sfml-network gtest gmock
+PKG_LIBS += sfml-network gtest gmock
 
 ###################################################
 # Generic Makefile rules

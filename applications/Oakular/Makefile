@@ -21,9 +21,8 @@ include $(P)/Makefile.common
 TARGET_NAME := Oakular
 TARGET_DESCRIPTION := Oakular - Behavior tree editor and real-time visualizer
 include $(M)/project/Makefile
+include $(P)/src/BlackThorn/BlackThorn.deps.mk
 
-###############################################################################
-# Inform Makefile where to find *.cpp files
 CURRENT_DIR := $(P)/applications/Oakular
 LIBRARY_DIR := $(P)/src/BlackThorn
 OAKULAR_LIB_DIR := $(P)/src/Oakular
@@ -41,8 +40,12 @@ VPATH += $(CURRENT_DIR) $(LIBRARY_DIR)
 ###################################################
 # Set third-party libraries. Order matters: dependencies last
 #
-INTERNAL_LIBS += $(call internal-lib,oakular)
-INTERNAL_LIBS += $(call internal-lib,blackthorn)
+INTERNAL_LIBS :=
+OAKULAR_STATIC_LIB := $(BUILD_PATH)/liboakular.a
+NOT_PKG_LIBS += $(OAKULAR_STATIC_LIB) $(BLACKTHORN_LINK_LIBS)
+
+$(OAKULAR_STATIC_LIB):
+	@$(MAKE) -C $(P)/src/Oakular all
 
 ###############################################################################
 # Make the list of files to compile (application sources only)
@@ -68,9 +71,11 @@ INCLUDES += $(IMGUIFILEDIALOG_DIR)
 ###################################################
 # Set Libraries.
 #
-PKG_LIBS += yaml-cpp sfml-network glfw3 glew gl
+PKG_LIBS += sfml-network glfw3 glew gl
 
 ###############################################################################
 # Sharable information between all Makefiles
 #
 include $(M)/rules/Makefile
+
+$(TARGET_BINARY_NAME): $(OAKULAR_STATIC_LIB) $(BLACKTHORN_STATIC_LIB)

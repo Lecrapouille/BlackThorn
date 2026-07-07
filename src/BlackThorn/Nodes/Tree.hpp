@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "BlackThorn/Nodes/Node.hpp"
 #include "BlackThorn/Network/TreeMetadata.hpp"
+#include "BlackThorn/Nodes/Node.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -54,7 +54,7 @@ class SubTreeNode;
 //! \code{.cpp}
 //! auto tree = Tree::create();
 //! auto node = factory.create("MyAction", blackboard);
-//! std::size_t index = tree->adoptNode(std::move(node));
+//! size_t index = tree->adoptNode(std::move(node));
 //! tree->setRootIndex(index);
 //! \endcode
 // ****************************************************************************
@@ -102,7 +102,7 @@ public:
         // --------------------------------------------------------------------
         //! \brief Register a child index for a composite parent slot.
         // --------------------------------------------------------------------
-        void appendChild(std::size_t p_parent, std::size_t p_child)
+        void appendChild(std::size_t p_parent, size_t p_child)
         {
             children[p_parent].push_back(p_child);
         }
@@ -110,7 +110,7 @@ public:
         // --------------------------------------------------------------------
         //! \brief Register the single child of a decorator slot.
         // --------------------------------------------------------------------
-        void setDecoratorChild(std::size_t p_parent, std::size_t p_child)
+        void setDecoratorChild(std::size_t p_parent, size_t p_child)
         {
             decorator_children[p_parent] = p_child;
         }
@@ -118,7 +118,7 @@ public:
         // --------------------------------------------------------------------
         //! \brief Return the number of children for a composite slot.
         // --------------------------------------------------------------------
-        [[nodiscard]] std::size_t childCount(std::size_t p_index) const
+        [[nodiscard]] size_t childCount(std::size_t p_index) const
         {
             return children[p_index].size();
         }
@@ -126,8 +126,7 @@ public:
         // --------------------------------------------------------------------
         //! \brief Return a child index for a composite slot.
         // --------------------------------------------------------------------
-        [[nodiscard]] std::size_t childAt(std::size_t p_index,
-                                          std::size_t p_offset) const
+        [[nodiscard]] size_t childAt(std::size_t p_index, size_t p_offset) const
         {
             return children[p_index][p_offset];
         }
@@ -188,7 +187,7 @@ public:
     [[nodiscard]] T& emplaceNode(Args&&... p_args)
     {
         static_assert(std::is_base_of_v<Node, T>, "T must inherit from Node");
-        std::size_t index = m_pool.size();
+        size_t index = m_pool.size();
         T& node = m_pool.create<T>(std::forward<Args>(p_args)...);
         node.bindToTree(*this, index);
         m_kinds.push_back(nodeKindOf<T>());
@@ -208,9 +207,9 @@ public:
     //! \c NodeFactory. The node is bound to this tree and appended to the
     //! flat storage.
     // ------------------------------------------------------------------------
-    [[nodiscard]] std::size_t adoptNode(Node::Ptr p_node)
+    [[nodiscard]] size_t adoptNode(Node::Ptr p_node)
     {
-        std::size_t index = m_pool.size();
+        size_t index = m_pool.size();
         Node& node = m_pool.adopt(std::move(p_node));
         node.bindToTree(*this, index);
         m_kinds.push_back(node.registrationKind());
@@ -265,7 +264,7 @@ public:
     //! \brief Return the storage index of the root node.
     //! \return Root index, or \ref INVALID_NODE_INDEX if no root was set.
     // ------------------------------------------------------------------------
-    [[nodiscard]] std::size_t rootIndex() const
+    [[nodiscard]] size_t rootIndex() const
     {
         return m_root_index;
     }
@@ -324,7 +323,7 @@ public:
     // ------------------------------------------------------------------------
     //! \brief Return the number of nodes stored in the pool.
     // ------------------------------------------------------------------------
-    [[nodiscard]] std::size_t nodeCount() const noexcept
+    [[nodiscard]] size_t nodeCount() const noexcept
     {
         return m_pool.size();
     }
@@ -550,7 +549,7 @@ private:
     //! \brief Return the storage index of a decorator child.
     //! \param[in] p_index Storage index of the decorator node.
     // ------------------------------------------------------------------------
-    [[nodiscard]] std::size_t decoratorChildIndex(std::size_t p_index) const;
+    [[nodiscard]] size_t decoratorChildIndex(std::size_t p_index) const;
 
     // ------------------------------------------------------------------------
     //! \brief Tick the single child of a decorator node.
@@ -567,7 +566,7 @@ private:
     //! \brief SoA runtime state parallel to pool slots.
     Runtime m_runtime;
     //! \brief Storage index of the node executed by tick().
-    std::size_t m_root_index = INVALID_NODE_INDEX;
+    size_t m_root_index = INVALID_NODE_INDEX;
     //! \brief Status returned by the last tick().
     Status m_status = Status::INVALID;
     //! \brief Visualizer IDs parallel to pool slots.

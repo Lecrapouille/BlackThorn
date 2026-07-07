@@ -9,7 +9,6 @@
 #pragma once
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
-#include "BlackThorn/Blackboard/Resolver.hpp"
 #include "BlackThorn/Blackboard/Ports.hpp"
 #include "BlackThorn/Blackboard/Resolver.hpp"
 #include "BlackThorn/Visitors/Visitor.hpp"
@@ -73,12 +72,12 @@ struct NodeConfig
     bool parallel_fail_on_all = true;
 
     //! \brief Default repetition count for \c Repeater.
-    std::size_t repeater_default = 0;
+    size_t repeater_default = 0;
     //! \brief Maximum attempts for \c UntilSuccess / \c UntilFailure (0 =
     //! infinite).
-    std::size_t until_attempts = 0;
+    size_t until_attempts = 0;
     //! \brief Default duration in milliseconds for temporal nodes.
-    std::size_t duration_ms = 1000;
+    size_t duration_ms = 1000;
 
     //! \brief Blackboard key written by \c SetBlackboard.
     std::string set_blackboard_key;
@@ -186,7 +185,15 @@ public:
 
             m_placed.emplace_back();
             PlacedBlock& block = m_placed.back();
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wconversion"
+#    pragma GCC diagnostic ignored "-Wsign-conversion"
+#endif
             T* node = new (block.storage) T(std::forward<Args>(p_args)...);
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
             block.destroy = [](Node* p_node) { static_cast<T*>(p_node)->~T(); };
             m_nodes.push_back(node);
             return *node;
@@ -238,7 +245,7 @@ public:
         //! \brief Return the number of nodes stored in the pool.
         //! \return Node count.
         // --------------------------------------------------------------------
-        [[nodiscard]] std::size_t size() const noexcept
+        [[nodiscard]] size_t size() const noexcept
         {
             return m_nodes.size();
         }
@@ -299,7 +306,7 @@ public:
     //! \brief Return the storage index assigned by the owning tree.
     //! \return Node index, or \ref INVALID_NODE_INDEX if not bound yet.
     // ------------------------------------------------------------------------
-    [[nodiscard]] std::size_t index() const
+    [[nodiscard]] size_t index() const
     {
         return m_index;
     }
@@ -324,7 +331,7 @@ public:
     //! \param[in] p_tree Owning tree.
     //! \param[in] p_index Storage index inside the tree pool.
     // ------------------------------------------------------------------------
-    void bindToTree(Tree& p_tree, std::size_t p_index);
+    void bindToTree(Tree& p_tree, size_t p_index);
 
     // ------------------------------------------------------------------------
     //! \brief Get the ports provided by the node.
@@ -463,9 +470,11 @@ protected: // Port management
             return std::nullopt;
         }
 
-        if (auto it = m_resolved_ports.find(p_port); it != m_resolved_ports.end())
+        if (auto it = m_resolved_ports.find(p_port);
+            it != m_resolved_ports.end())
         {
-            return VariableResolver::resolveBinding<T>(it->second, *m_blackboard);
+            return VariableResolver::resolveBinding<T>(it->second,
+                                                       *m_blackboard);
         }
 
         return m_blackboard->get<T>(p_port);
@@ -480,7 +489,8 @@ protected: // Port management
         }
 
         PortBinding const* binding = nullptr;
-        if (auto it = m_resolved_ports.find(p_port); it != m_resolved_ports.end())
+        if (auto it = m_resolved_ports.find(p_port);
+            it != m_resolved_ports.end())
         {
             binding = &it->second;
         }
@@ -491,8 +501,7 @@ protected: // Port management
             return;
         }
 
-        std::string const key =
-            binding ? binding->data : p_port;
+        std::string const key = binding ? binding->data : p_port;
         m_blackboard->set(key, std::forward<T>(p_value));
     }
 
@@ -557,7 +566,7 @@ protected: // Lifecycle hooks
     struct KindTraits;
 
     //! \brief Storage index inside the owning tree pool.
-    std::size_t m_index = INVALID_NODE_INDEX;
+    size_t m_index = INVALID_NODE_INDEX;
     //! \brief Owning tree, set by \ref bindToTree().
     Tree* m_tree = nullptr;
     //! \brief The blackboard for the node (shared data store).

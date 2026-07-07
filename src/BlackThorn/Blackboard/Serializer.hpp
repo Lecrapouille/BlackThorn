@@ -10,11 +10,8 @@
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
 #include "BlackThorn/Blackboard/BlackboardValue.hpp"
+#include <sstream>
 #include <string>
-
-namespace YAML {
-class Node;
-}
 
 namespace bt {
 
@@ -37,16 +34,6 @@ class BlackboardSerializer
 public:
 
     // ------------------------------------------------------------------------
-    //! \brief Populate a blackboard from a YAML node.
-    //! \param[in,out] p_target Blackboard to populate.
-    //! \param[in] p_node YAML map containing key/value pairs.
-    //! \param[in] p_reference Optional scope used to resolve ${var} references.
-    // ------------------------------------------------------------------------
-    static void load(Blackboard& p_target,
-                     YAML::Node const& p_node,
-                     Blackboard const* p_reference = nullptr);
-
-    // ------------------------------------------------------------------------
     //! \brief Populate a blackboard from a parsed YAML node (rapidyaml).
     //! \param[in,out] p_target Blackboard to populate.
     //! \param[in] p_node YAML map containing key/value pairs.
@@ -66,20 +53,20 @@ public:
     valueFromNode(YamlNode const& p_node, Blackboard const* p_scope = nullptr);
 
     // ------------------------------------------------------------------------
-    //! \brief Serialize the content of a blackboard into YAML.
+    //! \brief Serialize the content of a blackboard into YAML text.
     //! \param[in] p_source Blackboard to serialize.
-    //! \return YAML node representing the stored data.
+    //! \return YAML map body (one indentation level), or empty when no data.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static YAML::Node dump(Blackboard const& p_source);
+    [[nodiscard]] static std::string dump(Blackboard const& p_source);
 
 private:
 
     static bool isReference(std::string const& p_literal, std::string& p_key);
-    static BlackboardValue toValue(YAML::Node const& p_node,
-                                   Blackboard const* p_scope);
     static BlackboardValue toValue(YamlNode const& p_node,
                                    Blackboard const* p_scope);
-    static YAML::Node toYaml(BlackboardValue const& p_value);
+    static void appendYamlValue(std::ostringstream& p_out,
+                                BlackboardValue const& p_value,
+                                int p_indent);
 };
 
 } // namespace bt

@@ -149,7 +149,7 @@ void Server::update()
     // Receive data from connected client
     if (m_connected && m_client_socket)
     {
-        std::size_t received;
+        size_t received;
         char buffer[4096];
 
         sf::Socket::Status status =

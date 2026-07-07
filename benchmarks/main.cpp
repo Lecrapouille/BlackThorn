@@ -6,8 +6,8 @@
  * distributed under MIT License
  */
 
-#include "BenchmarkBlackThorn.hpp"
 #include "BenchmarkBT.hpp"
+#include "BenchmarkBlackThorn.hpp"
 
 #include <iostream>
 #include <memory>
@@ -24,7 +24,7 @@ void warmupBlackThorn(bt::Tree& p_tree)
 {
     for (std::size_t i = 0; i < kWarmupTicks; ++i)
     {
-        p_tree.tick();
+        static_cast<void>(p_tree.tick());
         p_tree.reset();
     }
 }
@@ -93,7 +93,7 @@ void benchBlackThornTick(char const* p_name, bt::Tree& p_tree)
 {
     warmupBlackThorn(p_tree);
     double const total_ms = ::benchmark::runTimed(kTickIterations, [&]() {
-        p_tree.tick();
+        static_cast<void>(p_tree.tick());
         p_tree.reset();
     });
     ::benchmark::printResult(p_name, kTickIterations, total_ms);
@@ -130,8 +130,10 @@ void runBlackThornBenchmarks()
     NodeFactory factory;
     bt::benchmark::registerBenchmarkNodes(factory);
 
-    auto const parallel_yaml = bt::benchmark::yamlPath("parallel_100_success.yaml");
-    auto const sequence_yaml = bt::benchmark::yamlPath("sequence_depth_50.yaml");
+    auto const parallel_yaml =
+        bt::benchmark::yamlPath("parallel_100_success.yaml");
+    auto const sequence_yaml =
+        bt::benchmark::yamlPath("sequence_depth_50.yaml");
     auto const patrol_yaml = bt::benchmark::yamlPath("patrol.yaml");
     auto const game_state_yaml = bt::benchmark::yamlPath("game_state.yaml");
     auto const bb_writes_yaml =
@@ -145,25 +147,25 @@ void runBlackThornBenchmarks()
     std::cout << "--- XML/YAML load (Builder::fromFile) ---\n";
     benchBlackThornYamlParse("[BlackThorn] load.parse.parallel_100_success",
                              parallel_yaml);
-    benchBlackThornYamlBuild("[BlackThorn] load.build.parallel_100_success",
-                             parallel_yaml, factory);
-    benchBlackThornYamlLoad("[BlackThorn] load.full.parallel_100_success",
-                            parallel_yaml, factory);
+    benchBlackThornYamlBuild(
+        "[BlackThorn] load.build.parallel_100_success", parallel_yaml, factory);
+    benchBlackThornYamlLoad(
+        "[BlackThorn] load.full.parallel_100_success", parallel_yaml, factory);
 
     benchBlackThornYamlParse("[BlackThorn] load.parse.sequence_depth_50",
                              sequence_yaml);
-    benchBlackThornYamlBuild("[BlackThorn] load.build.sequence_depth_50",
-                             sequence_yaml, factory);
-    benchBlackThornYamlLoad("[BlackThorn] load.full.sequence_depth_50",
-                            sequence_yaml, factory);
+    benchBlackThornYamlBuild(
+        "[BlackThorn] load.build.sequence_depth_50", sequence_yaml, factory);
+    benchBlackThornYamlLoad(
+        "[BlackThorn] load.full.sequence_depth_50", sequence_yaml, factory);
 
     auto patrol_bb = std::make_shared<Blackboard>();
-    benchBlackThornYamlLoad("[BlackThorn] load.patrol", patrol_yaml, factory,
-                            patrol_bb);
+    benchBlackThornYamlLoad(
+        "[BlackThorn] load.patrol", patrol_yaml, factory, patrol_bb);
 
     auto game_bb = std::make_shared<Blackboard>();
-    benchBlackThornYamlLoad("[BlackThorn] load.game_state", game_state_yaml,
-                            factory, game_bb);
+    benchBlackThornYamlLoad(
+        "[BlackThorn] load.game_state", game_state_yaml, factory, game_bb);
 
     std::cout << "\n--- Tick + reset ---\n";
 
@@ -178,7 +180,8 @@ void runBlackThornBenchmarks()
     };
 
     auto parallel_tree = loadOrAbort(parallel_yaml, nullptr);
-    benchBlackThornTick("[BlackThorn] tick.parallel_100_success", *parallel_tree);
+    benchBlackThornTick("[BlackThorn] tick.parallel_100_success",
+                        *parallel_tree);
 
     auto sequence_tree = loadOrAbort(sequence_yaml, nullptr);
     benchBlackThornTick("[BlackThorn] tick.sequence_depth_50", *sequence_tree);
@@ -194,59 +197,66 @@ void runBlackThornBenchmarks()
     std::cout << "\n--- Blackboard ---\n";
 
     auto bb_writes = loadOrAbort(bb_writes_yaml, nullptr);
-    benchBlackThornYamlLoad("[BlackThorn] load.blackboard_writes", bb_writes_yaml,
-                            factory);
+    benchBlackThornYamlLoad(
+        "[BlackThorn] load.blackboard_writes", bb_writes_yaml, factory);
     benchBlackThornTick("[BlackThorn] tick.blackboard_writes", *bb_writes);
 
     auto bb_reads_bb = std::make_shared<Blackboard>();
     benchBlackThornYamlLoad("[BlackThorn] load.blackboard_port_reads",
-                            bb_reads_yaml, factory, bb_reads_bb);
+                            bb_reads_yaml,
+                            factory,
+                            bb_reads_bb);
     auto bb_reads = loadOrAbort(bb_reads_yaml, bb_reads_bb);
     bb_reads->setBlackboard(bb_reads_bb);
     benchBlackThornTick("[BlackThorn] tick.blackboard_port_reads", *bb_reads);
 
     auto bb_remap_bb = std::make_shared<Blackboard>();
     benchBlackThornYamlLoad("[BlackThorn] load.blackboard_subtree_remap",
-                            bb_remap_yaml, factory, bb_remap_bb);
+                            bb_remap_yaml,
+                            factory,
+                            bb_remap_bb);
     auto bb_remap = loadOrAbort(bb_remap_yaml, bb_remap_bb);
     bb_remap->setBlackboard(bb_remap_bb);
-    benchBlackThornTick("[BlackThorn] tick.blackboard_subtree_remap", *bb_remap);
+    benchBlackThornTick("[BlackThorn] tick.blackboard_subtree_remap",
+                        *bb_remap);
 
     auto bb_large_bb = std::make_shared<Blackboard>();
-    benchBlackThornYamlLoad("[BlackThorn] load.blackboard_large", bb_large_yaml,
-                            factory, bb_large_bb);
+    benchBlackThornYamlLoad("[BlackThorn] load.blackboard_large",
+                            bb_large_yaml,
+                            factory,
+                            bb_large_bb);
     auto bb_large = loadOrAbort(bb_large_yaml, bb_large_bb);
     bb_large->setBlackboard(bb_large_bb);
     benchBlackThornTick("[BlackThorn] tick.blackboard_large", *bb_large);
 
     std::cout << "\n--- Reset only ---\n";
     warmupBlackThorn(*patrol_tree);
-    double const reset_ms = ::benchmark::runTimed(kResetIterations, [&]() {
-        patrol_tree->reset();
-    });
-    ::benchmark::printResult("[BlackThorn] reset.patrol x1000", kResetIterations,
-                           reset_ms);
+    double const reset_ms = ::benchmark::runTimed(
+        kResetIterations, [&]() { patrol_tree->reset(); });
+    ::benchmark::printResult(
+        "[BlackThorn] reset.patrol x1000", kResetIterations, reset_ms);
 
     std::cout << "\n--- Visualizer OFF vs ON (stub) ---\n";
     warmupBlackThorn(*patrol_tree);
     patrol_tree->setVisualizerClient(nullptr);
     double const tick_off_ms = ::benchmark::runTimed(kTickIterations, [&]() {
-        patrol_tree->tick();
+        static_cast<void>(patrol_tree->tick());
         patrol_tree->reset();
     });
     ::benchmark::printResult("[BlackThorn] tick.patrol.visualizer_off",
-                           kTickIterations, tick_off_ms);
+                             kTickIterations,
+                             tick_off_ms);
 
     auto visualizer = std::make_shared<VisualizerClient>();
     visualizer->enableStubMode(true);
     patrol_tree->setVisualizerClient(visualizer);
     warmupBlackThorn(*patrol_tree);
     double const tick_on_ms = ::benchmark::runTimed(kTickIterations, [&]() {
-        patrol_tree->tick();
+        static_cast<void>(patrol_tree->tick());
         patrol_tree->reset();
     });
-    ::benchmark::printResult("[BlackThorn] tick.patrol.visualizer_on",
-                           kTickIterations, tick_on_ms);
+    ::benchmark::printResult(
+        "[BlackThorn] tick.patrol.visualizer_on", kTickIterations, tick_on_ms);
 }
 
 void runBehaviorTreeCppBenchmarks()
@@ -256,8 +266,10 @@ void runBehaviorTreeCppBenchmarks()
 
     auto factory = btcpp::benchmark::makeFactory();
 
-    auto const parallel_xml = btcpp::benchmark::xmlPath("parallel_100_success.xml");
-    auto const sequence_xml = btcpp::benchmark::xmlPath("sequence_depth_50.xml");
+    auto const parallel_xml =
+        btcpp::benchmark::xmlPath("parallel_100_success.xml");
+    auto const sequence_xml =
+        btcpp::benchmark::xmlPath("sequence_depth_50.xml");
     auto const patrol_xml = btcpp::benchmark::xmlPath("patrol.xml");
     auto const game_state_xml = btcpp::benchmark::xmlPath("game_state.xml");
     auto const bb_writes_xml =
@@ -275,10 +287,12 @@ void runBehaviorTreeCppBenchmarks()
     benchBTXmlLoad("[BTCPP] load.game_state", game_state_xml, factory);
 
     std::cout << "\n--- Tick + reset ---\n";
-    auto parallel_tree = btcpp::benchmark::loadTreeFromXml(factory, parallel_xml);
+    auto parallel_tree =
+        btcpp::benchmark::loadTreeFromXml(factory, parallel_xml);
     benchBTTick("[BTCPP] tick.parallel_100_success", parallel_tree);
 
-    auto sequence_tree = btcpp::benchmark::loadTreeFromXml(factory, sequence_xml);
+    auto sequence_tree =
+        btcpp::benchmark::loadTreeFromXml(factory, sequence_xml);
     benchBTTick("[BTCPP] tick.sequence_depth_50", sequence_tree);
 
     auto patrol_tree = btcpp::benchmark::loadTreeFromXml(factory, patrol_xml);
@@ -290,29 +304,32 @@ void runBehaviorTreeCppBenchmarks()
     std::cout << "\n--- Blackboard ---\n";
     benchBTXmlLoad("[BTCPP] load.blackboard_writes", bb_writes_xml, factory);
     benchBTXmlLoad("[BTCPP] load.blackboard_port_reads", bb_reads_xml, factory);
-    benchBTXmlLoad("[BTCPP] load.blackboard_subtree_remap", bb_remap_xml,
-                   factory);
+    benchBTXmlLoad(
+        "[BTCPP] load.blackboard_subtree_remap", bb_remap_xml, factory);
     benchBTXmlLoad("[BTCPP] load.blackboard_large", bb_large_xml, factory);
 
-    auto bb_writes_tree = btcpp::benchmark::loadTreeFromXml(factory, bb_writes_xml);
+    auto bb_writes_tree =
+        btcpp::benchmark::loadTreeFromXml(factory, bb_writes_xml);
     benchBTTick("[BTCPP] tick.blackboard_writes", bb_writes_tree);
 
-    auto bb_reads_tree = btcpp::benchmark::loadTreeFromXml(factory, bb_reads_xml);
+    auto bb_reads_tree =
+        btcpp::benchmark::loadTreeFromXml(factory, bb_reads_xml);
     benchBTTick("[BTCPP] tick.blackboard_port_reads", bb_reads_tree);
 
-    auto bb_remap_tree = btcpp::benchmark::loadTreeFromXml(factory, bb_remap_xml);
+    auto bb_remap_tree =
+        btcpp::benchmark::loadTreeFromXml(factory, bb_remap_xml);
     benchBTTick("[BTCPP] tick.blackboard_subtree_remap", bb_remap_tree);
 
-    auto bb_large_tree = btcpp::benchmark::loadTreeFromXml(factory, bb_large_xml);
+    auto bb_large_tree =
+        btcpp::benchmark::loadTreeFromXml(factory, bb_large_xml);
     benchBTTick("[BTCPP] tick.blackboard_large", bb_large_tree);
 
     std::cout << "\n--- Reset only ---\n";
     warmupBT(patrol_tree);
-    double const reset_ms = ::benchmark::runTimed(kResetIterations, [&]() {
-        patrol_tree.haltTree();
-    });
-    ::benchmark::printResult("[BTCPP] reset.patrol x1000", kResetIterations,
-                           reset_ms);
+    double const reset_ms = ::benchmark::runTimed(
+        kResetIterations, [&]() { patrol_tree.haltTree(); });
+    ::benchmark::printResult(
+        "[BTCPP] reset.patrol x1000", kResetIterations, reset_ms);
 
     std::cout << "\n--- Observer OFF vs ON ---\n";
     warmupBT(patrol_tree);
@@ -320,8 +337,8 @@ void runBehaviorTreeCppBenchmarks()
         patrol_tree.tickOnce();
         patrol_tree.haltTree();
     });
-    ::benchmark::printResult("[BTCPP] tick.patrol.observer_off", kTickIterations,
-                           tick_off_ms);
+    ::benchmark::printResult(
+        "[BTCPP] tick.patrol.observer_off", kTickIterations, tick_off_ms);
 
     BT::TreeObserver observer(patrol_tree);
     warmupBT(patrol_tree);
@@ -330,8 +347,8 @@ void runBehaviorTreeCppBenchmarks()
         (void)observer;
         patrol_tree.haltTree();
     });
-    ::benchmark::printResult("[BTCPP] tick.patrol.observer_on", kTickIterations,
-                           tick_on_ms);
+    ::benchmark::printResult(
+        "[BTCPP] tick.patrol.observer_on", kTickIterations, tick_on_ms);
 }
 
 } // anonymous namespace

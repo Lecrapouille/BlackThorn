@@ -4,8 +4,8 @@
  *
  * This header groups everything related to \c ${key} expressions:
  * - compile-time port binding (\ref PortBinding, \ref resolvePortRemapping)
- * - run-time string substitution (\ref VariableResolver::resolve)
- * - typed reads from bindings (\ref VariableResolver::resolveBinding)
+ * - run-time string substitution (\ref VariableResolver::resolve, load-time only)
+ * - typed reads from bindings (\ref VariableResolver::resolveBinding, tick-time)
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -17,7 +17,6 @@
 
 #include <cstdint>
 #include <optional>
-#include <regex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -53,72 +52,35 @@ struct PortBinding
 
 using ResolvedPortMap = std::unordered_map<std::string, PortBinding>;
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //! \brief Fast check for a single \c ${key} reference (no regex).
-//!
-//! \code
-//!   isBlackboardReference("${hp}");       // true
-//!   isBlackboardReference("${a} ${b}");   // false
-//!   isBlackboardReference("literal");     // false
-//! \endcode
-// ---------------------------------------------------------------------------
-inline bool isBlackboardReference(std::string_view p_expr)
-{
-    if (p_expr.size() < 4 || p_expr.front() != '$' || p_expr[1] != '{' ||
-        p_expr.back() != '}')
-    {
-        return false;
-    }
-    return p_expr.find('}', 2) == p_expr.size() - 1;
-}
+//! \param[in] p_expr Port expression text.
+//! \return \c true when \p p_expr is exactly \c "${key}" with no extra text.
+// ------------------------------------------------------------------------
+[[nodiscard]] bool isBlackboardReference(std::string_view p_expr);
 
-// ---------------------------------------------------------------------------
-//! \brief Extract the key from \c ${key}. Returns nullopt if not a reference.
-// ---------------------------------------------------------------------------
-inline std::optional<std::string>
-extractBlackboardReference(std::string_view p_expr)
-{
-    if (!isBlackboardReference(p_expr))
-    {
-        return std::nullopt;
-    }
-    return std::string(p_expr.substr(2, p_expr.size() - 3));
-}
+// ------------------------------------------------------------------------
+//! \brief Extract the key from \c ${key}.
+//! \param[in] p_expr Port expression text.
+//! \return Inner key name, or \c std::nullopt when not a reference.
+// ------------------------------------------------------------------------
+[[nodiscard]] std::optional<std::string>
+extractBlackboardReference(std::string_view p_expr);
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //! \brief Resolve a YAML port expression once during tree construction.
-// ---------------------------------------------------------------------------
-inline PortBinding resolvePortExpression(std::string const& p_expr)
-{
-    if (auto key = extractBlackboardReference(p_expr))
-    {
-        return PortBinding{PortBindingKind::BlackboardKey, std::move(*key)};
-    }
-    return PortBinding{PortBindingKind::Literal, p_expr};
-}
+//! \param[in] p_expr Raw parameter value from YAML.
+//! \return Binding classified as blackboard key or literal.
+// ------------------------------------------------------------------------
+[[nodiscard]] PortBinding resolvePortExpression(std::string const& p_expr);
 
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //! \brief Resolve a map of port expressions from YAML parameters.
-//!
-//! \code
-//!   auto raw = std::unordered_map<std::string, std::string>{
-//!       {"speed", "${max_speed}"},
-//!       {"retries", "3"},
-//!   };
-//!   auto ports = resolvePortRemapping(raw);
-//! \endcode
-// ---------------------------------------------------------------------------
-inline ResolvedPortMap resolvePortRemapping(
-    std::unordered_map<std::string, std::string> const& p_raw)
-{
-    ResolvedPortMap resolved;
-    resolved.reserve(p_raw.size());
-    for (auto const& [port, expr] : p_raw)
-    {
-        resolved.emplace(port, resolvePortExpression(expr));
-    }
-    return resolved;
-}
+//! \param[in] p_raw Port name → expression table from node definition.
+//! \return Pre-resolved bindings for tick-time access.
+// ------------------------------------------------------------------------
+[[nodiscard]] ResolvedPortMap
+resolvePortRemapping(std::unordered_map<std::string, std::string> const& p_raw);
 
 // ****************************************************************************
 //! \brief Resolves \c ${variable} syntax in strings and typed port bindings.
@@ -143,51 +105,22 @@ public:
     //!
     //! Each \c ${key} segment is replaced by the corresponding \c std::string
     //! value from the blackboard. Unknown keys are left unchanged.
+    //! \param[in] p_str Source string, possibly containing placeholders.
+    //! \param[in] p_bb Blackboard used for key lookup.
+    //! \return String with known placeholders expanded.
     // ------------------------------------------------------------------------
-    static std::string resolve(std::string const& p_str, Blackboard const& p_bb)
-    {
-        if (auto key = extractBlackboardReference(p_str))
-        {
-            return p_bb.getOrDefault<std::string>(*key, p_str);
-        }
-
-        static std::regex const pattern(R"(\$\{([^}]+)\})");
-        std::string result = p_str;
-        std::smatch match;
-
-        auto search_start = result.cbegin();
-        while (std::regex_search(search_start, result.cend(), match, pattern))
-        {
-            std::string key = match[1].str();
-
-            if (auto value = p_bb.get<std::string>(key))
-            {
-                auto const offset = static_cast<std::string::size_type>(
-                    std::distance(result.cbegin(), search_start));
-                auto const pos = offset + static_cast<std::string::size_type>(
-                                                match.position(0));
-                auto const len =
-                    static_cast<std::string::size_type>(match.length(0));
-                result.replace(pos, len, *value);
-                std::string::size_type const new_index = pos + value->length();
-                search_start =
-                    result.cbegin() + static_cast<std::ptrdiff_t>(new_index);
-            }
-            else
-            {
-                search_start = match.suffix().first;
-            }
-        }
-
-        return result;
-    }
+    [[nodiscard]] static std::string resolve(std::string const& p_str,
+                                             Blackboard const& p_bb);
 
     // ------------------------------------------------------------------------
     //! \brief Resolve a typed value from a reference or a literal string.
+    //! \param[in] p_expr Port expression (\c "${key}" or literal text).
+    //! \param[in] p_bb Blackboard used when \p p_expr is a reference.
+    //! \return Parsed or looked-up value.
     // ------------------------------------------------------------------------
     template <typename T>
-    static std::optional<T> resolveValue(std::string const& p_expr,
-                                         Blackboard const& p_bb)
+    [[nodiscard]] static std::optional<T>
+    resolveValue(std::string const& p_expr, Blackboard const& p_bb)
     {
         if (auto key = extractBlackboardReference(p_expr))
         {
@@ -198,10 +131,13 @@ public:
 
     // ------------------------------------------------------------------------
     //! \brief Read a typed input port through a pre-resolved binding.
+    //! \param[in] p_binding Binding built at tree construction time.
+    //! \param[in] p_bb Blackboard used for key lookups.
+    //! \return Parsed or looked-up value.
     // ------------------------------------------------------------------------
     template <typename T>
-    static std::optional<T> resolveBinding(PortBinding const& p_binding,
-                                           Blackboard const& p_bb)
+    [[nodiscard]] static std::optional<T>
+    resolveBinding(PortBinding const& p_binding, Blackboard const& p_bb)
     {
         switch (p_binding.kind)
         {
@@ -215,8 +151,11 @@ public:
 
     // ------------------------------------------------------------------------
     //! \brief Return the blackboard key used when writing an output port.
+    //! \param[in] p_binding Output port binding.
+    //! \return Target blackboard key name.
     // ------------------------------------------------------------------------
-    static std::string resolveOutputKey(PortBinding const& p_binding)
+    [[nodiscard]] static std::string
+    resolveOutputKey(PortBinding const& p_binding)
     {
         return p_binding.data;
     }

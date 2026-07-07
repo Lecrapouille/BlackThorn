@@ -1,12 +1,19 @@
 /**
- * @file Document.cpp
- * @brief Fast YAML document wrapper (rapidyaml).
+ * @file Yaml.cpp
+ * @brief Generic YAML parsing layer (rapidyaml wrapper).
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
  */
 
-#include "BlackThorn/Yaml/Document.hpp"
+#include "BlackThorn/Builder/Yaml.hpp"
+
+#if defined(__GNUC__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wconversion"
+#    pragma GCC diagnostic ignored "-Wsign-conversion"
+#    pragma GCC diagnostic ignored "-Warith-conversion"
+#endif
 
 #include <ryml.hpp>
 #include <ryml_std.hpp>
@@ -14,36 +21,49 @@
 #include <c4/charconv.hpp>
 #include <c4/error.hpp>
 #include <c4/yml/tree.hpp>
+
+#if defined(__GNUC__)
+#    pragma GCC diagnostic pop
+#endif
 #include <csetjmp>
 #include <fstream>
-#include <stdexcept>
 #include <string>
 
 namespace bt {
 
-namespace {
+// ---------------------------------------------------------------------------
+// rapidyaml error handling
+//
+// By default, rapidyaml calls abort() on parse errors. BlackThorn needs a
+// recoverable Return<T>::error() instead. rapidyaml exposes a global error
+// callback (must never return). We combine:
+//   1. setjmp()  — save a checkpoint before parsing
+//   2. longjmp() — jump back to that checkpoint from the error callback
+//
+// std::jmp_buf holds the CPU/register state restored by longjmp().
+// thread_local ensures concurrent parses on different threads do not clash.
+// ---------------------------------------------------------------------------
 
-thread_local std::jmp_buf g_rymlParseJmp;
-thread_local std::string g_rymlParseError;
+static thread_local std::jmp_buf g_rymlParseJmp;
+static thread_local std::string g_rymlParseError;
 
-c4::csubstr toCsubstr(std::string_view p_view)
+static c4::csubstr toCsubstr(std::string_view p_view)
 {
     return c4::csubstr(p_view.data(), p_view.size());
 }
 
-C4_NORETURN void rymlErrorCallback(const char* p_msg,
-                                   size_t p_len,
-                                   ryml::Location /*p_loc*/,
-                                   void* /*p_user*/)
+C4_NORETURN static void rymlErrorCallback(c4::csubstr p_msg,
+                                          ryml::ErrorDataParse const& /*p_errdata*/,
+                                          void* /*p_user*/)
 {
-    g_rymlParseError.assign(p_msg, p_len);
+    g_rymlParseError.assign(p_msg.str, p_msg.len);
     std::longjmp(g_rymlParseJmp, 1);
 }
 
-ryml::Callbacks errorThrowingCallbacks()
+static ryml::Callbacks errorThrowingCallbacks()
 {
     ryml::Callbacks callbacks = ryml::get_callbacks();
-    callbacks.m_error = rymlErrorCallback;
+    callbacks.m_error_parse = rymlErrorCallback;
     return callbacks;
 }
 
@@ -63,12 +83,12 @@ struct ScopedRymlCallbacks
     }
 };
 
-ryml::substr mutableBuffer(std::vector<char>& p_buffer)
+static ryml::substr mutableBuffer(std::vector<char>& p_buffer)
 {
     return ryml::substr(p_buffer.data(), p_buffer.size() - 1);
 }
 
-bool parseIntoTree(std::vector<char>& p_buffer, ryml::Tree& p_tree)
+static bool parseIntoTree(std::vector<char>& p_buffer, ryml::Tree& p_tree)
 {
     g_rymlParseError.clear();
     ScopedRymlCallbacks const guard(errorThrowingCallbacks());
@@ -83,7 +103,7 @@ bool parseIntoTree(std::vector<char>& p_buffer, ryml::Tree& p_tree)
     return false;
 }
 
-bool readFile(std::string const& p_path, std::vector<char>& p_buffer)
+static bool readFile(std::string const& p_path, std::vector<char>& p_buffer)
 {
     std::ifstream file(p_path, std::ios::binary | std::ios::ate);
     if (!file)
@@ -104,14 +124,23 @@ bool readFile(std::string const& p_path, std::vector<char>& p_buffer)
     return static_cast<bool>(file);
 }
 
-std::string toString(c4::csubstr p_view)
+static std::string toString(c4::csubstr p_view)
 {
     return std::string(p_view.str, p_view.len);
 }
 
-} // namespace
+template <typename T>
+static std::optional<T> parseScalarAs(c4::csubstr p_val)
+{
+    T value{};
+    if (c4::from_chars(p_val, &value))
+    {
+        return value;
+    }
+    return std::nullopt;
+}
 
-YamlNode::YamlNode(ryml::Tree const* p_tree, std::uint32_t p_id) noexcept
+YamlNode::YamlNode(ryml::Tree const* p_tree, ryml::id_type p_id) noexcept
     : m_tree(p_tree), m_id(p_id)
 {
 }
@@ -215,13 +244,7 @@ std::optional<int> YamlNode::asInt() const
     {
         return std::nullopt;
     }
-
-    int value = 0;
-    if (c4::from_chars(ref().val(), &value))
-    {
-        return value;
-    }
-    return std::nullopt;
+    return parseScalarAs<int>(ref().val());
 }
 
 std::optional<double> YamlNode::asDouble() const
@@ -245,13 +268,7 @@ std::optional<std::size_t> YamlNode::asSize() const
     {
         return std::nullopt;
     }
-
-    std::size_t value = 0;
-    if (c4::from_chars(ref().val(), &value))
-    {
-        return value;
-    }
-    return std::nullopt;
+    return parseScalarAs<std::size_t>(ref().val());
 }
 
 std::pair<std::string, YamlNode> YamlNode::typeEntry() const
@@ -262,7 +279,7 @@ std::pair<std::string, YamlNode> YamlNode::typeEntry() const
     }
 
     ryml::ConstNodeRef const first = ref().first_child();
-    if (!first.valid())
+    if (!first.readable())
     {
         return {};
     }
@@ -348,6 +365,16 @@ YamlNode YamlDocument::root() const
         return {};
     }
     return YamlNode{&m_tree, m_tree.rootref().id()};
+}
+
+bool YamlDocument::hasKey(std::string_view p_key) const
+{
+    return root().hasKey(p_key);
+}
+
+YamlNode YamlDocument::operator[](std::string_view p_key) const
+{
+    return root().child(p_key);
 }
 
 } // namespace bt

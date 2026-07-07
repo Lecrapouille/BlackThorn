@@ -25,6 +25,15 @@ LIBRARY_DIR := $(P)/src/BlackThorn
 include $(M)/project/Makefile
 include $(LIBRARY_DIR)/BlackThorn.deps.mk
 
+# Link pre-built libs instead of merging their .o into liboakular.a (broken
+# with parallel builds: object dirs live under objs-Linux/blackthorn, not
+# objs-Linux/oakular/libblackthorn).
+THIRD_PARTIES_LIBS :=
+INTERNAL_LIBS :=
+NOT_PKG_LIBS += -L$(P)/build -lblackthorn
+
+$(TARGET_STATIC_LIB_NAME) $(TARGET_SHARED_LIB_NAME): $(P)/build/libblackthorn.a
+
 ###############################################################################
 # Inform Makefile where to find *.cpp files
 #
@@ -75,7 +84,7 @@ LIB_FILES += $(IMGUIFILEDIALOG_DIR)/ImGuiFileDialog.cpp
 ###################################################
 # Set Libraries.
 #
-PKG_LIBS += yaml-cpp sfml-network glfw3 glew gl
+PKG_LIBS += sfml-network glfw3 glew gl
 
 ###############################################################################
 # Sharable information between all Makefiles

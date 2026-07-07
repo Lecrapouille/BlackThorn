@@ -21,6 +21,7 @@ include $(P)/Makefile.common
 TARGET_NAME := Example-Nodes
 TARGET_DESCRIPTION := Example of nodes behavior tree
 include $(M)/project/Makefile
+include $(P)/src/BlackThorn/BlackThorn.deps.mk
 
 CURRENT_DIR := $(P)/doc/examples/Nodes
 
@@ -37,7 +38,7 @@ VPATH += $(P)/src $(CURRENT_DIR)
 ###################################################
 # Set third-party libraries. Order matters: dependencies last
 #
-INTERNAL_LIBS += $(call internal-lib,blackthorn)
+NOT_PKG_LIBS += $(BLACKTHORN_LINK_LIBS)
 
 ###############################################################################
 # Make the list of files to compile
@@ -47,9 +48,11 @@ SRC_FILES := $(call rwildcard,$(CURRENT_DIR),*.cpp)
 ###################################################
 # Set Libraries.
 #
-PKG_LIBS += yaml-cpp sfml-network
+PKG_LIBS += sfml-network
 
 ###############################################################################
 # Sharable information between all Makefiles
 #
 include $(M)/rules/Makefile
+
+$(TARGET_BINARY_NAME): $(BLACKTHORN_STATIC_LIB)

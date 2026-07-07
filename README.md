@@ -17,13 +17,13 @@ BlackThorn is a wordplay on "BT" (behavior tree) and serves as the name of the b
 - Prerequisites Ubuntu:
 
 ```bash
-sudo apt-get install libyaml-cpp-dev
+sudo apt-get install libsfml-dev
 ```
 
 - Prerequisites Fedora:
 
 ```bash
-sudo dnf install yaml-cpp-devel
+sudo dnf install SFML-devel
 ```
 
 - Download and compilation:

@@ -58,9 +58,8 @@ private:
     Clock::time_point m_start = Clock::now();
 };
 
-inline void printResult(std::string const& p_name,
-                        std::size_t p_iterations,
-                        double p_total_ms)
+inline void
+printResult(std::string const& p_name, size_t p_iterations, double p_total_ms)
 {
     double const per_op_us =
         p_iterations > 0

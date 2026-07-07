@@ -1,6 +1,6 @@
 /**
  * @file Blackboard.cpp
- * @brief Blackboard class for shared data storage in behavior trees.
+ * @brief Shared key-value storage for behavior tree nodes.
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
@@ -13,8 +13,51 @@
 
 namespace bt {
 
+// ------------------------------------------------------------------------
+std::string Blackboard::valueToString(Value const& p_value)
+{
+    if (auto const* v = std::get_if<std::string>(&p_value.asBase()))
+    {
+        return "\"" + *v + "\" (string)";
+    }
+    if (auto const* v = std::get_if<int>(&p_value.asBase()))
+    {
+        return std::to_string(*v) + " (int)";
+    }
+    if (auto const* v = std::get_if<double>(&p_value.asBase()))
+    {
+        return std::to_string(*v) + " (double)";
+    }
+    if (auto const* v = std::get_if<float>(&p_value.asBase()))
+    {
+        return std::to_string(*v) + " (float)";
+    }
+    if (auto const* v = std::get_if<bool>(&p_value.asBase()))
+    {
+        return (*v ? "true" : "false") + std::string(" (bool)");
+    }
+    if (auto const* v = std::get_if<std::size_t>(&p_value.asBase()))
+    {
+        return std::to_string(*v) + " (size_t)";
+    }
+    if (auto const* v = std::get_if<std::any>(&p_value.asBase()))
+    {
+        return std::string("(") + v->type().name() + ")";
+    }
+
+    return "(complex)";
+}
+
+// ------------------------------------------------------------------------
 Blackboard::Blackboard(Blackboard::Ptr p_parent) : m_parent(std::move(p_parent))
 {
+}
+
+// ------------------------------------------------------------------------
+void Blackboard::setRaw(Key const& p_key, Value const& p_value)
+{
+    m_data[p_key] = p_value;
+    invalidateKey(p_key);
 }
 
 // ------------------------------------------------------------------------
@@ -45,6 +88,42 @@ bool Blackboard::has(const Key& p_key) const
         return m_parent->has(p_key);
     }
     return false;
+}
+
+// ------------------------------------------------------------------------
+void Blackboard::remove(Key const& p_key)
+{
+    m_data.erase(p_key);
+    invalidateKey(p_key);
+}
+
+// ------------------------------------------------------------------------
+std::shared_ptr<Blackboard> Blackboard::createChild()
+{
+    return std::make_shared<Blackboard>(shared_from_this());
+}
+
+// ------------------------------------------------------------------------
+void Blackboard::setPortRemapping(
+    std::unordered_map<std::string, std::string> const& p_remapping)
+{
+    m_portRemapping = p_remapping;
+}
+
+// ------------------------------------------------------------------------
+void Blackboard::beginTick()
+{
+    ++m_tick_generation;
+    if (m_read_cache.size() > 256)
+    {
+        m_read_cache.clear();
+    }
+}
+
+// ------------------------------------------------------------------------
+void Blackboard::invalidateKey(Key const& p_key)
+{
+    m_read_cache.erase(p_key);
 }
 
 // ------------------------------------------------------------------------
@@ -87,8 +166,6 @@ std::string Blackboard::dump(std::string const& p_title,
 }
 
 // ------------------------------------------------------------------------
-//! \brief Get all keys stored in this blackboard (not including parent).
-// ------------------------------------------------------------------------
 std::vector<Blackboard::Key> Blackboard::keys() const
 {
     std::vector<Key> result;
@@ -100,40 +177,7 @@ std::vector<Blackboard::Key> Blackboard::keys() const
     return result;
 }
 
-std::string Blackboard::valueToString(Value const& p_value)
-{
-    if (auto const* v = std::get_if<std::string>(&p_value.asBase()))
-    {
-        return "\"" + *v + "\" (string)";
-    }
-    if (auto const* v = std::get_if<int>(&p_value.asBase()))
-    {
-        return std::to_string(*v) + " (int)";
-    }
-    if (auto const* v = std::get_if<double>(&p_value.asBase()))
-    {
-        return std::to_string(*v) + " (double)";
-    }
-    if (auto const* v = std::get_if<float>(&p_value.asBase()))
-    {
-        return std::to_string(*v) + " (float)";
-    }
-    if (auto const* v = std::get_if<bool>(&p_value.asBase()))
-    {
-        return (*v ? "true" : "false") + std::string(" (bool)");
-    }
-    if (auto const* v = std::get_if<std::size_t>(&p_value.asBase()))
-    {
-        return std::to_string(*v) + " (size_t)";
-    }
-    if (auto const* v = std::get_if<std::any>(&p_value.asBase()))
-    {
-        return std::string("(") + v->type().name() + ")";
-    }
-
-    return "(complex)";
-}
-
+// ------------------------------------------------------------------------
 std::string Blackboard::displayValue(Value const& p_value)
 {
     if (auto const* v = std::get_if<int>(&p_value.asBase()))
@@ -157,7 +201,7 @@ std::string Blackboard::displayValue(Value const& p_value)
     if (auto const* map = std::get_if<BlackboardMap>(&p_value.asBase()))
     {
         std::string result = "{";
-        std::size_t count = 0;
+        size_t count = 0;
         for (auto const& [field_key, _] : *map)
         {
             if (count > 0)
@@ -187,6 +231,7 @@ std::string Blackboard::displayValue(Value const& p_value)
     return "...";
 }
 
+// ------------------------------------------------------------------------
 std::string Blackboard::displayKey(Blackboard const* p_blackboard,
                                    std::string const& p_key)
 {

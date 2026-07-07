@@ -36,12 +36,12 @@ int leaf_example()
     auto tree = Tree::create();
     tree->setBlackboard(blackboard);
     auto& sequence = tree->createRoot<Sequence>();
-    sequence.addChild<Condition>(
+    static_cast<void>(sequence.addChild<Condition>(
         Condition::Function([bb = blackboard]() {
             return bb->get<int>("battery").value_or(0) > 20;
         }),
-        blackboard);
-    sequence.addChild<ReportEnemy>(blackboard);
+        blackboard));
+    static_cast<void>(sequence.addChild<ReportEnemy>(blackboard));
 
     Status status = tree->tick();
     std::cout << "[Leaf] Result: " << to_string(status) << '\n';

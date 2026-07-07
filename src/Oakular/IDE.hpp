@@ -17,16 +17,15 @@
 
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-// Forward declarations
-namespace YAML {
-class Emitter;
-class Node;
-} // namespace YAML
+namespace bt {
+class YamlNode;
+}
 
 class Renderer;
 
@@ -284,10 +283,12 @@ private: // Tree conversion (internal)
     void buildTreeFromNodes();
     void buildNodesFromTree(bt::Node& p_root);
     int buildNodesFromTreeRecursive(bt::Node& p_node, ID p_parent_id);
-    void serializeNodeToYaml(YAML::Emitter& p_out,
+    void serializeNodeToYaml(std::ostringstream& p_out,
                              Node* p_node,
-                             bool is_subtree_definition = false);
-    int parseYamlNode(const YAML::Node& p_yaml_node, ID p_parent_id);
+                             int p_indent,
+                             bool is_subtree_definition = false,
+                             bool p_sequence_item = false);
+    int parseYamlNode(bt::YamlNode const& p_yaml_node, ID p_parent_id);
 
     void layoutNodeRecursive(Node* p_node,
                              float p_x,

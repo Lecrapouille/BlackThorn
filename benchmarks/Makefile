@@ -13,17 +13,19 @@ TARGET_DESCRIPTION := Comparative benchmarks for $(PROJECT_NAME)
 COMPILATION_MODE := release
 include $(M)/project/Makefile
 include $(P)/src/BlackThorn/BlackThorn.deps.mk
+THIRD_PARTIES_LIBS :=
 
 CURRENT_DIR := $(P)/benchmarks
 BTCPP_DIR := $(P)/external/BehaviorTree.CPP
 BTCPP_LIB := $(BTCPP_DIR)/build/libbehaviortree_cpp.a
+BTCPP_TINYXML2_LIB := $(BTCPP_DIR)/build/3rdparty/tinyxml2/libtinyxml2.a
 
 INCLUDES += $(CURRENT_DIR) $(P)/src $(BTCPP_DIR)/include $(THIRD_PARTIES_DIR)
 VPATH += $(CURRENT_DIR)
 
-INTERNAL_LIBS += $(call internal-lib,blackthorn)
-PKG_LIBS += yaml-cpp sfml-network
-NOT_PKG_LIBS += $(BTCPP_LIB) -lpthread -dl
+INTERNAL_LIBS :=
+PKG_LIBS += sfml-network
+NOT_PKG_LIBS += $(BLACKTHORN_LINK_LIBS) $(BTCPP_LIB) $(BTCPP_TINYXML2_LIB) -lpthread -dl
 
 SRC_FILES := $(CURRENT_DIR)/main.cpp
 
@@ -47,6 +49,6 @@ $(GENERATED_YAML) $(GENERATED_XML): $(CURRENT_DIR)/generate_yaml.py
 $(BTCPP_LIB):
 	@$(MAKE) -C $(P) compile-external-libs
 
-$(TARGET_BINARY_NAME): yaml xml $(BTCPP_LIB)
-
 include $(M)/rules/Makefile
+
+$(TARGET_BINARY_NAME): yaml xml $(BTCPP_LIB) $(BLACKTHORN_STATIC_LIB)

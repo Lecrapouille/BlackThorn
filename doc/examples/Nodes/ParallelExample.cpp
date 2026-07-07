@@ -49,9 +49,9 @@ int parallel_example()
 
     auto tree = Tree::create();
     auto& parallel = tree->createRoot<Parallel>(2, 2);
-    parallel.addChild<MonitorBattery>();
-    parallel.addChild<MonitorObstacles>();
-    parallel.addChild<MonitorComms>();
+    static_cast<void>(parallel.addChild<MonitorBattery>());
+    static_cast<void>(parallel.addChild<MonitorObstacles>());
+    static_cast<void>(parallel.addChild<MonitorComms>());
 
     Status status = tree->tick();
     std::cout << "[Parallel] Result: " << to_string(status) << '\n';

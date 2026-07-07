@@ -67,7 +67,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -82,7 +82,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -97,7 +97,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -112,7 +112,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -127,7 +127,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -142,7 +142,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -157,7 +157,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -172,7 +172,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -525,7 +525,7 @@ public:
     void visitComposite(Composite const& p_node)
     {
         collectNode(p_node);
-        for (uint32_t child_index : p_node.childIndices())
+        for (std::size_t child_index : p_node.childIndices())
         {
             p_node.ownerTree()->node(child_index).accept(*this);
         }

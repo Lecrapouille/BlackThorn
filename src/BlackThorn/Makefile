@@ -48,7 +48,7 @@ HEADER_FILES := $(call rwildcard,$(CURRENT_DIR),*.hpp)
 ###############################################################################
 # Set Libraries
 #
-PKG_LIBS += yaml-cpp sfml-network
+PKG_LIBS += sfml-network
 
 ###############################################################################
 # Sharable information between all Makefiles

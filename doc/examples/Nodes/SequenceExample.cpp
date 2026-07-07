@@ -49,9 +49,9 @@ int sequence_example()
 
     auto tree = Tree::create();
     auto& sequence = tree->createRoot<Sequence>();
-    sequence.addChild<OpenDoor>();
-    sequence.addChild<WalkThrough>();
-    sequence.addChild<CloseDoor>();
+    static_cast<void>(sequence.addChild<OpenDoor>());
+    static_cast<void>(sequence.addChild<WalkThrough>());
+    static_cast<void>(sequence.addChild<CloseDoor>());
 
     Status status = tree->tick();
     std::cout << "[Sequence] Result: " << to_string(status) << '\n';

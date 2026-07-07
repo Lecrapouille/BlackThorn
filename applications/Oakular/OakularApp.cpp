@@ -13,7 +13,6 @@
 #include "Renderer.hpp"
 
 #include <imgui_stdlib.h>
-#include <yaml-cpp/yaml.h>
 
 #include <iostream>
 
@@ -1155,14 +1154,11 @@ void OakularApp::showBlackboardPanel()
     ImGui::Text("Variables:");
 
     // Display existing variables using recursive function
-    YAML::Node bb_yaml = bt::BlackboardSerializer::dump(*m_blackboard);
-
     std::vector<std::string> keys_to_remove;
     bool modified = false;
 
-    for (auto yaml_it = bb_yaml.begin(); yaml_it != bb_yaml.end(); ++yaml_it)
+    for (std::string const& key : m_blackboard->keys())
     {
-        std::string key = yaml_it->first.as<std::string>();
         auto raw_value = m_blackboard->raw(key);
 
         if (!raw_value.has_value())

@@ -5,7 +5,7 @@ This guide will help you get started with BlackThorn, a modern C++ behavior tree
 ## 📦 Prerequisites
 
 ```bash
-sudo apt-get install libyaml-cpp-dev sfml-dev
+sudo apt-get install libsfml-dev
 ```
 
 ## 🔨 Download and Compilation

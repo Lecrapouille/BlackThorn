@@ -78,7 +78,7 @@ public:
 protected:
 
     //! \brief Storage index of the single child node.
-    std::size_t m_child_index = INVALID_NODE_INDEX;
+    size_t m_child_index = INVALID_NODE_INDEX;
 };
 
 } // namespace bt
