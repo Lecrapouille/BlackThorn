@@ -84,7 +84,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -99,7 +99,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -114,7 +114,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -129,7 +129,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -144,7 +144,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -159,7 +159,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -178,7 +178,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -198,7 +198,7 @@ public:
         if (p_node.hasChildren())
         {
             writeChildrenStart();
-            for (uint32_t child_index : p_node.childIndices())
+            for (std::size_t child_index : p_node.childIndices())
             {
                 p_node.ownerTree()->node(child_index).accept(*this);
             }
@@ -433,7 +433,7 @@ public:
         writeNode(p_type, p_node, "[[", "]]");
         std::string prev_parent = m_parent_id;
         m_parent_id = nodeId(p_node);
-        for (uint32_t child_index : p_node.childIndices())
+        for (std::size_t child_index : p_node.childIndices())
         {
             p_node.ownerTree()->node(child_index).accept(*this);
         }

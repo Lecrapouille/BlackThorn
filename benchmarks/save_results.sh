@@ -1,34 +1,33 @@
 #!/bin/bash -e
-# Run benchmarks and save BlackThorn + BT.CPP results separately.
+# Run the benchmarks and write a single, self-contained HTML report.
+#
+# Output: benchmarks/results/report.html
+#   - head-to-head BlackThorn vs BehaviorTree.CPP tables (with speedups)
+#   - green/red cell backgrounds for latency comparison
+#   - the full raw output embedded in a collapsible appendix
+#
+# No timestamped or per-engine text files are produced: the report is
+# self-contained and simply overwritten on each run.
 
 P="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$P/build/BlackThorn-Benchmark"
 OUT="$P/benchmarks/results"
-STAMP="$(date +%Y%m%d_%H%M%S)"
+REPORT="$OUT/report.html"
 
 mkdir -p "$OUT"
 
 if [ ! -x "$BIN" ]; then
-    echo "Missing $BIN — run: make benchmarks"
+    echo "Missing $BIN - run: make benchmarks"
     exit 1
 fi
 
-FULL="$OUT/run_${STAMP}.txt"
-BT="$OUT/blackthorn_latest.txt"
-BTCPP="$OUT/btcpp_latest.txt"
+# Capture the run once, print it live, then render the HTML report.
+RAW="$(mktemp)"
+trap 'rm -f "$RAW"' EXIT
 
-: > "$BT"
-: > "$BTCPP"
+"$BIN" | tee "$RAW"
 
-"$BIN" | tee "$FULL" | awk -v bt="$BT" -v btcpp="$BTCPP" '
-/^=== BlackThorn ===/ { s=1; next }
-/^=== BehaviorTree.CPP ===/ { s=2; next }
-s==1 { print >> bt }
-s==2 { print >> btcpp }
-'
+python3 "$P/benchmarks/report.py" --input "$RAW" --output "$REPORT"
 
-cp "$FULL" "$OUT/latest.txt"
-echo "Saved:"
-echo "  $BT"
-echo "  $BTCPP"
-echo "  $FULL"
+echo
+echo "Report saved: $REPORT"

@@ -17,7 +17,7 @@
 
 namespace bt {
 
-void Node::bindToTree(Tree& p_tree, std::size_t p_index)
+void Node::bindToTree(Tree& p_tree, size_t p_index)
 {
     m_tree = &p_tree;
     m_index = p_index;
@@ -135,7 +135,7 @@ char const* toString(Node::Kind p_kind)
         case Node::Kind::SubTree:
             return "SubTree";
     }
-    return "Unknown";
+    __builtin_unreachable();
 }
 
 bool isComposite(Node::Kind p_kind)
@@ -151,9 +151,27 @@ bool isComposite(Node::Kind p_kind)
         case Node::Kind::Parallel:
         case Node::Kind::ParallelAll:
             return true;
-        default:
+
+        case Node::Kind::Inverter:
+        case Node::Kind::ForceSuccess:
+        case Node::Kind::ForceFailure:
+        case Node::Kind::RunOnce:
+        case Node::Kind::Repeater:
+        case Node::Kind::UntilSuccess:
+        case Node::Kind::UntilFailure:
+        case Node::Kind::Timeout:
+        case Node::Kind::Delay:
+        case Node::Kind::Cooldown:
+        case Node::Kind::Success:
+        case Node::Kind::Failure:
+        case Node::Kind::Wait:
+        case Node::Kind::SetBlackboard:
+        case Node::Kind::Condition:
+        case Node::Kind::Callback:
+        case Node::Kind::SubTree:
             return false;
     }
+    __builtin_unreachable();
 }
 
 bool isDecorator(Node::Kind p_kind)
@@ -171,9 +189,25 @@ bool isDecorator(Node::Kind p_kind)
         case Node::Kind::Delay:
         case Node::Kind::Cooldown:
             return true;
-        default:
+
+        case Node::Kind::Sequence:
+        case Node::Kind::ReactiveSequence:
+        case Node::Kind::SequenceWithMemory:
+        case Node::Kind::Selector:
+        case Node::Kind::ReactiveSelector:
+        case Node::Kind::SelectorWithMemory:
+        case Node::Kind::Parallel:
+        case Node::Kind::ParallelAll:
+        case Node::Kind::Success:
+        case Node::Kind::Failure:
+        case Node::Kind::Wait:
+        case Node::Kind::SetBlackboard:
+        case Node::Kind::Condition:
+        case Node::Kind::Callback:
+        case Node::Kind::SubTree:
             return false;
     }
+    __builtin_unreachable();
 }
 
 } // namespace bt

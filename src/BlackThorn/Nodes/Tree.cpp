@@ -196,38 +196,42 @@ bool Tree::isNodeValid(std::size_t p_index) const
     auto const& runtime = m_runtime;
     NodeConfig const& node_config = config(p_index);
 
-    switch (node_kind)
+    if (node_kind == NodeKind::Callback)
     {
-        case NodeKind::Callback:
-            return static_cast<bool>(node_config.callback);
-        case NodeKind::Condition:
-            return static_cast<bool>(node_config.condition);
-        case NodeKind::SubTree:
-            return node(p_index).isValidCustom();
-        default:
-            if (isComposite(node_kind))
-            {
-                if (runtime.childCount(p_index) == 0)
-                {
-                    return false;
-                }
-                for (std::size_t i = 0; i < runtime.childCount(p_index); ++i)
-                {
-                    if (!isNodeValid(runtime.childAt(p_index, i)))
-                    {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            if (isDecorator(node_kind))
-            {
-                return runtime.decorator_children[p_index] !=
-                           INVALID_NODE_INDEX &&
-                       isNodeValid(runtime.decorator_children[p_index]);
-            }
-            return true;
+        return static_cast<bool>(node_config.callback);
     }
+    if (node_kind == NodeKind::Condition)
+    {
+        return static_cast<bool>(node_config.condition);
+    }
+    if (node_kind == NodeKind::SubTree)
+    {
+        return node(p_index).isValidCustom();
+    }
+
+    if (isComposite(node_kind))
+    {
+        if (runtime.childCount(p_index) == 0)
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < runtime.childCount(p_index); ++i)
+        {
+            if (!isNodeValid(runtime.childAt(p_index, i)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (isDecorator(node_kind))
+    {
+        return runtime.decorator_children[p_index] != INVALID_NODE_INDEX &&
+               isNodeValid(runtime.decorator_children[p_index]);
+    }
+
+    return true;
 }
 
 Status Tree::setUpNode(std::size_t p_index)
@@ -334,9 +338,25 @@ Status Tree::setUpNode(std::size_t p_index)
             }
             return Status::RUNNING;
 
-        default:
+        case NodeKind::Sequence:
+        case NodeKind::ReactiveSequence:
+        case NodeKind::SequenceWithMemory:
+        case NodeKind::Selector:
+        case NodeKind::ReactiveSelector:
+        case NodeKind::SelectorWithMemory:
+        case NodeKind::Parallel:
+        case NodeKind::ParallelAll:
+        case NodeKind::Inverter:
+        case NodeKind::ForceSuccess:
+        case NodeKind::ForceFailure:
+        case NodeKind::Success:
+        case NodeKind::Failure:
+        case NodeKind::Condition:
+        case NodeKind::Callback:
+        case NodeKind::SetBlackboard:
             return Status::RUNNING;
     }
+    __builtin_unreachable();
 }
 
 std::size_t Tree::decoratorChildIndex(std::size_t p_index) const
@@ -437,15 +457,14 @@ Status Tree::runNode(std::size_t p_index)
         }
 
         case NodeKind::ParallelAll: {
-            std::size_t const minimum_success =
-                node_config.parallel_success_on_all
-                    ? runtime.childCount(p_index)
-                    : 1;
-            std::size_t const minimum_fail = node_config.parallel_fail_on_all
-                                                 ? runtime.childCount(p_index)
-                                                 : 1;
-            std::size_t total_success = 0;
-            std::size_t total_fail = 0;
+            size_t const minimum_success = node_config.parallel_success_on_all
+                                               ? runtime.childCount(p_index)
+                                               : 1;
+            size_t const minimum_fail = node_config.parallel_fail_on_all
+                                            ? runtime.childCount(p_index)
+                                            : 1;
+            size_t total_success = 0;
+            size_t total_fail = 0;
 
             for (std::size_t i = 0; i < runtime.childCount(p_index); ++i)
             {
@@ -585,7 +604,7 @@ Status Tree::runNode(std::size_t p_index)
             if (elapsed.count() >=
                 static_cast<long long>(runtime.duration_ms_runtime[p_index]))
             {
-                std::size_t const child = decoratorChildIndex(p_index);
+                size_t const child = decoratorChildIndex(p_index);
                 if (runtime.statuses[child] == Status::RUNNING)
                 {
                     haltNode(child);
@@ -670,10 +689,8 @@ Status Tree::runNode(std::size_t p_index)
             subtree.subtree().propagateOutputs();
             return status;
         }
-
-        default:
-            return Status::FAILURE;
     }
+    __builtin_unreachable();
 }
 
 void Tree::tearDownNode(std::size_t p_index, Status p_status)

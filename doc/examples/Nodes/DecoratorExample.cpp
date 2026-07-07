@@ -35,7 +35,7 @@ int decorator_example()
 
     auto tree = Tree::create();
     auto& retry = tree->createRoot<UntilSuccess>(3);
-    retry.createChild<FlakyConnect>();
+    static_cast<void>(retry.createChild<FlakyConnect>());
 
     Status status = Status::RUNNING;
     while (status == Status::RUNNING)

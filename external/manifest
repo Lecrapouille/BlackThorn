@@ -10,6 +10,6 @@ aiekick/ImGuiFileDialog
 ### License: MIT
 BehaviorTree/BehaviorTree.CPP@4.9.0
 
-### Fast YAML parser for BlackThorn tree loading.
+### A library to parse and emit YAML, and do it fast.
 ### License: MIT
-biojppm/rapidyaml@v0.7.2
+biojppm/rapidyaml@v0.15.2
