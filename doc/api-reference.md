@@ -326,7 +326,7 @@ template<typename T>
 void set(std::string const& key, T&& value)
 ```
 
-Store a value in the blackboard. Supports any type that can be stored in `std::any`.
+Store a value in the blackboard. The YAML types (`int`, `double`, `float`, `bool`, `std::string`, `size_t`, arrays and maps) land in a dedicated variant alternative; any other copyable C++ type is boxed in `std::any`.
 
 - **Retrieval 🕵️:**
 

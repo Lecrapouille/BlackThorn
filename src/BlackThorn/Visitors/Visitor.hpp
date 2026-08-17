@@ -9,7 +9,7 @@
  * @file BehaviorTreeVisitor.hpp
  * @brief Visitor interface for behavior tree nodes.
  *
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once

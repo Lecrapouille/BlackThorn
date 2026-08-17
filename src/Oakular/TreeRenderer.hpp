@@ -6,15 +6,16 @@
 // See LICENSING.md for details.
 
 /**
- * @file NodeRenderer.hpp
+ * @file TreeRenderer.hpp
  * @brief Custom node rendering with ImGui
  *
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
-#include "IDE.hpp"
+#include "Editor.hpp"
 
 #include <cstdint>
 #include <imgui.h>
@@ -23,10 +24,13 @@
 #include <unordered_map>
 #include <vector>
 
+namespace oakular {
+
 // ****************************************************************************
-//! \brief Renders behavior tree nodes using pure ImGui
+//! \brief Renders behavior tree nodes using pure ImGui.
+//! Draws at the current ImGui cursor: it never opens a window of its own.
 // ****************************************************************************
-class Renderer
+class TreeRenderer
 {
 public:
 
@@ -36,12 +40,12 @@ public:
     // ------------------------------------------------------------------------
     //! \brief Constructor.
     // ------------------------------------------------------------------------
-    Renderer() = default;
+    TreeRenderer() = default;
 
     // ------------------------------------------------------------------------
     //! \brief Destructor.
     // ------------------------------------------------------------------------
-    ~Renderer()
+    ~TreeRenderer()
     {
         shutdown();
     }
@@ -60,8 +64,8 @@ public:
     //! \param p_blackboard Pointer to the blackboard for displaying values.
     //! \param p_read_only If true, the graph is read-only (no editing).
     // ------------------------------------------------------------------------
-    void drawBehaviorTree(std::unordered_map<ID, IDE::Node>& p_nodes,
-                          std::vector<IDE::Link> const& p_links,
+    void drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_nodes,
+                          std::vector<Editor::Link> const& p_links,
                           int p_layout_direction,
                           bt::Blackboard* p_blackboard = nullptr,
                           bool p_read_only = false);
@@ -153,7 +157,7 @@ private:
     //! \param p_node The node to render.
     //! \param is_top_to_bottom True if the layout is top-to-bottom.
     // ------------------------------------------------------------------------
-    void drawNode(IDE::Node const& p_node, bool p_is_top_to_bottom);
+    void drawNode(Editor::Node const& p_node, bool p_is_top_to_bottom);
 
     // ------------------------------------------------------------------------
     //! \brief Rendering a pin.
@@ -192,22 +196,22 @@ private:
     //! \param node The node to drag.
     //! \param is_edit_mode True if the editor is in edit mode.
     // ------------------------------------------------------------------------
-    void handleNodeDrag(IDE::Node& node, bool is_edit_mode);
+    void handleNodeDrag(Editor::Node& node, bool is_edit_mode);
 
     // ------------------------------------------------------------------------
     //! \brief Handling the link creation.
     //! \param node The node to create the link from.
     //! \param is_edit_mode True if the editor is in edit mode.
     // ------------------------------------------------------------------------
-    void handleLinkCreation(IDE::Node const& node, bool is_edit_mode);
+    void handleLinkCreation(Editor::Node const& node, bool is_edit_mode);
 
     // ------------------------------------------------------------------------
     //! \brief Handling the selection.
     //! \param nodes The nodes to select.
     //! \param links The links to select.
     // ------------------------------------------------------------------------
-    void handleSelection(std::unordered_map<ID, IDE::Node> const& nodes,
-                         std::vector<IDE::Link> const& links);
+    void handleSelection(std::unordered_map<ID, Editor::Node> const& nodes,
+                         std::vector<Editor::Link> const& links);
 
     // ------------------------------------------------------------------------
     //! \brief Checking if a pin is hovered.
@@ -222,7 +226,7 @@ private:
     //! \param node The node to calculate the size of.
     //! \return The size of the node.
     // ------------------------------------------------------------------------
-    ImVec2 calculateNodeSize(const IDE::Node& node) const;
+    ImVec2 calculateNodeSize(const Editor::Node& node) const;
 
     // ------------------------------------------------------------------------
     //! \brief Calculating the positions of the pins.
@@ -284,3 +288,5 @@ private:
     bool m_link_dropped_in_void = false;
     int m_layout_direction = 1; // 0 = LeftToRight, 1 = TopToBottom
 };
+
+} // namespace oakular

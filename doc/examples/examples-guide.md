@@ -54,3 +54,23 @@ To use with visualizer:
 1. 🎨 Launch Oakular in Visualizer mode (before the example)
 2. ▶️ Run the example
 3. 👁️ Watch the tree execute in real-time
+
+---
+
+## 🧩 Embedded Example
+
+📁 Location: `doc/examples/Embedded/`
+
+Embeds the Oakular editor into a host application, the way another project such
+as a robot simulator would. Demonstrates:
+
+- 🪟 A GLFW window and a Dear ImGui context created by the host, not by Oakular
+- 🧱 Composing `oakular::Editor` as a plain member, without inheriting any window layer
+- 🎨 Docking the editor into the dockspace of the host
+- 🤖 Declaring domain nodes with `registerNodeType` so they appear in the palette
+- 📡 Answering the `onFileDialogRequested` and `onQuitRequested` signals
+
+Unlike the other examples, its `Makefile` consumes BlackThorn through
+[BlackThorn.mk](../../BlackThorn.mk), exactly as an external project would.
+
+▶️ Run: `./build/Example-Embedded`

@@ -9,11 +9,14 @@
  * @file Server.cpp
  * @brief TCP server implementation using SFML
  *
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #include "Server.hpp"
 #include <iostream>
 #include <sstream>
+
+namespace oakular {
 
 // ----------------------------------------------------------------------------
 Server::~Server()
@@ -223,3 +226,5 @@ void Server::update()
         // sf::Socket::NotReady is normal in non-blocking mode
     }
 }
+
+} // namespace oakular

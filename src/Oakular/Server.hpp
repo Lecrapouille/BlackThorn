@@ -6,9 +6,10 @@
 // See LICENSING.md for details.
 
 /**
- * @file VisualizerServer.hpp
+ * @file Server.hpp
  * @brief TCP server for behavior tree visualization
  *
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
@@ -20,8 +21,10 @@
 #include <string>
 #include <unordered_map>
 
+namespace oakular {
+
 // ****************************************************************************
-//! \briefTCP server that receives behavior tree data from clients
+//! \brief TCP server that receives behavior tree data from clients
 //!
 //! The server listens for incoming connections and receives YAML data
 //! representing behavior trees. This allows runtime visualization of
@@ -134,3 +137,5 @@ private:
     //! \brief Flag indicating if states have been updated since last read
     bool m_states_updated = false;
 };
+
+} // namespace oakular

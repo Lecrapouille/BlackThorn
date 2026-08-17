@@ -9,12 +9,12 @@
  * @file DearImGuiApplication.cpp
  * @brief Dear ImGui application wrapper with docking support.
  *
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #include "DearImGuiApplication.hpp"
 
-namespace robotik::renderer {
+namespace oakular {
 
 // ----------------------------------------------------------------------------
 DearImGuiApplication::DearImGuiApplication(size_t const p_width,
@@ -221,4 +221,4 @@ void DearImGuiApplication::setupDockspace() const
     ImGui::End();
 }
 
-} // namespace robotik::renderer
+} // namespace oakular

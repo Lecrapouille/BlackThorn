@@ -10,7 +10,7 @@
  * @brief Main header for unit tests - Includes Google Test and Google Mock
  * frameworks with their namespaces.
  *
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once

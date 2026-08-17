@@ -9,7 +9,7 @@
  * @file Application.hpp
  * @brief Application base class with Dear ImGui integration.
  *
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
@@ -22,7 +22,7 @@
 #include <memory>
 #include <string>
 
-namespace robotik::renderer {
+namespace oakular {
 
 // ****************************************************************************
 //! \brief Base application class with Dear ImGui integration.
@@ -186,4 +186,4 @@ private:
     std::unique_ptr<DearImGuiApplication> m_imgui_app;
 };
 
-} // namespace robotik::renderer
+} // namespace oakular

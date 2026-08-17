@@ -10,7 +10,7 @@
  * @brief Main entry point for unit test execution - Initializes the Google Test
  * framework and runs all tests.
  *
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #include "main.hpp"

@@ -12,8 +12,11 @@
  */
 
 #include "BlackThorn/Nodes/Tree.hpp"
-#include "BlackThorn/Network/VisualizerClient.hpp"
 #include "BlackThorn/Nodes/SubTree.hpp"
+
+#if defined(BLACKTHORN_HAS_NETWORK)
+#    include "BlackThorn/Network/VisualizerClient.hpp"
+#endif
 
 #include <chrono>
 
@@ -730,10 +733,12 @@ Status Tree::tick()
 
     m_status = tickNode(m_root_index);
 
+#if defined(BLACKTHORN_HAS_NETWORK)
     if (m_visualizer && m_visualizer->isConnected())
     {
         m_visualizer->sendStateChanges(*this);
     }
+#endif
 
     return m_status;
 }

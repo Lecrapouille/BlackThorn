@@ -9,7 +9,7 @@
  * @file Signal.hpp
  * @brief Signal/Slot system for event handling.
  *
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
@@ -18,7 +18,7 @@
 #include <functional>
 #include <map>
 
-namespace robotik {
+namespace bt {
 
 // ****************************************************************************
 //! \brief Signal/Slot system for event handling.
@@ -185,4 +185,4 @@ private:
     typename Signal<Args...>::ConnectionId m_id;
 };
 
-} // namespace robotik
+} // namespace bt

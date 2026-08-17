@@ -241,6 +241,7 @@ void runBlackThornBenchmarks()
     ::benchmark::printResult(
         "[BlackThorn] reset.patrol x1000", kResetIterations, reset_ms);
 
+#if defined(BLACKTHORN_HAS_NETWORK)
     std::cout << "\n--- Visualizer OFF vs ON (stub) ---\n";
     warmupBlackThorn(*patrol_tree);
     patrol_tree->setVisualizerClient(nullptr);
@@ -262,6 +263,7 @@ void runBlackThornBenchmarks()
     });
     ::benchmark::printResult(
         "[BlackThorn] tick.patrol.visualizer_on", kTickIterations, tick_on_ms);
+#endif
 }
 
 void runBehaviorTreeCppBenchmarks()
