@@ -155,6 +155,21 @@ Blackboard:
       health: 20
 ```
 
+### 🔤 Quotes decide the type
+
+The type of a scalar is inferred from its text, so `counter: 42` gives an `int` and `x: 1.0` a `double`. Quoting switches this off, as the YAML specification mandates: a quoted scalar is always a string. 📌
+
+```yaml
+Blackboard:
+  count: 42          # int    -> get<int>("count")
+  ratio: 0.5         # double -> get<double>("ratio")
+  ready: true        # bool   -> get<bool>("ready")
+  version: "42"      # string -> get<std::string>("version")
+  goal: "1;2;3"      # string, never truncated to the number 1
+```
+
+Inference only applies to text that spells a complete number or boolean. `1.2.3` and `3 apples` stay strings even unquoted, and the special reals `.inf`, `-.inf` and `.nan` are read as `double`. Saving a blackboard quotes back any string that could be re-read as something else, so types survive a save/reload round trip. 🔁
+
 ---
 
 ## 🔗 Variable References with `${key}`

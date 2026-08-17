@@ -51,7 +51,7 @@ inline BT::BehaviorTreeFactory makeFactory()
     BT::BehaviorTreeFactory factory;
 
     BT::NodeStatus const ok = BT::NodeStatus::SUCCESS;
-    auto noop = [&ok](BT::TreeNode&) { return ok; };
+    auto noop = [&ok](BT::TreeNode&) noexcept { return ok; };
 
     for (char const* name : {"LoadRoute",
                              "FollowWaypoints",

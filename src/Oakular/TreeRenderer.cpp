@@ -1,13 +1,14 @@
 /**
- * @file Renderer.cpp
+ * @file TreeRenderer.cpp
  * @brief Custom node rendering implementation
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
-#include "Renderer.hpp"
-#include "IDE.hpp"
+#include "TreeRenderer.hpp"
+#include "Editor.hpp"
 
 #include "BlackThorn/Blackboard/Blackboard.hpp"
 
@@ -16,6 +17,8 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+
+namespace oakular {
 
 // ----------------------------------------------------------------------------
 // Constants
@@ -45,7 +48,7 @@ static std::string getBlackboardValueString(bt::Blackboard const* blackboard,
 // ----------------------------------------------------------------------------
 // Color lookup table for node types
 // ----------------------------------------------------------------------------
-const std::unordered_map<std::string, ImU32> s_type_colors = {
+static const std::unordered_map<std::string, ImU32> s_type_colors = {
     {"Sequence", IM_COL32(100, 150, 200, 255)},
     {"Selector", IM_COL32(200, 150, 100, 255)},
     {"Parallel", IM_COL32(150, 200, 150, 255)},
@@ -58,14 +61,14 @@ const std::unordered_map<std::string, ImU32> s_type_colors = {
 };
 
 // ----------------------------------------------------------------------------
-void Renderer::shutdown()
+void TreeRenderer::shutdown()
 {
     m_node_visuals.clear();
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::drawBehaviorTree(std::unordered_map<ID, IDE::Node>& p_nodes,
-                                std::vector<IDE::Link> const& p_links,
+void TreeRenderer::drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_nodes,
+                                std::vector<Editor::Link> const& p_links,
                                 int p_layout_direction,
                                 bt::Blackboard* p_blackboard,
                                 bool p_read_only)
@@ -156,7 +159,7 @@ void Renderer::drawBehaviorTree(std::unordered_map<ID, IDE::Node>& p_nodes,
     // Third pass: draw nodes
     bool is_top_to_bottom =
         (p_layout_direction ==
-         static_cast<int>(IDE::LayoutDirection::TopToBottom));
+         static_cast<int>(Editor::LayoutDirection::TopToBottom));
     for (auto& [id, node] : p_nodes)
     {
         drawNode(node, is_top_to_bottom);
@@ -181,7 +184,7 @@ void Renderer::drawBehaviorTree(std::unordered_map<ID, IDE::Node>& p_nodes,
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::drawNode(IDE::Node const& p_node, bool /*p_is_top_to_bottom*/)
+void TreeRenderer::drawNode(Editor::Node const& p_node, bool /*p_is_top_to_bottom*/)
 {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     NodeVisual const& visual = m_node_visuals[p_node.id];
@@ -350,7 +353,7 @@ void Renderer::drawNode(IDE::Node const& p_node, bool /*p_is_top_to_bottom*/)
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::drawPin(ImVec2 p_position,
+void TreeRenderer::drawPin(ImVec2 p_position,
                        bool p_is_input,
                        bool p_is_hovered) const
 {
@@ -372,7 +375,7 @@ void Renderer::drawPin(ImVec2 p_position,
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::drawLink(ImVec2 p_start,
+void TreeRenderer::drawLink(ImVec2 p_start,
                         ImVec2 p_end,
                         bool p_is_selected,
                         bool p_is_top_to_bottom) const
@@ -406,7 +409,7 @@ void Renderer::drawLink(ImVec2 p_start,
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::drawGrid(ImDrawList* draw_list, ImVec2 canvas_pos) const
+void TreeRenderer::drawGrid(ImDrawList* draw_list, ImVec2 canvas_pos) const
 {
     ImU32 grid_color = IM_COL32(60, 60, 60, 100);
 
@@ -434,7 +437,7 @@ void Renderer::drawGrid(ImDrawList* draw_list, ImVec2 canvas_pos) const
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::handleCanvasPanAndZoom()
+void TreeRenderer::handleCanvasPanAndZoom()
 {
     auto const& io = ImGui::GetIO();
 
@@ -455,7 +458,7 @@ void Renderer::handleCanvasPanAndZoom()
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::handleNodeDrag(IDE::Node& node, bool is_edit_mode)
+void TreeRenderer::handleNodeDrag(Editor::Node& node, bool is_edit_mode)
 {
     if (!is_edit_mode)
         return;
@@ -500,7 +503,7 @@ void Renderer::handleNodeDrag(IDE::Node& node, bool is_edit_mode)
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::handleLinkCreation(IDE::Node const& p_node, bool p_is_edit_mode)
+void TreeRenderer::handleLinkCreation(Editor::Node const& p_node, bool p_is_edit_mode)
 {
     bool can_have_children =
         !p_node.children.empty() || p_node.type == "Sequence" ||
@@ -577,8 +580,8 @@ void Renderer::handleLinkCreation(IDE::Node const& p_node, bool p_is_edit_mode)
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::handleSelection(std::unordered_map<ID, IDE::Node> const& nodes,
-                               std::vector<IDE::Link> const& /*p_links*/)
+void TreeRenderer::handleSelection(std::unordered_map<ID, Editor::Node> const& nodes,
+                               std::vector<Editor::Link> const& /*p_links*/)
 {
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     {
@@ -628,7 +631,7 @@ void Renderer::handleSelection(std::unordered_map<ID, IDE::Node> const& nodes,
 }
 
 // ----------------------------------------------------------------------------
-bool Renderer::isPinHovered(ImVec2 p_pin_pos, ImVec2 p_mouse_pos) const
+bool TreeRenderer::isPinHovered(ImVec2 p_pin_pos, ImVec2 p_mouse_pos) const
 {
     float dx = p_mouse_pos.x - p_pin_pos.x;
     float dy = p_mouse_pos.y - p_pin_pos.y;
@@ -637,7 +640,7 @@ bool Renderer::isPinHovered(ImVec2 p_pin_pos, ImVec2 p_mouse_pos) const
 }
 
 // ----------------------------------------------------------------------------
-ImVec2 Renderer::calculateNodeSize(const IDE::Node& p_node) const
+ImVec2 TreeRenderer::calculateNodeSize(const Editor::Node& p_node) const
 {
     float height = 24.0f + NODE_PADDING; // Header
     height += 18.0f;                     // Name
@@ -668,7 +671,7 @@ ImVec2 Renderer::calculateNodeSize(const IDE::Node& p_node) const
 }
 
 // ----------------------------------------------------------------------------
-void Renderer::calculatePinPositions(NodeVisual& p_visual,
+void TreeRenderer::calculatePinPositions(NodeVisual& p_visual,
                                      bool p_has_input,
                                      bool p_has_output,
                                      bool p_is_top_to_bottom) const
@@ -712,7 +715,7 @@ void Renderer::calculatePinPositions(NodeVisual& p_visual,
 }
 
 // ----------------------------------------------------------------------------
-ImVec2 Renderer::screenToCanvas(ImVec2 p_screen_pos) const
+ImVec2 TreeRenderer::screenToCanvas(ImVec2 p_screen_pos) const
 {
     return ImVec2(
         (p_screen_pos.x - m_canvas_pos.x - m_canvas_offset.x) / m_canvas_zoom,
@@ -720,7 +723,7 @@ ImVec2 Renderer::screenToCanvas(ImVec2 p_screen_pos) const
 }
 
 // ----------------------------------------------------------------------------
-ImVec2 Renderer::canvasToScreen(ImVec2 p_canvas_pos) const
+ImVec2 TreeRenderer::canvasToScreen(ImVec2 p_canvas_pos) const
 {
     return ImVec2(
         p_canvas_pos.x * m_canvas_zoom + m_canvas_offset.x + m_canvas_pos.x,
@@ -728,7 +731,7 @@ ImVec2 Renderer::canvasToScreen(ImVec2 p_canvas_pos) const
 }
 
 // ----------------------------------------------------------------------------
-ImU32 Renderer::getNodeColor(const std::string& p_type) const
+ImU32 TreeRenderer::getNodeColor(const std::string& p_type) const
 {
     auto it = s_type_colors.find(p_type);
     if (it != s_type_colors.end())
@@ -739,7 +742,7 @@ ImU32 Renderer::getNodeColor(const std::string& p_type) const
 }
 
 // ----------------------------------------------------------------------------
-bool Renderer::getLinkCreated(ID& p_from_node, ID& p_to_node) const
+bool TreeRenderer::getLinkCreated(ID& p_from_node, ID& p_to_node) const
 {
     if (m_link_created_this_frame)
     {
@@ -751,7 +754,7 @@ bool Renderer::getLinkCreated(ID& p_from_node, ID& p_to_node) const
 }
 
 // ----------------------------------------------------------------------------
-bool Renderer::getLinkDeleted(ID& p_from_node, ID& p_to_node) const
+bool TreeRenderer::getLinkDeleted(ID& p_from_node, ID& p_to_node) const
 {
     if (m_link_deleted_this_frame)
     {
@@ -763,7 +766,7 @@ bool Renderer::getLinkDeleted(ID& p_from_node, ID& p_to_node) const
 }
 
 // ----------------------------------------------------------------------------
-bool Renderer::getSubTreeToggled(ID& p_node_id) const
+bool TreeRenderer::getSubTreeToggled(ID& p_node_id) const
 {
     if (m_toggled_subtree_id >= 0)
     {
@@ -774,7 +777,7 @@ bool Renderer::getSubTreeToggled(ID& p_node_id) const
 }
 
 // ----------------------------------------------------------------------------
-bool Renderer::getLinkDroppedInVoid(ID& p_from_node) const
+bool TreeRenderer::getLinkDroppedInVoid(ID& p_from_node) const
 {
     if (m_link_dropped_in_void)
     {
@@ -785,7 +788,7 @@ bool Renderer::getLinkDroppedInVoid(ID& p_from_node) const
 }
 
 // ----------------------------------------------------------------------------
-Renderer::ID Renderer::getHoveredNodeId() const
+TreeRenderer::ID TreeRenderer::getHoveredNodeId() const
 {
     ImVec2 mouse_pos = ImGui::GetMousePos();
 
@@ -800,3 +803,5 @@ Renderer::ID Renderer::getHoveredNodeId() const
 
     return -1;
 }
+
+} // namespace oakular

@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Robotik-tests with gdb",
+            "name": "BlackThorn-tests with gdb",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Robotik-tests",
+            "program": "${workspaceFolder}/build/BlackThorn-tests",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -21,13 +21,11 @@
             ]
         },
         {
-            "name": "Robotik-viewer with gdb",
+            "name": "Oakular with gdb",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Robotik-Viewer",
-            "args": [
-                "${workspaceFolder}/data/scara_robot.urdf"
-            ],
+            "program": "${workspaceFolder}/build/Oakular",
+            "args": [],
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "environment": [],

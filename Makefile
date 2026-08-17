@@ -25,10 +25,12 @@ ORCHESTRATOR_MODE := 1
 include $(M)/project/Makefile
 
 ###############################################################################
-# Internal libs to compile in the correct order
+# Internal libs to compile in the correct order: the graphical layer links
+# against the logical one.
 #
-LIB_BEHAVIOR_TREE := $(call internal-lib,behavior-tree)
-INTERNAL_LIBS := $(LIB_BEHAVIOR_TREE)
+LIB_BLACKTHORN := $(call internal-lib,blackthorn)
+LIB_OAKULAR := $(call internal-lib,oakular)
+INTERNAL_LIBS := $(LIB_BLACKTHORN) $(LIB_OAKULAR)
 PATH_SRC_BLACKTHORN := $(P)/src/BlackThorn
 PATH_SRC_OAKULAR := $(P)/src/Oakular
 PATH_APP_OAKULAR := $(P)/applications/Oakular

@@ -45,11 +45,6 @@ NOT_PKG_LIBS += $(BLACKTHORN_LINK_LIBS)
 #
 SRC_FILES := $(call rwildcard,$(CURRENT_DIR),*.cpp)
 
-###################################################
-# Set Libraries.
-#
-PKG_LIBS += sfml-network
-
 ###############################################################################
 # Sharable information between all Makefiles
 #

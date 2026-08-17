@@ -20,7 +20,7 @@ public:
                   std::cout << "[Leaf] Engaging " << *target << '\n';
                   return bt::Status::SUCCESS;
               },
-              std::move(blackboard))
+              blackboard)
     {
     }
 };

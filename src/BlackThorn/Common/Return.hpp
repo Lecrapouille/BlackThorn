@@ -4,7 +4,7 @@
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
@@ -13,7 +13,7 @@
 #include <string>
 #include <utility>
 
-namespace robotik {
+namespace bt {
 
 // ****************************************************************************
 //! \brief Return type template that holds either a success value or an error.
@@ -182,4 +182,4 @@ private:
     bool m_has_value = false;
 };
 
-} // namespace robotik
+} // namespace bt

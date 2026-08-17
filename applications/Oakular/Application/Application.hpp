@@ -4,7 +4,7 @@
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
@@ -17,7 +17,7 @@
 #include <memory>
 #include <string>
 
-namespace robotik::renderer {
+namespace oakular {
 
 // ****************************************************************************
 //! \brief Base application class with Dear ImGui integration.
@@ -181,4 +181,4 @@ private:
     std::unique_ptr<DearImGuiApplication> m_imgui_app;
 };
 
-} // namespace robotik::renderer
+} // namespace oakular

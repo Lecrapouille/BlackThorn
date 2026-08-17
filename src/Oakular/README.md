@@ -1,168 +1,164 @@
-# Behavior Tree Editor
+# Oakular - Embeddable behavior tree editor
 
-Version 2.0 - Architecture modulaire
+Oakular is the graphical layer of BlackThorn. It offers two modes:
 
-## Overview
+- **Creation**: build and edit behavior trees graphically, load and save them as YAML.
+- **Visualizer**: display, in real time, the execution of a tree running in another
+  process, fed over TCP by a `bt::VisualizerClient`.
 
-Éditeur graphique pour les arbres de comportement avec deux modes :
-- **Editor** : Créer et éditer des arbres visuellement
-- **Visualizer** : Visualiser en temps réel l'exécution d'arbres distants via TCP
+## The embedding contract
 
-## Architecture
+`oakular::Editor` is a pure Dear ImGui component. It guarantees three things, and
+they are what makes it embeddable in any host:
 
-### Structure des fichiers
+1. It never creates a window, an OpenGL context or an ImGui context, and never
+   calls GLFW. The host owns the frame.
+2. It compiles no third-party source into its archive. It consumes the Dear ImGui
+   headers only, at a path the host imposes through `IMGUI_DIR`, so that a single
+   copy of ImGui ends up in the final binary.
+3. It exposes no symbol in the global namespace: everything lives in `oakular`,
+   and the engine in `bt`.
 
-```
-src/Editor/
-├── main.cpp                    # Point d'entrée
-├── BehaviorTreeEditor.hpp/cpp  # Classe principale (hérite OpenGLApplication)
-├── EditorNode.hpp              # Structures de données (EditorNode, EditorLink, etc.)
-├── NodeRenderer.hpp/cpp        # Rendu des nœuds avec ImNodes
-├── VisualizerServer.hpp/cpp    # Serveur TCP avec SFML
-└── CMakeLists.txt              # Configuration de compilation
-```
+Anything the editor cannot do on its own — browsing the file system, closing the
+window — it asks for through a signal.
 
-### Composants
+## Minimal host
 
-#### 1. BehaviorTreeEditor (Classe principale)
+```cpp
+#include "Oakular/Oakular.hpp"
 
-Hérite de `robotik::renderer::OpenGLApplication` pour gérer :
-- La fenêtre OpenGL
-- L'interface ImGui
-- La boucle de rendu
+oakular::Editor editor;                 // no width, no height, no window
 
-**Responsabilités** :
-- Gestion des modes (Editor/Visualizer)
-- Coordination entre les composants
-- Gestion des menus et des interfaces utilisateur
-- Opérations sur les nœuds (ajout, suppression, liens)
+// Once per frame, outside of the ImGui draw calls.
+editor.update(delta_time);
 
-#### 2. EditorNode (Structures de données)
+// Inside the frame, between ImGui::NewFrame() and ImGui::Render().
+editor.draw("Behavior Tree Editor");
 
-Définit les types et structures :
-- `BTNodeType` : Énumération des types de nœuds
-- `EditorNode` : Représentation d'un nœud dans l'éditeur
-- `EditorLink` : Lien entre deux nœuds
-- `EditorMode` : Mode de l'éditeur
-
-#### 3. NodeRenderer (Rendu)
-
-Utilise **ImNodes** pour le rendu graphique :
-- Initialisation du contexte ImNodes
-- Rendu des nœuds avec codes couleurs par type
-- Gestion des interactions (sélection, création/suppression de liens)
-- Gestion des pins d'entrée/sortie
-
-#### 4. VisualizerServer (Serveur TCP)
-
-Utilise **SFML Network** pour :
-- Écouter les connexions TCP entrantes (port 8888 par défaut)
-- Recevoir des données YAML depuis des clients
-- Mode non-bloquant pour ne pas geler l'interface
-
-## Dépendances
-
-- **OpenGL** : Rendu graphique
-- **GLFW** : Gestion de fenêtre
-- **GLEW** : Extensions OpenGL
-- **ImGui** : Interface utilisateur
-- **ImNodes** : Éditeur de graphes de nœuds
-- **SFML Network** : Communication TCP
-
-## Compilation
-
-```bash
-mkdir build
-cd build
-cmake ..
-make
+// Inside your menu bar, between BeginMenuBar and EndMenuBar.
+editor.drawMenuBar();
 ```
 
-## Utilisation
+`doc/examples/Embedded/Embedded.cpp` is a complete host: its own GLFW window, its
+own ImGui context, its own dockspace, and no dependency on the `Application`
+layer of the standalone application.
 
-### Mode Editor
+## API
 
-1. Lancer l'application
-2. Menu → Mode → Editor
-3. Clic droit ou Espace : Ouvrir la palette de nœuds
-4. Créer des liens en glissant depuis les pins de sortie vers les pins d'entrée
-5. Supprimer : Sélectionner un nœud et appuyer sur Delete
-6. Auto Layout : Menu → Edit → Auto Layout
+### Construction
 
-### Mode Visualizer
+| Method | Purpose |
+|---|---|
+| `Editor()` | Empty tree with its own blackboard |
+| `Editor(bt::Blackboard::Ptr)` | Share a blackboard owned by the host, so the edited tree and the rest of the host see the same variables |
+| `setBlackboard(ptr)` | Replace the edited blackboard later on |
+| `blackboard()` | Retrieve it, to hand it over to a running `bt::Tree` |
 
-1. Menu → Mode → Visualizer
-2. Le serveur démarre automatiquement sur le port 8888
-3. Connecter un client pour envoyer des données YAML
-4. L'arbre s'affiche automatiquement à réception
+### Life cycle, driven by the host
 
-### Raccourcis clavier
+| Method | When to call it |
+|---|---|
+| `setup()` | Optional. The constructor already initializes the editor; use it to restart from scratch |
+| `update(float dt)` | Once per frame, outside of the ImGui draw calls. Polls the visualizer server |
+| `teardown()` | Optional. Called by the destructor |
 
-- `Ctrl+O` : Charger un fichier YAML
-- `Ctrl+S` : Sauvegarder en YAML
-- `Ctrl+L` : Auto Layout
-- `Space` : Ouvrir la palette de nœuds
-- `Delete` : Supprimer le nœud sélectionné
-- `Ctrl+Q` : Quitter
+### Drawing, inside an ImGui frame
 
-## Protocole TCP (Mode Visualizer)
+| Method | Draws |
+|---|---|
+| `draw(title)` | Everything: keyboard shortcuts, tree window and blackboard panel |
+| `drawEditorWindow(title)` | The tree window alone |
+| `drawBlackboardPanel()` | The blackboard panel alone, so the host can dock it where it wants |
+| `drawMenuBar()` | The File, Edit, View and Mode menus, to be called from the host menu bar |
+| `drawBehaviorTree()` | The canvas alone, at the current ImGui cursor |
 
-### Format des messages
+### Tree edition
 
-Le serveur attend des données YAML au format suivant :
+`reset()`, `setMode()`, `mode()`, `addNode()`, `addNodeAndLink()`, `deleteNode()`,
+`createLink()`, `deleteLink()`, `loadFromYaml()`, `loadFromYamlString()`,
+`saveToYaml()`, `autoLayoutNodes()`, `toggleSubTreeExpansion()`, `isModified()`,
+`filepath()`, `selectedNode()`.
 
-```yaml
-type: Sequence
-name: RootSequence
-children:
-  - type: Action
-    name: MoveForward
-  - type: Condition
-    name: IsObstacleDetected
----
+### Extending the node palette
+
+The palette lists the ten built-in node types. A host declares its own domain
+nodes so that they can be placed graphically, mirroring what it registers in its
+`bt::NodeFactory`:
+
+```cpp
+editor.registerNodeType("MoveToTarget", "Robot");
+editor.registerNodeType("BatteryAboveThreshold", "Robot", /* can_have_ports */ true);
 ```
 
-Le marqueur `---` ou `EOF` indique la fin du message.
+The category groups the entries in the palette. `can_have_ports` decides whether
+the node edition popup offers blackboard input and output ports.
 
-### Exemple de client Python
+### Signals
 
-```python
-import socket
+| Signal | Meaning |
+|---|---|
+| `onFileDialogRequested(FileDialog)` | The user asked to load or save. Open your own file browser, then call `loadFromYaml` or `saveToYaml` |
+| `onQuitRequested()` | The user asked to close. Check `isModified()` and decide |
+| `onNodeModified(ID)` | A node was edited through the popup |
+| `onLinkCreated(ID, ID)` | A link was created |
+| `onLinkDeleted(ID)` | A link was deleted |
 
-def send_tree(yaml_data):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(('localhost', 8888))
-    sock.sendall(yaml_data.encode() + b'\n---\n')
-    sock.close()
+### Visualizer server
+
+The editor never creates a server: the host injects one, which is what lets an
+embedded editor stay away from TCP entirely.
+
+```cpp
+editor.attachServer(std::make_shared<oakular::Server>());
 ```
 
-## Amélioration futures
+Available only when built with `OAKULAR_WITH_SERVER=1` (the default), which
+defines `OAKULAR_HAS_SERVER`. Without a server the Visualizer mode reports itself
+unavailable and the Creation mode is unaffected.
 
-- [ ] Implémenter YamlLoader pour charger/sauvegarder des arbres
-- [ ] Parser automatiquement le YAML reçu en mode Visualizer
-- [ ] Ajouter la validation des liens (pas de cycles)
-- [ ] Exporter vers des images (PNG, SVG)
+## Files
+
+```
+src/Oakular/
+├── Oakular.hpp          # Umbrella header for hosts
+├── Editor.hpp/cpp       # Tree model, YAML I/O, layout
+├── EditorWidgets.cpp    # Dear ImGui widgets of the editor
+├── TreeRenderer.hpp/cpp # Canvas: nodes, links, pan and zoom
+├── Server.hpp/cpp       # Optional TCP server for the Visualizer mode
+└── Oakular.deps.mk      # Compile flags shared with the hosts
+```
+
+## Dependencies
+
+- **Dear ImGui**: headers only. The host compiles it, `misc/cpp/imgui_stdlib.cpp`
+  included, and owns the context.
+- **BlackThorn**: the behavior tree engine, `libblackthorn.a`.
+- **SFML Network**: only for the optional visualizer server.
+
+Notably absent: GLFW, GLEW and OpenGL are dependencies of the host, not of the
+editor. `ImGuiFileDialog` is a choice of the host too.
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+O` | Ask the host for a load dialog |
+| `Ctrl+S` | Ask the host for a save dialog |
+| `Ctrl+L` | Auto layout |
+| `Ctrl+Q` | Ask the host to quit |
+| `Space` or right click | Open the node palette |
+| `Delete` | Delete the selected node |
+| Double click | Edit a node, or open the definition of a SubTree |
+
+## Future improvements
+
+- [ ] Link validation (no cycles)
+- [ ] Export to PNG or SVG
 - [ ] Undo/Redo
-- [ ] Copier/Coller de sous-arbres
-- [ ] Bibliothèque de templates
-- [ ] Débogage pas à pas en mode Visualizer
-
-## Différences avec v1
-
-### Version 1 (BehaviorTreeEditor.cpp_old)
-- Tout dans un seul fichier (~1873 lignes)
-- Pas d'héritage de classe de base
-- Gestion manuelle du rendu des ports et des liens
-- Code plus complexe et difficile à maintenir
-
-### Version 2 (Actuelle)
-- Architecture modulaire (~150 lignes par fichier)
-- Héritage de OpenGLApplication
-- Délégation du rendu à NodeRenderer
-- Séparation claire des responsabilités
-- Plus facile à tester et à étendre
+- [ ] Copy and paste of subtrees
+- [ ] Template library
+- [ ] Step by step debugging in Visualizer mode
 
 ## License
 
 MIT License - Copyright (c) 2025 Quentin Quadrat
-

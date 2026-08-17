@@ -757,3 +757,145 @@ TEST(TestNodeWithBlackboard, LiteralValues)
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(*result, 12);
 }
+
+// ===========================================================================
+// bt::BlackboardSerializer Tests
+// ===========================================================================
+
+// ------------------------------------------------------------------------
+//! \brief Load a YAML map into a blackboard, the way the loader and the
+//!        editor do when reading the Blackboard section of a tree.
+// ------------------------------------------------------------------------
+static bt::Blackboard::Ptr loadBlackboardFromYaml(std::string const& p_yaml)
+{
+    auto blackboard = std::make_shared<bt::Blackboard>();
+    auto document = bt::YamlDocument::parseText(p_yaml);
+    if (document)
+    {
+        bt::BlackboardSerializer::load(*blackboard, document.getValue().root());
+    }
+    return blackboard;
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test type inference on plain YAML scalars.
+//! \details GIVEN a YAML map holding unquoted scalars, WHEN loading it into
+//!          a blackboard, THEN EXPECT each entry gets the type its text
+//!          spells.
+// ------------------------------------------------------------------------
+TEST(TestBlackboardSerializer, PlainScalarsGetTheirTypeInferred)
+{
+    // GIVEN & WHEN: Loading a YAML map of unquoted scalars
+    auto bb = loadBlackboardFromYaml("count: 42\n"
+                                     "ratio: 0.5\n"
+                                     "flag: true\n"
+                                     "label: hello\n");
+
+    // THEN: EXPECT each entry holds the type spelled by its text
+    EXPECT_EQ(bb->get<int>("count"), std::optional<int>(42));
+    EXPECT_EQ(bb->get<double>("ratio"), std::optional<double>(0.5));
+    EXPECT_EQ(bb->get<bool>("flag"), std::optional<bool>(true));
+    EXPECT_EQ(bb->get<std::string>("label"),
+              std::optional<std::string>("hello"));
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test that YAML quoting prevents type inference.
+//! \details GIVEN a YAML map holding quoted scalars that look numeric,
+//!          WHEN loading it into a blackboard, THEN EXPECT they are kept as
+//!          strings, as the YAML specification mandates.
+// ------------------------------------------------------------------------
+TEST(TestBlackboardSerializer, QuotedScalarsStayStrings)
+{
+    // GIVEN & WHEN: Loading quoted scalars that look like numbers
+    auto bb = loadBlackboardFromYaml("id: \"42\"\n"
+                                     "ratio: '0.5'\n"
+                                     "flag: \"true\"\n");
+
+    // THEN: EXPECT the quotes preserved the string type
+    EXPECT_EQ(bb->get<std::string>("id"), std::optional<std::string>("42"));
+    EXPECT_EQ(bb->get<std::string>("ratio"), std::optional<std::string>("0.5"));
+    EXPECT_EQ(bb->get<std::string>("flag"), std::optional<std::string>("true"));
+    EXPECT_FALSE(bb->get<int>("id").has_value());
+    EXPECT_FALSE(bb->get<double>("ratio").has_value());
+    EXPECT_FALSE(bb->get<bool>("flag").has_value());
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test that a partially numeric scalar is not truncated.
+//! \details GIVEN scalars starting with digits but not spelling a number,
+//!          WHEN loading them into a blackboard, THEN EXPECT the whole text
+//!          is kept as a string instead of being cut at the first non-digit.
+// ------------------------------------------------------------------------
+TEST(TestBlackboardSerializer, TextWithNumericPrefixStaysString)
+{
+    // GIVEN & WHEN: Loading scalars whose text merely starts with a number
+    auto bb = loadBlackboardFromYaml("goal: 1;2;3\n"
+                                     "basket: 3 apples\n"
+                                     "version: 1.2.3\n");
+
+    // THEN: EXPECT the full text is preserved
+    EXPECT_EQ(bb->get<std::string>("goal"),
+              std::optional<std::string>("1;2;3"));
+    EXPECT_EQ(bb->get<std::string>("basket"),
+              std::optional<std::string>("3 apples"));
+    EXPECT_EQ(bb->get<std::string>("version"),
+              std::optional<std::string>("1.2.3"));
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test the YAML spellings of the special real numbers.
+//! \details GIVEN the YAML forms .inf, -.inf and .nan, WHEN loading them
+//!          into a blackboard, THEN EXPECT they are stored as reals rather
+//!          than kept as text.
+//! \note The numeric values themselves are not asserted: the project builds
+//!       with -ffast-math, under which std::isinf and std::isnan fold to
+//!       false.
+// ------------------------------------------------------------------------
+TEST(TestBlackboardSerializer, SpecialRealsAreRead)
+{
+    // GIVEN & WHEN: Loading the YAML spellings of the special reals
+    auto bb = loadBlackboardFromYaml("high: .inf\n"
+                                     "low: -.inf\n"
+                                     "undefined: .nan\n");
+
+    // THEN: EXPECT each entry holds a real, not the source text
+    for (char const* key : {"high", "low", "undefined"})
+    {
+        auto raw = bb->raw(key);
+        ASSERT_TRUE(raw.has_value()) << key;
+        EXPECT_TRUE(std::holds_alternative<double>(raw->asBase())) << key;
+        EXPECT_FALSE(bb->get<std::string>(key).has_value()) << key;
+    }
+}
+
+// ------------------------------------------------------------------------
+//! \brief Test that saving then reloading preserves the value types.
+//! \details GIVEN a blackboard holding strings that look like scalars of
+//!          another type, WHEN dumping it to YAML and loading it back, THEN
+//!          EXPECT the types are unchanged, meaning the writer quoted them.
+// ------------------------------------------------------------------------
+TEST(TestBlackboardSerializer, TypesSurviveARoundTrip)
+{
+    // GIVEN: A blackboard whose strings look like numbers or booleans
+    bt::Blackboard source;
+    source.set("numeric_string", std::string("42"));
+    source.set("real_string", std::string("0.5"));
+    source.set("bool_string", std::string("true"));
+    source.set("real_int", 42);
+    source.set("real_bool", true);
+
+    // WHEN: Dumping to YAML and loading the result back
+    auto reloaded =
+        loadBlackboardFromYaml(bt::BlackboardSerializer::dump(source));
+
+    // THEN: EXPECT every entry kept its original type
+    EXPECT_EQ(reloaded->get<std::string>("numeric_string"),
+              std::optional<std::string>("42"));
+    EXPECT_EQ(reloaded->get<std::string>("real_string"),
+              std::optional<std::string>("0.5"));
+    EXPECT_EQ(reloaded->get<std::string>("bool_string"),
+              std::optional<std::string>("true"));
+    EXPECT_EQ(reloaded->get<int>("real_int"), std::optional<int>(42));
+    EXPECT_EQ(reloaded->get<bool>("real_bool"), std::optional<bool>(true));
+}

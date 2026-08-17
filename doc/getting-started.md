@@ -27,10 +27,16 @@ BlackThorn comes with **Oakular** - a standalone editor and visualizer applicati
 ```
 
 Oakular can work in two modes:
+
 - **Editor mode**: Create and edit behavior trees graphically
 - **Visualizer mode**: Display runtime behavior trees from TCP clients
 
 A blank window will appear waiting for a connection with a client application using this library. Launch it before a demo to see live node states.
+
+The editor is also embeddable in your own application: `oakular::Editor` is a pure
+Dear ImGui component that draws inside the frame you own. See the
+[embedding section of the README](../README.md#-embedding-blackthorn-in-your-own-project)
+and `doc/examples/Embedded/`.
 
 ## 🏃 Running Examples
 
@@ -38,6 +44,7 @@ A blank window will appear waiting for a connection with a client application us
 make examples -j8
 ./build/Example-GameState   # doc/examples/GameState
 ./build/Example-Patrol      # doc/examples/Patrol
+./build/Example-Embedded    # doc/examples/Embedded
 ```
 
 Each example folder contains its own `Makefile`, YAML description, and C++ entry point. Use them as templates for your own projects.

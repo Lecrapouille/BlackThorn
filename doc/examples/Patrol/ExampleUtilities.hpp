@@ -1,15 +1,34 @@
+/**
+ * @file ExampleUtilities.hpp
+ * @brief Printing helpers shared by the examples loading composite YAML data.
+ *
+ * The blackboard stores an entry as a \ref bt::BlackboardValue, a variant able
+ * to hold scalars, sequences and nested mappings. These helpers walk that
+ * variant so that an example can dump what its YAML file loaded.
+ *
+ * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
+ * distributed under MIT License
+ * @see https://github.com/Lecrapouille/BlackThorn
+ */
+
 #pragma once
 
+#include "BlackThorn/Blackboard/BlackboardValue.hpp"
+
 #include <any>
+#include <cstddef>
 #include <iostream>
 #include <string>
-#include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace bt::examples {
 
-using AnyMap = std::unordered_map<std::string, std::any>;
-using AnyList = std::vector<std::any>;
+//! \brief A blackboard entry loaded from a YAML mapping.
+using ValueMap = BlackboardMap;
+//! \brief A blackboard entry loaded from a YAML sequence of anything.
+using ValueList = std::vector<BlackboardValue>;
+//! \brief A blackboard entry loaded from a YAML sequence of numbers.
 using NumericList = std::vector<double>;
 
 inline void printIndent(int indent)
@@ -20,81 +39,110 @@ inline void printIndent(int indent)
     }
 }
 
-inline void printAny(std::any const& value, int indent = 0)
+// ----------------------------------------------------------------------------
+//! \brief Print a blackboard entry, recursing into sequences and mappings.
+//! \param[in] p_value Entry to print.
+//! \param[in] p_indent Number of leading spaces.
+// ----------------------------------------------------------------------------
+void printValue(BlackboardValue const& p_value, int p_indent = 0);
+
+// ----------------------------------------------------------------------------
+//! \brief Print \p p_value when it holds a \c T streamable as is.
+//! \return \c true when the alternative matched and was printed.
+// ----------------------------------------------------------------------------
+template <typename T>
+inline bool printScalarAs(BlackboardValue const& p_value, int p_indent)
 {
-    if (!value.has_value())
+    auto const* scalar = std::get_if<T>(&p_value.asBase());
+    if (scalar == nullptr)
     {
-        printIndent(indent);
+        return false;
+    }
+    printIndent(p_indent);
+    std::cout << *scalar << std::endl;
+    return true;
+}
+
+inline void printValue(BlackboardValue const& p_value, int p_indent)
+{
+    auto const& base = p_value.asBase();
+
+    if (std::holds_alternative<std::monostate>(base))
+    {
+        printIndent(p_indent);
         std::cout << "null" << std::endl;
         return;
     }
 
-    if (value.type() == typeid(int))
+    // Streamed apart from the other scalars: bool would print as 0 or 1 and a
+    // string reads better quoted.
+    if (auto const* flag = std::get_if<bool>(&base))
     {
-        printIndent(indent);
-        std::cout << std::any_cast<int>(value) << std::endl;
+        printIndent(p_indent);
+        std::cout << (*flag ? "true" : "false") << std::endl;
         return;
     }
-    if (value.type() == typeid(double))
+    if (auto const* text = std::get_if<std::string>(&base))
     {
-        printIndent(indent);
-        std::cout << std::any_cast<double>(value) << std::endl;
+        printIndent(p_indent);
+        std::cout << '"' << *text << '"' << std::endl;
         return;
     }
-    if (value.type() == typeid(bool))
+    if (printScalarAs<int>(p_value, p_indent) ||
+        printScalarAs<double>(p_value, p_indent) ||
+        printScalarAs<float>(p_value, p_indent) ||
+        printScalarAs<std::size_t>(p_value, p_indent))
     {
-        printIndent(indent);
-        std::cout << (std::any_cast<bool>(value) ? "true" : "false")
-                  << std::endl;
         return;
     }
-    if (value.type() == typeid(std::string))
+
+    if (auto const* numbers = std::get_if<NumericList>(&base))
     {
-        printIndent(indent);
-        std::cout << '"' << std::any_cast<std::string>(value) << '"'
-                  << std::endl;
-        return;
-    }
-    if (value.type() == typeid(NumericList))
-    {
-        printIndent(indent);
+        printIndent(p_indent);
         std::cout << "[ ";
-        for (double d : std::any_cast<NumericList>(value))
+        for (double number : *numbers)
         {
-            std::cout << d << ' ';
+            std::cout << number << ' ';
         }
         std::cout << ']' << std::endl;
         return;
     }
-    if (value.type() == typeid(AnyList))
+    if (auto const* list = std::get_if<ValueList>(&base))
     {
-        printIndent(indent);
-        std::cout << "[" << std::endl;
-        for (auto const& entry : std::any_cast<AnyList>(value))
+        printIndent(p_indent);
+        std::cout << '[' << std::endl;
+        for (auto const& entry : *list)
         {
-            printAny(entry, indent + 2);
+            printValue(entry, p_indent + 2);
         }
-        printIndent(indent);
-        std::cout << "]" << std::endl;
+        printIndent(p_indent);
+        std::cout << ']' << std::endl;
         return;
     }
-    if (value.type() == typeid(AnyMap))
+    if (auto const* map = std::get_if<ValueMap>(&base))
     {
-        printIndent(indent);
-        std::cout << "{" << std::endl;
-        for (auto const& [key, entry] : std::any_cast<AnyMap>(value))
+        printIndent(p_indent);
+        std::cout << '{' << std::endl;
+        for (auto const& [key, entry] : *map)
         {
-            printIndent(indent + 2);
-            std::cout << key << ":" << std::endl;
-            printAny(entry, indent + 4);
+            printIndent(p_indent + 2);
+            std::cout << key << ':' << std::endl;
+            printValue(entry, p_indent + 4);
         }
-        printIndent(indent);
-        std::cout << "}" << std::endl;
+        printIndent(p_indent);
+        std::cout << '}' << std::endl;
+        return;
+    }
+    if (auto const* boxed = std::get_if<std::any>(&base))
+    {
+        printIndent(p_indent);
+        std::cout << "<custom type: " << boxed->type().name() << '>'
+                  << std::endl;
         return;
     }
 
-    printIndent(indent);
-    std::cout << "<unhandled type: " << value.type().name() << ">" << std::endl;
+    printIndent(p_indent);
+    std::cout << "<unhandled alternative>" << std::endl;
 }
 
 } // namespace bt::examples

@@ -20,12 +20,17 @@ BTCPP_DIR := $(P)/external/BehaviorTree.CPP
 BTCPP_LIB := $(BTCPP_DIR)/build/libbehaviortree_cpp.a
 BTCPP_TINYXML2_LIB := $(BTCPP_DIR)/build/3rdparty/tinyxml2/libtinyxml2.a
 
-INCLUDES += $(CURRENT_DIR) $(P)/src $(BTCPP_DIR)/include $(THIRD_PARTIES_DIR)
+INCLUDES += $(CURRENT_DIR) $(P)/src $(THIRD_PARTIES_DIR)
 VPATH += $(CURRENT_DIR)
 
+# BehaviorTree.CPP is the library BlackThorn is compared against. Its headers
+# are noisy under the strict warning set, so they come in as system headers.
+# Raw flags cannot travel through INCLUDES, which prefixes each word with -I.
+USER_CXXFLAGS += -isystem $(abspath $(BTCPP_DIR)/include)
+
 INTERNAL_LIBS :=
-PKG_LIBS += sfml-network
-NOT_PKG_LIBS += $(BLACKTHORN_LINK_LIBS) $(BTCPP_LIB) $(BTCPP_TINYXML2_LIB) -lpthread -dl
+NOT_PKG_LIBS += $(BLACKTHORN_LINK_LIBS) $(BTCPP_LIB) $(BTCPP_TINYXML2_LIB)
+NOT_PKG_LIBS += -lpthread -ldl
 
 SRC_FILES := $(CURRENT_DIR)/main.cpp
 

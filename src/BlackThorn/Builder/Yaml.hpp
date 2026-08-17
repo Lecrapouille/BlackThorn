@@ -5,6 +5,10 @@
  * Pipeline: \c YamlDocument / YamlNode → \ref TreeDocument / Builder.
  * Parse error handling: see \c Yaml.cpp.
  *
+ * rapidyaml is an implementation detail: this header only forward declares the
+ * two class names it needs, so a project consuming BlackThorn neither includes
+ * \c <ryml.hpp> nor needs its include path.
+ *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
  */
@@ -14,15 +18,20 @@
 #include "BlackThorn/Common/Return.hpp"
 
 #include <cstddef>
-#include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
-#include <ryml.hpp>
+// Mirrors <c4/yml/fwd.hpp>, so that a translation unit including <ryml.hpp>
+// afterwards sees consistent declarations. Note that ryml is a namespace made
+// of `using namespace c4::yml`, hence the declarations below use c4::yml.
+namespace c4::yml {
+class Tree;
+class ConstNodeRef;
+} // namespace c4::yml
 
 namespace bt {
 
@@ -65,6 +74,14 @@ public:
     //! \brief Whether the node is a leaf scalar (neither map nor sequence).
     // ------------------------------------------------------------------------
     [[nodiscard]] bool isScalar() const;
+
+    // ------------------------------------------------------------------------
+    //! \brief Whether the scalar was written between quotes in the source.
+    //!
+    //! Quoting carries a meaning in YAML: \c "42" is a string while \c 42 is an
+    //! integer. Readers inferring a type from the text must not infer one here.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isQuotedScalar() const;
 
     // ------------------------------------------------------------------------
     //! \brief Whether the node holds no children.
@@ -157,22 +174,25 @@ public:
 
 private:
 
+    //! \brief Sentinel marking a node index as unset (rapidyaml's \c NONE).
+    static constexpr std::size_t kInvalidId = static_cast<std::size_t>(-1);
+
     // ------------------------------------------------------------------------
     //! \brief Bind a view to node \p p_id inside tree \p p_tree.
     // ------------------------------------------------------------------------
-    YamlNode(ryml::Tree const* p_tree, ryml::id_type p_id) noexcept;
+    YamlNode(c4::yml::Tree const* p_tree, std::size_t p_id) noexcept;
 
     // ------------------------------------------------------------------------
     //! \brief Underlying rapidyaml handle for the referenced node.
+    //! \note Declared with an incomplete return type on purpose: only Yaml.cpp,
+    //!       which includes rapidyaml, can call it.
     // ------------------------------------------------------------------------
-    [[nodiscard]] ryml::ConstNodeRef ref() const;
+    [[nodiscard]] c4::yml::ConstNodeRef ref() const;
 
     //! \brief Owning tree, or \c nullptr for an invalid node.
-    ryml::Tree const* m_tree = nullptr;
+    c4::yml::Tree const* m_tree = nullptr;
     //! \brief Index of the referenced node within \ref m_tree.
-    ryml::id_type m_id = ryml::NONE;
-    //! \brief Sentinel marking a node index as unset.
-    static constexpr ryml::id_type kInvalidId = ryml::NONE;
+    std::size_t m_id = kInvalidId;
 };
 
 // ****************************************************************************
@@ -186,12 +206,39 @@ class YamlDocument
 public:
 
     // ------------------------------------------------------------------------
+    //! \brief Build an empty document, whose \ref root() is invalid.
+    // ------------------------------------------------------------------------
+    YamlDocument();
+
+    // ------------------------------------------------------------------------
+    //! \brief Release the parsed tree and its backing storage.
+    // ------------------------------------------------------------------------
+    ~YamlDocument();
+
+    // ------------------------------------------------------------------------
+    //! \brief Transfer ownership of the parsed tree.
+    //! \note \ref YamlNode views taken from \p p_other stay valid, as the tree
+    //!       itself does not move.
+    // ------------------------------------------------------------------------
+    YamlDocument(YamlDocument&& p_other) noexcept;
+
+    // ------------------------------------------------------------------------
+    //! \brief Transfer ownership of the parsed tree.
+    // ------------------------------------------------------------------------
+    YamlDocument& operator=(YamlDocument&& p_other) noexcept;
+
+    //! \brief Not copyable: the tree holds views into the backing storage, so a
+    //! copy would read the bytes owned by the original document.
+    YamlDocument(YamlDocument const&) = delete;
+    YamlDocument& operator=(YamlDocument const&) = delete;
+
+    // ------------------------------------------------------------------------
     //! \brief Parse a YAML file from disk.
     //! \param[in] p_path Path to the YAML file to read.
     //! \return The parsed document on success, or an error describing the
     //!         read/parse failure.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static robotik::Return<YamlDocument>
+    [[nodiscard]] static Return<YamlDocument>
     parseFile(std::string const& p_path);
 
     // ------------------------------------------------------------------------
@@ -199,7 +246,7 @@ public:
     //! \param[in] p_text YAML text (taken by value; copied into the document).
     //! \return The parsed document on success, or an error on parse failure.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static robotik::Return<YamlDocument>
+    [[nodiscard]] static Return<YamlDocument>
     parseText(std::string p_text);
 
     // ------------------------------------------------------------------------
@@ -223,10 +270,22 @@ public:
 
 private:
 
-    //! \brief Backing storage parsed in place by rapidyaml (NUL-terminated).
-    std::vector<char> m_buffer;
-    //! \brief Parsed node tree; views into \ref m_buffer.
-    ryml::Tree m_tree;
+    //! \brief Backing storage and parsed node tree, defined in Yaml.cpp so that
+    //! rapidyaml stays out of this header.
+    struct Impl;
+    //! \brief Never null on a document that was not moved from.
+    std::unique_ptr<Impl> m_impl;
 };
+
+// ----------------------------------------------------------------------------
+//! \brief Whether a plain scalar would be read back as a number or a boolean.
+//! \param[in] p_text Scalar text, without quotes.
+//!
+//! Writers use this to decide whether a string needs quotes to survive a round
+//! trip: the text \c 42 would come back as an integer, \c "42" as a string. It
+//! answers with the very parsers used by \ref YamlNode, so both sides cannot
+//! drift apart.
+// ----------------------------------------------------------------------------
+[[nodiscard]] bool scalarReadsAsNonString(std::string_view p_text);
 
 } // namespace bt

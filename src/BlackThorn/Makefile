@@ -35,20 +35,18 @@ INCLUDES += $(P)/src/ $(THIRD_PARTIES_DIR)
 VPATH +=  $(P)/src/
 
 ###############################################################################
-# Project defines
-#
-DEFINES +=
-
-###############################################################################
 # Make the list of files to compile
 #
-LIB_FILES += $(call rwildcard,$(CURRENT_DIR),*.cpp)
+LIB_FILES += $(filter-out $(CURRENT_DIR)/Network/%,$(call rwildcard,$(CURRENT_DIR),*.cpp))
 HEADER_FILES := $(call rwildcard,$(CURRENT_DIR),*.hpp)
 
 ###############################################################################
-# Set Libraries
+# Optional network support. The define and the sfml-network dependency come
+# from BlackThorn.deps.mk, shared with the consumers of the library.
 #
-PKG_LIBS += sfml-network
+ifeq ($(BLACKTHORN_WITH_NETWORK),1)
+LIB_FILES += $(call rwildcard,$(CURRENT_DIR)/Network,*.cpp)
+endif
 
 ###############################################################################
 # Sharable information between all Makefiles

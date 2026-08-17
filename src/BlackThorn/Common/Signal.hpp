@@ -4,7 +4,7 @@
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
@@ -13,7 +13,7 @@
 #include <functional>
 #include <map>
 
-namespace robotik {
+namespace bt {
 
 // ****************************************************************************
 //! \brief Signal/Slot system for event handling.
@@ -180,4 +180,4 @@ private:
     typename Signal<Args...>::ConnectionId m_id;
 };
 
-} // namespace robotik
+} // namespace bt

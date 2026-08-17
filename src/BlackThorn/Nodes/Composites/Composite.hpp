@@ -36,10 +36,11 @@ public:
     //! \brief Create and add a new child node of type T.
     //! \tparam T Concrete node type derived from \ref Node.
     //! \param[in] p_args Arguments forwarded to the node constructor.
-    //! \return A reference to the new child node.
+    //! \return A reference to the new child node, to be ignored when the child
+    //! needs no further configuration.
     // ------------------------------------------------------------------------
     template <class T, typename... Args>
-    [[nodiscard]] inline T& addChild(Args&&... p_args)
+    inline T& addChild(Args&&... p_args)
     {
         static_assert(std::is_base_of_v<Node, T>, "T must inherit from Node");
         T& child = tree().emplaceNode<T>(std::forward<Args>(p_args)...);

@@ -22,6 +22,7 @@ TARGET_NAME := Oakular
 TARGET_DESCRIPTION := Oakular - Behavior tree editor and real-time visualizer
 include $(M)/project/Makefile
 include $(P)/src/BlackThorn/BlackThorn.deps.mk
+include $(P)/src/Oakular/Oakular.deps.mk
 
 CURRENT_DIR := $(P)/applications/Oakular
 LIBRARY_DIR := $(P)/src/BlackThorn
@@ -41,37 +42,40 @@ VPATH += $(CURRENT_DIR) $(LIBRARY_DIR)
 # Set third-party libraries. Order matters: dependencies last
 #
 INTERNAL_LIBS :=
-OAKULAR_STATIC_LIB := $(BUILD_PATH)/liboakular.a
 NOT_PKG_LIBS += $(OAKULAR_STATIC_LIB) $(BLACKTHORN_LINK_LIBS)
-
-$(OAKULAR_STATIC_LIB):
-	@$(MAKE) -C $(P)/src/Oakular all
 
 ###############################################################################
 # Make the list of files to compile (application sources only)
 #
 SRC_FILES := $(CURRENT_DIR)/main.cpp
 SRC_FILES += $(CURRENT_DIR)/OakularApp.cpp
+SRC_FILES += $(CURRENT_DIR)/Application/Application.cpp
+SRC_FILES += $(CURRENT_DIR)/Application/DearImGuiApplication.cpp
 
 ###################################################
-# Set third party Dear ImGui (for headers)
+# Compile Dear ImGui. As the host of the editor, this application owns the
+# single copy of ImGui linked in the final binary, backends included.
 #
-IMGUI_DIR := $(THIRD_PARTIES_DIR)/imgui
-INCLUDES += $(IMGUI_DIR) $(IMGUI_DIR)/misc/cpp $(IMGUI_DIR)/backends
-USER_CXXFLAGS += -Wno-conversion -Wno-arith-conversion -Wno-double-promotion -Wno-cast-qual
-USER_CXXFLAGS += -Wno-old-style-cast -Wno-sign-conversion -Wno-duplicated-branches
-USER_CXXFLAGS += -Wno-useless-cast -Wno-ctor-dtor-privacy -Wno-float-equal -Wno-null-dereference
+VPATH += $(IMGUI_DIR) $(IMGUI_DIR)/misc/cpp $(IMGUI_DIR)/backends
+SRC_FILES += $(IMGUI_DIR)/imgui_widgets.cpp $(IMGUI_DIR)/imgui_draw.cpp
+SRC_FILES += $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui.cpp
+SRC_FILES += $(IMGUI_DIR)/misc/cpp/imgui_stdlib.cpp
+SRC_FILES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp
+SRC_FILES += $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 
 ###################################################
-# Set third party ImGuiFileDialog (for headers)
+# Compile third party ImGuiFileDialog. The file browser is a choice of the host
+# application, not of the editor library.
 #
-IMGUIFILEDIALOG_DIR := $(THIRD_PARTIES_DIR)/ImGuiFileDialog
+IMGUIFILEDIALOG_DIR ?= $(THIRD_PARTIES_DIR)/ImGuiFileDialog
 INCLUDES += $(IMGUIFILEDIALOG_DIR)
+VPATH += $(IMGUIFILEDIALOG_DIR)
+SRC_FILES += $(IMGUIFILEDIALOG_DIR)/ImGuiFileDialog.cpp
 
 ###################################################
-# Set Libraries.
+# Set Libraries. The window and OpenGL context belong to this application.
 #
-PKG_LIBS += sfml-network glfw3 glew gl
+PKG_LIBS += glfw3 glew gl
 
 ###############################################################################
 # Sharable information between all Makefiles

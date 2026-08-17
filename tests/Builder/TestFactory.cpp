@@ -16,7 +16,7 @@ namespace {
 
 bt::Node& adoptCreatedNode(bt::Tree& p_tree, std::unique_ptr<bt::Node> p_node)
 {
-    uint32_t index = p_tree.adoptNode(std::move(p_node));
+    size_t index = p_tree.adoptNode(std::move(p_node));
     return p_tree.node(index);
 }
 

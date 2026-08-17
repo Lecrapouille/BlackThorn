@@ -44,5 +44,7 @@
 #include "BlackThorn/Nodes/Leaves/SetBlackboard.hpp"
 #include "BlackThorn/Nodes/Leaves/Wait.hpp"
 
-// Network
-#include "BlackThorn/Network/VisualizerClient.hpp"
+// Network. Only available when built with BLACKTHORN_WITH_NETWORK=1.
+#if defined(BLACKTHORN_HAS_NETWORK)
+#    include "BlackThorn/Network/VisualizerClient.hpp"
+#endif

@@ -1,17 +1,23 @@
 #include "DecoratorExample.hpp"
+#include "LeafExample.hpp"
 #include "ParallelExample.hpp"
 #include "SelectorExample.hpp"
 #include "SequenceExample.hpp"
 
 #include <iostream>
 
+static int usage(char const* program)
+{
+    std::cerr << "Usage: " << program
+              << " [decorator|parallel|selector|sequence|leaf]" << std::endl;
+    return EXIT_FAILURE;
+}
+
 int main(int argc, char* argv[])
 {
     if (argc < 2)
     {
-        std::cerr << "Usage: " << argv[0]
-                  << " [decorator|parallel|selector|sequence]" << std::endl;
-        return EXIT_FAILURE;
+        return usage(argv[0]);
     }
 
     std::string example = argv[1];
@@ -32,8 +38,10 @@ int main(int argc, char* argv[])
     {
         return sequence_example();
     }
+    if (example == "leaf")
+    {
+        return leaf_example();
+    }
 
-    std::cerr << "Usage: " << argv[0]
-              << " [decorator|parallel|selector|sequence|leaf]" << std::endl;
-    return EXIT_FAILURE;
+    return usage(argv[0]);
 }

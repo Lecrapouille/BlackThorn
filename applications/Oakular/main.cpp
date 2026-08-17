@@ -18,7 +18,7 @@ int main()
     try
     {
         // Create and run Oakular editor
-        OakularApp app(1600, 900);
+        oakular::OakularApp app(1600, 900);
 
         if (!app.run())
         {

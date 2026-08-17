@@ -1,25 +1,28 @@
 /**
  * @file OakularApp.hpp
- * @brief Oakular standalone application - Uses the Oakular library
+ * @brief Oakular standalone application - Hosts the Oakular editor.
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
 
-#include "IDE.hpp"
+#include "Application/Application.hpp"
+#include "Oakular/Oakular.hpp"
 
-#include <ImGuiFileDialog.h>
+namespace oakular {
 
 // ****************************************************************************
-//! \brief Oakular standalone application using the Oakular library.
+//! \brief Standalone application hosting the Oakular behavior tree editor.
 //!
-//! This class provides the UI widgets and window management for the Oakular
-//! behavior tree editor. It inherits from IDE which provides the core
-//! functionality (menus, tree management, rendering, serialization).
+//! This class owns what the editor library deliberately does not: the GLFW
+//! window, the Dear ImGui context, the file browser and the quit confirmation.
+//! The editor itself is a plain member: it is composed, not inherited. Any
+//! other application embedding Oakular follows the same pattern.
 // ****************************************************************************
-class OakularApp: public IDE
+class OakularApp: public Application
 {
 public:
 
@@ -35,45 +38,37 @@ public:
     // ------------------------------------------------------------------------
     virtual ~OakularApp() = default;
 
-protected:
+private: // Overrides from Application
 
-    // Override from Application
+    bool onSetup() override;
+    void onTeardown() override;
+    void onUpdate(float const p_dt) override;
+    void onDrawMenuBar() override;
     void onDrawMainPanel() override;
 
-private: // UI widgets
+private: // Application-owned widgets
 
-    //! \brief Show the palette for adding new nodes.
-    void showAddNodePalette();
+    //! \brief Open the file browser the editor asked for.
+    //! \param p_dialog Whether to load or to save.
+    void openFileDialog(Editor::FileDialog const p_dialog) const;
 
-    //! \brief Show the context menu for node operations.
-    void showNodeContextMenu();
-
-    //! \brief Show the popup for editing node properties.
-    void showNodeEditPopup();
-
-    //! \brief Show the quit confirmation popup.
-    void showQuitConfirmationPopup();
-
-    //! \brief Show the visualizer panel (TCP server status).
-    void showVisualizerPanel();
-
-    //! \brief Show the editor tabs for tree views.
-    void showEditorTabs();
-
-    //! \brief Draw a single tree tab.
-    //! \param name The name of the tab.
-    //! \param view The tree view to draw.
-    void drawTreeTab(const std::string& name, TreeView& view);
-
-    //! \brief Show file dialogs (load/save).
+    //! \brief Draw the load and save file browsers.
     void showFileDialogs();
 
-    //! \brief Handle edit mode interactions (node selection, link creation).
-    void handleEditModeInteractions();
+    //! \brief Draw the confirmation asked before losing unsaved changes.
+    void showQuitConfirmationPopup();
 
-    //! \brief Handle keyboard shortcuts.
-    void handleKeyboardShortcuts();
+    //! \brief Close the window, asking for confirmation when relevant.
+    void requestQuit();
 
-    //! \brief Show the blackboard panel.
-    void showBlackboardPanel();
+private:
+
+    //! \brief The editor, embedded exactly like any other host would.
+    Editor m_editor;
+    //! \brief Flag to open the quit confirmation popup.
+    bool m_show_quit_confirmation = false;
+    //! \brief Whether the pending save shall be followed by a quit.
+    bool m_quit_after_save = false;
 };
+
+} // namespace oakular

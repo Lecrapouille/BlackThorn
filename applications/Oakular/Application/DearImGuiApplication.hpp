@@ -4,7 +4,7 @@
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #pragma once
@@ -18,7 +18,7 @@
 
 #include <functional>
 
-namespace robotik::renderer {
+namespace oakular {
 
 // ****************************************************************************
 //! \brief Dear ImGui application wrapper providing docking support.
@@ -136,4 +136,4 @@ private:
     StatusBarCallback m_status_bar_callback;
 };
 
-} // namespace robotik::renderer
+} // namespace oakular

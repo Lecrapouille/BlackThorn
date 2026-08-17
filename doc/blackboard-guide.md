@@ -27,7 +27,7 @@ blackboard->set<double>("speed", 1.5);              // ⚡ Speed
 ### 🔍 Getting Values
 
 ```cpp
-// battery is a std::any
+// battery is a std::optional<int>
 auto battery = blackboard->get<int>("battery");
 if (battery && *battery > 20) {
     std::cout << "✅ battery voltage: " << *battery << std::endl;
@@ -61,15 +61,17 @@ Blackboard:
 
 ### 🔍 Accessing in C++
 
-```cpp
-using AnyMap = std::unordered_map<std::string, std::any>;
-using AnyList = std::vector<std::any>;
-using NumericList = std::vector<double>;
+Nested YAML maps and arrays are stored as `bt::BlackboardValue`, a variant covering the YAML types, with an `std::any` fallback for custom C++ types.
 
-// snapshot is a dictionary of std::any
-auto snapshot = blackboard->get<AnyMap>("game_state");
+```cpp
+using ValueMap = bt::BlackboardMap;                    // map of BlackboardValue
+using ValueList = std::vector<bt::BlackboardValue>;    // heterogeneous array
+using NumericList = std::vector<double>;               // array of numbers only
+
+auto snapshot = blackboard->get<ValueMap>("game_state");
 if (snapshot) {
-    auto enemies = (*snapshot)["enemies"];
+    auto score = std::get_if<int>(&snapshot->at("score").asBase());
+    auto enemies = std::get_if<ValueList>(&snapshot->at("enemies").asBase());
 }
 ```
 

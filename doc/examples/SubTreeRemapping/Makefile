@@ -20,7 +20,6 @@ VPATH += $(CURRENT_DIR) $(LIBRARY_DIR)
 
 NOT_PKG_LIBS += $(BLACKTHORN_LINK_LIBS)
 SRC_FILES := $(CURRENT_DIR)/SubTreeRemapping.cpp
-PKG_LIBS += sfml-network
 
 include $(M)/rules/Makefile
 

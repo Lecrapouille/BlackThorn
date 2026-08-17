@@ -2,3 +2,14 @@ PROJECT_NAME := BlackThorn
 PROJECT_VERSION := 0.1.0
 COMPILATION_MODE := release
 CXX_STANDARD := --std=c++17
+
+###############################################################################
+# Optional features. A host project embedding BlackThorn or Oakular may switch
+# them off to avoid pulling sfml-network in.
+#
+# BLACKTHORN_WITH_NETWORK: compile bt::VisualizerClient, which streams the
+# runtime state of a tree to the Oakular visualizer.
+BLACKTHORN_WITH_NETWORK ?= 1
+# OAKULAR_WITH_SERVER: compile oakular::Server, the TCP server feeding the
+# visualizer mode of the editor.
+OAKULAR_WITH_SERVER ?= 1

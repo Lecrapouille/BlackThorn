@@ -25,7 +25,7 @@ class ReadPorts final: public CallbackLeaf
 {
 public:
 
-    ReadPorts() : CallbackLeaf([]() { return Status::SUCCESS; }) {}
+    ReadPorts() : CallbackLeaf([]() noexcept { return Status::SUCCESS; }) {}
 
     [[nodiscard]] static constexpr char const* toString()
     {
@@ -45,7 +45,7 @@ public:
 
 inline void registerBenchmarkNodes(NodeFactory& p_factory)
 {
-    auto success = []() { return Status::SUCCESS; };
+    auto success = []() noexcept { return Status::SUCCESS; };
 
     for (char const* name : {"LoadRoute",
                              "FollowWaypoints",
@@ -61,7 +61,7 @@ inline void registerBenchmarkNodes(NodeFactory& p_factory)
     p_factory.registerNode<ReadPorts>("ReadPorts");
 }
 
-inline robotik::Return<Tree::Ptr>
+inline bt::Return<Tree::Ptr>
 loadTreeFromYaml(NodeFactory const& p_factory,
                  std::filesystem::path const& p_path,
                  Blackboard::Ptr p_blackboard = nullptr,
@@ -70,13 +70,13 @@ loadTreeFromYaml(NodeFactory const& p_factory,
     return Builder::fromFile(p_factory, p_path.string(), p_blackboard, p_options);
 }
 
-inline robotik::Return<std::shared_ptr<TreeDocument>>
+inline bt::Return<std::shared_ptr<TreeDocument>>
 parseTreeDocument(std::filesystem::path const& p_path)
 {
     return TreeDocument::parseFile(p_path.string());
 }
 
-inline robotik::Return<Tree::Ptr>
+inline bt::Return<Tree::Ptr>
 instantiateTree(NodeFactory const& p_factory,
                 std::shared_ptr<TreeDocument> const& p_document,
                 Blackboard::Ptr p_blackboard = nullptr,

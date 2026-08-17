@@ -237,10 +237,11 @@ public:
     //! \brief Create the root node and mark it as the entry point.
     //! \tparam T Concrete node type derived from \ref Node.
     //! \param p_args Arguments forwarded to the node constructor.
-    //! \return Reference to the root node.
+    //! \return Reference to the root node, to be ignored when the root needs no
+    //! further configuration.
     // ------------------------------------------------------------------------
     template <class T, typename... Args>
-    [[nodiscard]] T& createRoot(Args&&... p_args)
+    T& createRoot(Args&&... p_args)
     {
         T& root = emplaceNode<T>(std::forward<Args>(p_args)...);
         setRootIndex(root.index());

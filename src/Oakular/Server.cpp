@@ -4,11 +4,14 @@
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #include "Server.hpp"
 #include <iostream>
 #include <sstream>
+
+namespace oakular {
 
 // ----------------------------------------------------------------------------
 Server::~Server()
@@ -218,3 +221,5 @@ void Server::update()
         // sf::Socket::NotReady is normal in non-blocking mode
     }
 }
+
+} // namespace oakular

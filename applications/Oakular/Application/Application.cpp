@@ -4,7 +4,7 @@
  *
  * Copyright (c) 2025 Quentin Quadrat <lecrapouille@gmail.com>
  * distributed under MIT License
- * @see https://github.com/Lecrapouille/Robotik
+ * @see https://github.com/Lecrapouille/BlackThorn
  */
 
 #include "Application.hpp"
@@ -15,7 +15,7 @@
 #include <chrono>
 #include <cstdio>
 
-namespace robotik::renderer {
+namespace oakular {
 
 // ----------------------------------------------------------------------------
 Application::Application(size_t const p_width, size_t const p_height)
@@ -249,4 +249,4 @@ bool Application::run()
     return true;
 }
 
-} // namespace robotik::renderer
+} // namespace oakular

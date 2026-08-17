@@ -19,26 +19,22 @@ public:
 
     explicit LoadRoute(Blackboard::Ptr blackboard)
         : CallbackLeaf(
-              [bb = blackboard]() {
-                  if (!bb)
-                  {
-                      std::cout << "[LoadRoute] Blackboard unavailable"
-                                << std::endl;
-                      return Status::FAILURE;
-                  }
-                  auto route = bb->get<AnyMap>("route");
+              [this]() {
+                  // "route: ${patrol_route}" in the YAML declares a port
+                  // remapped to a blackboard variable, read through the port.
+                  auto route = getInput<ValueMap>("route");
                   if (!route)
                   {
-                      std::cout << "[LoadRoute] Missing 'route' parameter"
+                      std::cout << "[LoadRoute] Cannot resolve the 'route' port"
                                 << std::endl;
                       return Status::FAILURE;
                   }
 
                   std::cout << "[LoadRoute] Patrol route:" << std::endl;
-                  printAny(*route, 2);
+                  printValue(*route, 2);
                   return Status::SUCCESS;
               },
-              std::move(blackboard))
+              blackboard)
     {
     }
 };
@@ -49,27 +45,22 @@ public:
 
     explicit FollowWaypoints(Blackboard::Ptr blackboard)
         : CallbackLeaf(
-              [bb = blackboard]() {
-                  if (!bb)
-                  {
-                      std::cout << "[FollowWaypoints] Blackboard unavailable"
-                                << std::endl;
-                      return Status::FAILURE;
-                  }
-                  auto path = bb->get<AnyMap>("path");
+              [this]() {
+                  auto path = getInput<ValueMap>("path");
                   if (!path)
                   {
-                      std::cout << "[FollowWaypoints] Missing 'path' parameter"
-                                << std::endl;
+                      std::cout
+                          << "[FollowWaypoints] Cannot resolve the 'path' port"
+                          << std::endl;
                       return Status::FAILURE;
                   }
 
                   std::cout << "[FollowWaypoints] Executing patrol:"
                             << std::endl;
-                  printAny(*path, 2);
+                  printValue(*path, 2);
                   return Status::SUCCESS;
               },
-              std::move(blackboard))
+              blackboard)
     {
     }
 };
@@ -80,18 +71,13 @@ public:
 
     explicit AttemptNonLethal(Blackboard::Ptr blackboard)
         : CallbackLeaf(
-              [bb = blackboard]() {
-                  if (!bb)
-                  {
-                      std::cout << "[AttemptNonLethal] Blackboard unavailable"
-                                << std::endl;
-                      return Status::FAILURE;
-                  }
-                  auto contact = bb->get<AnyMap>("contact");
+              [this]() {
+                  auto contact = getInput<ValueMap>("contact");
                   if (!contact)
                   {
                       std::cout
-                          << "[AttemptNonLethal] Missing 'contact' parameter"
+                          << "[AttemptNonLethal] Cannot resolve the 'contact' "
+                             "port"
                           << std::endl;
                       return Status::FAILURE;
                   }
@@ -99,13 +85,13 @@ public:
                   std::cout
                       << "[AttemptNonLethal] Attempting peaceful resolution:"
                       << std::endl;
-                  printAny(*contact, 2);
+                  printValue(*contact, 2);
                   std::cout << "[AttemptNonLethal] Contact resisted, "
                                "escalating..."
                             << std::endl;
                   return Status::FAILURE;
               },
-              std::move(blackboard))
+              blackboard)
     {
     }
 };
@@ -116,30 +102,25 @@ public:
 
     explicit NeutralizeThreat(Blackboard::Ptr blackboard)
         : CallbackLeaf(
-              [bb = blackboard]() {
-                  if (!bb)
-                  {
-                      std::cout << "[NeutralizeThreat] Blackboard unavailable"
-                                << std::endl;
-                      return Status::FAILURE;
-                  }
-                  auto contact = bb->get<AnyMap>("contact");
+              [this]() {
+                  auto contact = getInput<ValueMap>("target");
                   if (!contact)
                   {
                       std::cout
-                          << "[NeutralizeThreat] Missing 'contact' parameter"
+                          << "[NeutralizeThreat] Cannot resolve the 'target' "
+                             "port"
                           << std::endl;
                       return Status::FAILURE;
                   }
 
                   std::cout << "[NeutralizeThreat] Engaging hostile target:"
                             << std::endl;
-                  printAny(*contact, 2);
+                  printValue(*contact, 2);
                   std::cout << "[NeutralizeThreat] Threat neutralized"
                             << std::endl;
                   return Status::SUCCESS;
               },
-              std::move(blackboard))
+              blackboard)
     {
     }
 };
@@ -150,29 +131,23 @@ public:
 
     explicit ExtractTeam(Blackboard::Ptr blackboard)
         : CallbackLeaf(
-              [bb = blackboard]() {
-                  if (!bb)
-                  {
-                      std::cout << "[ExtractTeam] Blackboard unavailable"
-                                << std::endl;
-                      return Status::FAILURE;
-                  }
-                  auto destination = bb->get<AnyMap>("destination");
+              [this]() {
+                  auto destination = getInput<ValueMap>("destination");
                   if (!destination)
                   {
-                      std::cout
-                          << "[ExtractTeam] Missing 'destination' parameter"
-                          << std::endl;
+                      std::cout << "[ExtractTeam] Cannot resolve the "
+                                   "'destination' port"
+                                << std::endl;
                       return Status::FAILURE;
                   }
 
                   std::cout << "[ExtractTeam] Heading to extraction point:"
                             << std::endl;
-                  printAny(*destination, 2);
+                  printValue(*destination, 2);
                   std::cout << "[ExtractTeam] Team evacuated" << std::endl;
                   return Status::SUCCESS;
               },
-              std::move(blackboard))
+              blackboard)
     {
     }
 };
@@ -203,6 +178,7 @@ int main()
     auto tree = result.moveValue();
     tree->setBlackboard(blackboard);
 
+#if defined(BLACKTHORN_HAS_NETWORK)
     auto visualizer = std::make_shared<VisualizerClient>();
     if (visualizer->connect("localhost", 8888))
     {
@@ -218,6 +194,10 @@ int main()
                   << std::endl;
         std::cout << "=== Running without visualization ===" << std::endl;
     }
+#else
+    std::cout << "=== Built without network support: no visualization ==="
+              << std::endl;
+#endif
 
     std::cout << "=== Running " << yamlPath << " ===" << std::endl;
 

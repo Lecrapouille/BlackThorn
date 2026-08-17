@@ -85,6 +85,7 @@ int main()
     auto& tree = result.getValue();
 
     // Connect to visualizer
+#if defined(BLACKTHORN_HAS_NETWORK)
     auto visualizer = std::make_shared<bt::VisualizerClient>();
     if (visualizer->connect())
     {
@@ -100,6 +101,10 @@ int main()
                   << std::endl;
         std::cout << "=== Running without visualization ===" << std::endl;
     }
+#else
+    std::cout << "=== Built without network support: no visualization ==="
+              << std::endl;
+#endif
 
     std::cout << "\n=== Running " << yaml_path << " ===" << std::endl;
     std::cout << "=== Watch nodes change color in Oakular! ===" << std::endl;

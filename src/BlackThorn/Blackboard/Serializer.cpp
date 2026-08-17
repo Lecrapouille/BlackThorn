@@ -47,6 +47,13 @@ static bool needsQuotes(std::string const& p_value)
         return true;
     }
 
+    // Without quotes, a string spelled like a number or a boolean would be
+    // reloaded as such and lose its type.
+    if (scalarReadsAsNonString(p_value))
+    {
+        return true;
+    }
+
     static char const* const reserved[] = {
         "true", "false", "null", "yes", "no", "~"};
 
@@ -194,6 +201,13 @@ BlackboardValue BlackboardSerializer::toValue(YamlNode const& p_node,
             {
                 return *value;
             }
+        }
+
+        // Quoting is meaningful in YAML: "42" is a string while 42 is an
+        // integer. Only a plain scalar gets its type inferred from its text.
+        if (p_node.isQuotedScalar())
+        {
+            return literal;
         }
 
         if (auto v = p_node.asInt())

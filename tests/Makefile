@@ -37,8 +37,13 @@ INCLUDES += $(P)/tests $(P)/src $(THIRD_PARTIES_DIR)
 ###################################################
 # Make the list of compiled files for the library
 #
-SRC_FILES += $(call rwildcard,$(P)/src/BlackThorn,*.cpp)
+SRC_FILES += $(filter-out $(P)/src/BlackThorn/Network/%,$(call rwildcard,$(P)/src/BlackThorn,*.cpp))
 SRC_FILES += $(call rwildcard,$(P)/tests,*.cpp)
+
+# Mirror the optional network support of the library.
+ifeq ($(BLACKTHORN_WITH_NETWORK),1)
+SRC_FILES += $(call rwildcard,$(P)/src/BlackThorn/Network,*.cpp)
+endif
 
 ###################################################
 # Google Test and Google Mock specific warnings
@@ -48,7 +53,7 @@ USER_CXXFLAGS += -Wno-noexcept
 ###################################################
 # Set Libraries.
 #
-PKG_LIBS += sfml-network gtest gmock
+PKG_LIBS += gtest gmock
 
 ###################################################
 # Generic Makefile rules

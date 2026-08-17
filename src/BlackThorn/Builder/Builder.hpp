@@ -86,7 +86,7 @@ public:
     //! \param[in] p_path Path to the YAML file.
     //! \return Parsed document on success, or an error message.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static robotik::Return<std::shared_ptr<TreeDocument>>
+    [[nodiscard]] static Return<std::shared_ptr<TreeDocument>>
     parseFile(std::string const& p_path);
 
     // ------------------------------------------------------------------------
@@ -94,7 +94,7 @@ public:
     //! \param[in] p_text YAML text.
     //! \return Parsed document on success, or an error message.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static robotik::Return<std::shared_ptr<TreeDocument>>
+    [[nodiscard]] static Return<std::shared_ptr<TreeDocument>>
     parseText(std::string p_text);
 
     // ------------------------------------------------------------------------
@@ -104,7 +104,7 @@ public:
     //! \param[in] p_options Instantiation flags (merge, reserve, lazy subtrees).
     //! \return Instantiated tree on success, or an error message.
     // ------------------------------------------------------------------------
-    [[nodiscard]] robotik::Return<Tree::Ptr>
+    [[nodiscard]] Return<Tree::Ptr>
     instantiate(NodeFactory const& p_factory,
                 Blackboard::Ptr p_blackboard = nullptr,
                 BuilderOptions p_options = {}) const;
@@ -161,7 +161,7 @@ public:
     //! \param[in] p_options Instantiation flags.
     //! \return Instantiated tree on success, or an error message.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static robotik::Return<Tree::Ptr>
+    [[nodiscard]] static Return<Tree::Ptr>
     fromFile(NodeFactory const& p_factory,
              std::string const& p_file_path,
              Blackboard::Ptr p_blackboard = nullptr,
@@ -175,7 +175,7 @@ public:
     //! \param[in] p_options Instantiation flags.
     //! \return Instantiated tree on success, or an error message.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static robotik::Return<Tree::Ptr>
+    [[nodiscard]] static Return<Tree::Ptr>
     fromText(NodeFactory const& p_factory,
              std::string const& p_yaml_text,
              Blackboard::Ptr p_blackboard = nullptr,
@@ -191,7 +191,7 @@ public:
     //! \param[in] p_options Instantiation flags.
     //! \return Number of nodes created, or an error message.
     // ------------------------------------------------------------------------
-    [[nodiscard]] static robotik::Return<uint32_t>
+    [[nodiscard]] static Return<uint32_t>
     parseYAMLNode(Tree& p_tree,
                   NodeFactory const& p_factory,
                   YamlNode const& p_node,
