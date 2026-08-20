@@ -50,6 +50,7 @@ private: // Overrides from Application
     void onUpdate(float const p_dt) override;
     void onDrawMenuBar() override;
     void onDrawMainPanel() override;
+    bool onCloseRequested() override;
 
 private: // Application-owned widgets
 
@@ -65,6 +66,9 @@ private: // Application-owned widgets
 
     //! \brief Close the window, asking for confirmation when relevant.
     void requestQuit();
+
+    //! \brief Save the tree, then close the window once it reached the disk.
+    void saveThenQuit();
 
 private:
 

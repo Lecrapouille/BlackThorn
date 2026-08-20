@@ -118,10 +118,11 @@ void OakularApp::showFileDialogs()
 
     if (ImGuiFileDialog::Instance()->Display(c_save_dialog_key))
     {
-        bool const accepted = ImGuiFileDialog::Instance()->IsOk();
-        if (accepted)
+        bool saved = false;
+        if (ImGuiFileDialog::Instance()->IsOk())
         {
-            m_editor.saveToYaml(ImGuiFileDialog::Instance()->GetFilePathName());
+            saved = m_editor.saveToYaml(
+                ImGuiFileDialog::Instance()->GetFilePathName());
         }
 
         ImGuiFileDialog::Instance()->Close();
@@ -130,7 +131,7 @@ void OakularApp::showFileDialogs()
         if (m_quit_after_save)
         {
             m_quit_after_save = false;
-            if (accepted && !m_editor.isModified())
+            if (saved)
             {
                 halt();
             }
@@ -139,15 +140,42 @@ void OakularApp::showFileDialogs()
 }
 
 // ----------------------------------------------------------------------------
+bool OakularApp::onCloseRequested()
+{
+    if (!m_editor.isModified())
+    {
+        return true;
+    }
+
+    m_show_quit_confirmation = true;
+    return false;
+}
+
+// ----------------------------------------------------------------------------
 void OakularApp::requestQuit()
 {
-    if (m_editor.isModified())
+    if (onCloseRequested())
     {
-        m_show_quit_confirmation = true;
+        halt();
+    }
+}
+
+// ----------------------------------------------------------------------------
+void OakularApp::saveThenQuit()
+{
+    if (m_editor.filepath().empty())
+    {
+        // Never saved yet: the window closes from showFileDialogs(), once the
+        // user picked a destination and the tree reached the disk.
+        m_quit_after_save = true;
+        openFileDialog(Editor::FileDialog::Save);
         return;
     }
 
-    halt();
+    if (m_editor.save())
+    {
+        halt();
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -170,8 +198,7 @@ void OakularApp::showQuitConfirmationPopup()
 
         if (ImGui::Button("Save and Quit", ImVec2(120, 0)))
         {
-            m_quit_after_save = true;
-            openFileDialog(Editor::FileDialog::Save);
+            saveThenQuit();
             ImGui::CloseCurrentPopup();
         }
 
