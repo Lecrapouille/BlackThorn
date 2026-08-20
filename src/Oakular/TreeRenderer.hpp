@@ -120,6 +120,17 @@ public:
         return screenToCanvas(screen_pos);
     }
 
+    // ------------------------------------------------------------------------
+    //! \brief Room a node takes on the canvas. The auto-layout needs it to
+    //! space nodes according to what is actually drawn.
+    //! \param p_node The node to measure.
+    //! \return The size of the node, in canvas units.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] ImVec2 measureNode(Editor::Node const& p_node) const
+    {
+        return calculateNodeSize(p_node);
+    }
+
 private:
 
     // ------------------------------------------------------------------------

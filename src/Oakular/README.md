@@ -72,12 +72,30 @@ layer of the standalone application.
 | `drawMenuBar()` | The File, Edit, View and Mode menus, to be called from the host menu bar |
 | `drawBehaviorTree()` | The canvas alone, at the current ImGui cursor |
 
+### Documents
+
+The editor edits a document, and there is none until the host, or the user
+through the `File` menu, asks for one. Without a document there is nothing to add
+a node to: the palette, the auto-layout and both save entries stay disabled.
+
+| Method | Purpose |
+|---|---|
+| `newDocument()` | Start an empty, unnamed document. This is what enables edition |
+| `hasDocument()` | Whether a document is open, created or loaded |
+| `isEditable()` | Whether the tree may be edited: a document, in creation mode |
+| `save()` | Write the tree back to its file, or ask the host for a save dialog when it has none yet |
+
 ### Tree edition
 
 `reset()`, `setMode()`, `mode()`, `addNode()`, `addNodeAndLink()`, `deleteNode()`,
 `createLink()`, `deleteLink()`, `loadFromYaml()`, `loadFromYamlString()`,
 `saveToYaml()`, `autoLayoutNodes()`, `toggleSubTreeExpansion()`, `isModified()`,
 `filepath()`, `selectedNode()`.
+
+An arc always goes from the output pin of a parent down to the input pin of a
+child. `createLink()` refuses the opposite direction, from a node up to one of
+its own ancestors, which would close a cycle and leave a graph no longer
+serializable as a tree.
 
 ### Extending the node palette
 
@@ -142,17 +160,18 @@ editor. `ImGuiFileDialog` is a choice of the host too.
 
 | Shortcut | Action |
 |---|---|
+| `Ctrl+N` | New behavior tree |
 | `Ctrl+O` | Ask the host for a load dialog |
-| `Ctrl+S` | Ask the host for a save dialog |
+| `Ctrl+S` | Save, asking the host for a dialog when the tree has no file yet |
+| `Ctrl+Shift+S` | Ask the host for a save dialog |
 | `Ctrl+L` | Auto layout |
 | `Ctrl+Q` | Ask the host to quit |
-| `Space` or right click | Open the node palette |
+| Right click | Open the node palette |
 | `Delete` | Delete the selected node |
 | Double click | Edit a node, or open the definition of a SubTree |
 
 ## Future improvements
 
-- [ ] Link validation (no cycles)
 - [ ] Export to PNG or SVG
 - [ ] Undo/Redo
 - [ ] Copy and paste of subtrees

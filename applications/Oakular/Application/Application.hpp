@@ -97,6 +97,18 @@ protected:
     }
 
     // ------------------------------------------------------------------------
+    //! \brief Called when the window manager asks to close the window, through
+    //! the title bar button or a keyboard shortcut of the desktop. Override it
+    //! to keep the application alive, typically while a confirmation popup is
+    //! shown. Not called by \c halt, which closes unconditionally.
+    //! \return true to let the application close.
+    // ------------------------------------------------------------------------
+    virtual bool onCloseRequested()
+    {
+        return true;
+    }
+
+    // ------------------------------------------------------------------------
     //! \brief Draw ImGui menu bar. Override to add custom menu items.
     // ------------------------------------------------------------------------
     virtual void onDrawMenuBar()
@@ -137,10 +149,11 @@ protected:
 private:
 
     // ------------------------------------------------------------------------
-    //! \brief Check if the application shall be halted.
+    //! \brief Check if the application shall be halted, asking
+    //! \c onCloseRequested when the request comes from the window manager.
     //! \return true if the application shall be halted, false otherwise.
     // ------------------------------------------------------------------------
-    bool shallBeHalted() const;
+    bool shallBeHalted();
 
     // ------------------------------------------------------------------------
     //! \brief Initialize the application (GLFW, OpenGL, ImGui).
@@ -176,6 +189,8 @@ private:
     size_t m_height;
     GLFWwindow* m_window = nullptr;
     std::string m_title;
+    //! \brief Set by halt(), to close without asking anything.
+    bool m_halted = false;
 
     // Dear ImGui integration
     std::unique_ptr<DearImGuiApplication> m_imgui_app;

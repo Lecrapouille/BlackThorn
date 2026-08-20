@@ -486,8 +486,18 @@ void Editor::drawEditorWindow(char const* p_title)
     switch (m_mode)
     {
         case Mode::Creation:
-            showEditorTabs();
-            showAddNodePalette();
+            if (m_has_document)
+            {
+                showEditorTabs();
+                showAddNodePalette();
+            }
+            else
+            {
+                showNoDocumentPanel();
+            }
+            // Opened from the menu bar, where the ImGui ID stack belongs to the
+            // menu: the popup itself has to live here.
+            showNewDocumentConfirmation();
             break;
         case Mode::Visualizer:
             showVisualizerPanel();
@@ -499,22 +509,117 @@ void Editor::drawEditorWindow(char const* p_title)
 }
 
 // ----------------------------------------------------------------------------
+void Editor::showNoDocumentPanel()
+{
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                       "No behavior tree opened.");
+    ImGui::Spacing();
+    ImGui::TextDisabled(
+        "Use File > New Behavior Tree to start from scratch, or\n"
+        "File > Load Behavior Tree to open an existing YAML file.");
+    ImGui::Spacing();
+
+    if (ImGui::Button("New Behavior Tree"))
+    {
+        newDocument();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Load Behavior Tree..."))
+    {
+        onFileDialogRequested.emit(FileDialog::Load);
+    }
+}
+
+// ----------------------------------------------------------------------------
+void Editor::showNewDocumentConfirmation()
+{
+    if (m_show_new_confirmation)
+    {
+        ImVec2 const center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(
+            center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        ImGui::OpenPopup("Discard changes?");
+        m_show_new_confirmation = false;
+    }
+
+    if (!ImGui::BeginPopupModal(
+            "Discard changes?", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        return;
+    }
+
+    ImGui::Text("The current behavior tree has unsaved changes.");
+    ImGui::Separator();
+
+    if (ImGui::Button("Save first", ImVec2(140, 0)))
+    {
+        // An unnamed tree only gets a host save dialog here, so the new
+        // document waits for the next explicit request rather than racing it.
+        if (save())
+        {
+            newDocument();
+        }
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Discard and start anew", ImVec2(180, 0)))
+    {
+        newDocument();
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(100, 0)))
+    {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
+// ----------------------------------------------------------------------------
 void Editor::drawMenuBar()
 {
+    // Everything acting on a tree stays greyed out until a document exists:
+    // there is nothing to add a node to, nor anything to save.
+    bool const creation_mode = (m_mode == Mode::Creation);
+    bool const editable = isEditable();
+
     if (ImGui::BeginMenu("File"))
     {
+        if (ImGui::MenuItem(
+                "New Behavior Tree", "Ctrl+N", false, creation_mode))
+        {
+            if (m_is_modified)
+            {
+                m_show_new_confirmation = true;
+            }
+            else
+            {
+                newDocument();
+            }
+        }
+
         // The editor cannot browse the file system on its own: the host owns
         // the file dialog and calls back loadFromYaml/saveToYaml.
-        if (ImGui::MenuItem("Load Behavior Tree", "Ctrl+O"))
+        if (ImGui::MenuItem("Load Behavior Tree...", "Ctrl+O"))
         {
             onFileDialogRequested.emit(FileDialog::Load);
         }
 
-        if (ImGui::MenuItem(
-                "Save As...", "Ctrl+S", false, m_mode == Mode::Creation))
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("Save", "Ctrl+S", false, editable))
+        {
+            save();
+        }
+
+        if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S", false, editable))
         {
             onFileDialogRequested.emit(FileDialog::Save);
         }
+
         ImGui::Separator();
 
         if (ImGui::MenuItem("Quit", "Ctrl+Q"))
@@ -527,8 +632,7 @@ void Editor::drawMenuBar()
     if (ImGui::BeginMenu("Edit"))
     {
         // Auto-layout the nodes
-        if (ImGui::MenuItem(
-                "Auto Layout", "Ctrl+L", false, m_mode == Mode::Creation))
+        if (ImGui::MenuItem("Auto Layout", "Ctrl+L", false, editable))
         {
             autoLayoutNodes();
         }
@@ -540,7 +644,7 @@ void Editor::drawMenuBar()
                             nullptr,
                             getCurrentTreeView().layout_direction ==
                                 LayoutDirection::LeftToRight,
-                            m_mode == Mode::Creation))
+                            editable))
         {
             getCurrentTreeView().layout_direction =
                 LayoutDirection::LeftToRight;
@@ -552,7 +656,7 @@ void Editor::drawMenuBar()
                             nullptr,
                             getCurrentTreeView().layout_direction ==
                                 LayoutDirection::TopToBottom,
-                            m_mode == Mode::Creation))
+                            editable))
         {
             getCurrentTreeView().layout_direction =
                 LayoutDirection::TopToBottom;
@@ -562,11 +666,11 @@ void Editor::drawMenuBar()
         ImGui::Separator();
 
         // Add a new node
-        if (ImGui::MenuItem(
-                "Add Node", "Space", false, m_mode == Mode::Creation))
+        if (ImGui::MenuItem("Add Node", nullptr, false, editable))
         {
             m_show_palettes.node_creation = true;
             m_show_palettes.position = ImGui::GetMousePos();
+            m_pending_link_from_node = -1;
         }
         ImGui::EndMenu();
     }
@@ -612,19 +716,42 @@ void Editor::handleKeyboardShortcuts()
     if (!ctrl_pressed)
         return;
 
+    bool const shift_pressed = ImGui::IsKeyDown(ImGuiKey_LeftShift) ||
+                               ImGui::IsKeyDown(ImGuiKey_RightShift);
+
+    if (ImGui::IsKeyPressed(ImGuiKey_N) && m_mode == Mode::Creation)
+    {
+        if (m_is_modified)
+        {
+            m_show_new_confirmation = true;
+        }
+        else
+        {
+            newDocument();
+        }
+        return;
+    }
+
     if (ImGui::IsKeyPressed(ImGuiKey_O))
     {
         onFileDialogRequested.emit(FileDialog::Load);
         return;
     }
 
-    if (ImGui::IsKeyPressed(ImGuiKey_S) && m_mode == Mode::Creation)
+    if (ImGui::IsKeyPressed(ImGuiKey_S) && isEditable())
     {
-        onFileDialogRequested.emit(FileDialog::Save);
+        if (shift_pressed)
+        {
+            onFileDialogRequested.emit(FileDialog::Save);
+        }
+        else
+        {
+            save();
+        }
         return;
     }
 
-    if (ImGui::IsKeyPressed(ImGuiKey_L) && m_mode == Mode::Creation)
+    if (ImGui::IsKeyPressed(ImGuiKey_L) && isEditable())
     {
         autoLayoutNodes();
         return;
@@ -746,6 +873,12 @@ void Editor::drawTreeTab(std::string const& p_name,
 // ----------------------------------------------------------------------------
 void Editor::showAddNodePalette()
 {
+    if (!isEditable())
+    {
+        m_show_palettes.node_creation = false;
+        return;
+    }
+
     // Open the popup when requested
     if (m_show_palettes.node_creation)
     {
@@ -792,8 +925,9 @@ void Editor::showAddNodePalette()
 // ----------------------------------------------------------------------------
 void Editor::handleEditModeInteractions()
 {
-    // Skip if not in edit mode
-    if (m_mode != Mode::Creation)
+    // Skip unless a document is open in edit mode: without one there is
+    // nothing to select, to link or to add a node to.
+    if (!isEditable())
         return;
 
     if (!m_renderer)
@@ -890,12 +1024,6 @@ void Editor::handleEditModeInteractions()
     {
         deleteNode(m_selected_node_id);
         m_selected_node_id = -1;
-    }
-
-    if (ImGui::IsKeyPressed(ImGuiKey_Space))
-    {
-        m_show_palettes.node_creation = true;
-        m_show_palettes.position = ImGui::GetMousePos();
     }
 }
 

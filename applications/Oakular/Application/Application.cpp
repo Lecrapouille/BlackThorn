@@ -58,6 +58,7 @@ GLFWwindow* Application::window() const
 // ----------------------------------------------------------------------------
 void Application::halt()
 {
+    m_halted = true;
     if (m_window)
     {
         glfwSetWindowShouldClose(m_window, GLFW_TRUE);
@@ -71,9 +72,22 @@ ImGuiIO& Application::imguiIO()
 }
 
 // ----------------------------------------------------------------------------
-bool Application::shallBeHalted() const
+bool Application::shallBeHalted()
 {
-    return m_window ? glfwWindowShouldClose(m_window) : true;
+    if (m_halted)
+        return true;
+
+    if (m_window == nullptr)
+        return true;
+
+    if (glfwWindowShouldClose(m_window) == GLFW_FALSE)
+        return false;
+
+    // The window manager asked to close. Take the request back so that the
+    // application may refuse it, typically to confirm the loss of unsaved
+    // changes first.
+    glfwSetWindowShouldClose(m_window, GLFW_FALSE);
+    return onCloseRequested();
 }
 
 // ----------------------------------------------------------------------------

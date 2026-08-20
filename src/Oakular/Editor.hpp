@@ -258,8 +258,8 @@ public:
     void drawBehaviorTree();
 
     // ------------------------------------------------------------------------
-    //! \brief Handle the editor keyboard shortcuts (Ctrl+O, Ctrl+S, Ctrl+L,
-    //! Ctrl+Q). Already called by \c draw.
+    //! \brief Handle the editor keyboard shortcuts (Ctrl+N, Ctrl+O, Ctrl+S,
+    //! Ctrl+Shift+S, Ctrl+L, Ctrl+Q). Already called by \c draw.
     // ------------------------------------------------------------------------
     void handleKeyboardShortcuts();
 
@@ -268,9 +268,34 @@ public:
     // ========================================================================
 
     // ------------------------------------------------------------------------
-    //! \brief Reset the editor to an empty tree with a fresh blackboard.
+    //! \brief Reset the editor to an empty tree with a fresh blackboard and no
+    //! open document. Edition stays disabled until a document is opened.
     // ------------------------------------------------------------------------
     void reset();
+
+    // ------------------------------------------------------------------------
+    //! \brief Start a new, empty and unnamed document. This is what enables
+    //! edition: without a document there is nothing to add a node to.
+    // ------------------------------------------------------------------------
+    void newDocument();
+
+    // ------------------------------------------------------------------------
+    //! \brief Check whether a document is open, either created by
+    //! \c newDocument or loaded by \c loadFromYaml.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool hasDocument() const
+    {
+        return m_has_document;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Check whether the tree may be edited: an open document, in
+    //! creation mode. Visualizer trees are read-only.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isEditable() const
+    {
+        return m_has_document && (m_mode == Mode::Creation);
+    }
 
     // ------------------------------------------------------------------------
     //! \brief Set the editor mode: Editor or Real-Time Visualizer.
@@ -323,22 +348,35 @@ public:
     void deleteLink(ID const p_from_node, ID const p_to_node);
 
     // ------------------------------------------------------------------------
-    //! \brief Load a tree from a YAML file.
+    //! \brief Load a tree from a YAML file. On success the file becomes the
+    //! open document.
     //! \param p_filepath The path to the YAML file.
+    //! \return true when the tree was loaded.
     // ------------------------------------------------------------------------
-    void loadFromYaml(std::string const& p_filepath);
+    bool loadFromYaml(std::string const& p_filepath);
 
     // ------------------------------------------------------------------------
     //! \brief Load a tree from a YAML string (for visualizer mode).
     //! \param p_yaml_content The YAML content as a string.
+    //! \return true when the tree was loaded.
     // ------------------------------------------------------------------------
-    void loadFromYamlString(std::string const& p_yaml_content);
+    bool loadFromYamlString(std::string const& p_yaml_content);
 
     // ------------------------------------------------------------------------
-    //! \brief Save a tree to a YAML file.
+    //! \brief Save a tree to a YAML file, which becomes the open document.
     //! \param p_filepath The path to the YAML file.
+    //! \return true when the tree reached the disk.
     // ------------------------------------------------------------------------
-    void saveToYaml(std::string const& p_filepath);
+    bool saveToYaml(std::string const& p_filepath);
+
+    // ------------------------------------------------------------------------
+    //! \brief Save the tree back to the file it came from. When the document
+    //! has no file yet, ask the host for a save dialog through
+    //! \c onFileDialogRequested instead.
+    //! \return true when the tree reached the disk, false when a dialog was
+    //! requested or when the write failed.
+    // ------------------------------------------------------------------------
+    bool save();
 
     // ------------------------------------------------------------------------
     //! \brief Auto-layout the nodes in the tree.
@@ -487,6 +525,13 @@ protected: // Widgets
     //! \brief Draw the palette popup for adding new nodes.
     void showAddNodePalette();
 
+    //! \brief Draw the placeholder shown when no document is open.
+    void showNoDocumentPanel();
+
+    //! \brief Draw the confirmation asked before a new document discards the
+    //! unsaved changes of the current one.
+    void showNewDocumentConfirmation();
+
     //! \brief Draw the context menu for node operations.
     void showNodeContextMenu();
 
@@ -521,6 +566,11 @@ protected: // TreeView helpers
     void collectVisibleNodes(ID p_root_id,
                              std::unordered_set<ID>& p_visible_nodes);
 
+    //! \brief Nodes acting as a root in the current view: the root of the view
+    //! plus, in the main tree, the nodes not attached to a parent yet. Both the
+    //! canvas and the auto-layout walk exactly these.
+    [[nodiscard]] std::vector<ID> collectViewRoots();
+
     //! \brief Check whether a node type may declare blackboard ports.
     [[nodiscard]] bool canHaveBlackboardPorts(std::string const& p_type) const;
 
@@ -541,10 +591,41 @@ private: // Tree conversion (internal)
                              bool p_sequence_item = false);
     ID parseYamlNode(bt::YamlNode const& p_yaml_node, ID p_parent_id);
 
-    void layoutNodeRecursive(Node* p_node,
-                             float p_x,
-                             float p_y,
-                             float& p_max_extent);
+private: // Auto-layout (internal)
+
+    //! \brief Size a node occupies on the canvas, as the renderer draws it.
+    [[nodiscard]] ImVec2 nodeSize(Node const& p_node) const;
+
+    //! \brief Room a subtree needs along the axis siblings spread on: the
+    //! width in top-to-bottom layout, the height in left-to-right layout.
+    //! \param p_node_id Root of the measured subtree.
+    //! \param p_breadths Memoized results, also breaking accidental cycles.
+    float measureSubtree(ID p_node_id,
+                         std::unordered_map<ID, float>& p_breadths);
+
+    //! \brief Place a subtree, each parent centered over its children.
+    //! \param p_node_id Root of the placed subtree.
+    //! \param p_breadth Start of the slot reserved for the subtree.
+    //! \param p_depth Coordinate of the level along the parent-to-child axis.
+    //! \param p_breadths Result of \c measureSubtree.
+    //! \param p_placed Nodes already placed, guarding against cycles.
+    void placeSubtree(ID p_node_id,
+                      float p_breadth,
+                      float p_depth,
+                      std::unordered_map<ID, float> const& p_breadths,
+                      std::unordered_set<ID>& p_placed);
+
+    //! \brief Copy the positions of the current view back into the nodes, so
+    //! that a caller not going through the canvas sees them too.
+    void syncNodePositionsFromView();
+
+private: // Tree structure helpers (internal)
+
+    //! \brief Check whether \p p_candidate is an ancestor of \p p_node.
+    [[nodiscard]] bool isAncestorOf(ID p_candidate, ID p_node);
+
+    //! \brief Walk up the parents of \p p_node up to the topmost one.
+    [[nodiscard]] ID topmostAncestor(ID p_node);
 
     void registerBuiltinNodeTypes();
 
@@ -570,6 +651,10 @@ protected:
 #endif
     //! \brief Modification flag for unsaved changes.
     bool m_is_modified = false;
+    //! \brief Whether a document is open, hence whether edition is allowed.
+    bool m_has_document = false;
+    //! \brief Flag to open the "discard unsaved changes" confirmation.
+    bool m_show_new_confirmation = false;
     //! \brief Currently opened behavior tree file path.
     std::string m_behavior_tree_filepath;
     //! \brief Available tree views (name -> TreeView)

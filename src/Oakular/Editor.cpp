@@ -25,6 +25,23 @@
 
 namespace oakular {
 
+namespace {
+
+//! \brief Canvas coordinate the auto-layout starts from, on both axes.
+constexpr float c_layout_origin = 40.0f;
+//! \brief Gap left between two siblings.
+constexpr float c_layout_sibling_gap = 40.0f;
+//! \brief Gap left between a parent and its children.
+constexpr float c_layout_depth_gap = 60.0f;
+//! \brief Gap left between two trees laid out side by side.
+constexpr float c_layout_forest_gap = 100.0f;
+//! \brief Node width assumed when no renderer can be asked.
+constexpr float c_layout_fallback_width = 180.0f;
+//! \brief Node height assumed when no renderer can be asked.
+constexpr float c_layout_fallback_height = 80.0f;
+
+} // namespace
+
 // ----------------------------------------------------------------------------
 //! \brief Extract the filename without extension from a file path.
 //! \param[in] p_filepath The full file path.
@@ -206,6 +223,37 @@ void Editor::reset()
     m_node_edit.initialized = false;
     m_blackboard_panel.edit_buffers.clear();
     m_blackboard = std::make_shared<bt::Blackboard>();
+    m_has_document = false;
+    m_show_new_confirmation = false;
+}
+
+// ----------------------------------------------------------------------------
+void Editor::newDocument()
+{
+    reset();
+    m_has_document = true;
+
+    // Give the document its "Main" view right away so that the canvas, and the
+    // menus reading the layout direction, have something to work with.
+    getCurrentTreeView();
+}
+
+// ----------------------------------------------------------------------------
+bool Editor::save()
+{
+    if (!m_has_document)
+        return false;
+
+    if (m_behavior_tree_filepath.empty())
+    {
+        onFileDialogRequested.emit(FileDialog::Save);
+        return false;
+    }
+
+    // Copied on purpose: saveToYaml assigns the path to the very member this
+    // would otherwise alias.
+    std::string const filepath = m_behavior_tree_filepath;
+    return saveToYaml(filepath);
 }
 
 // ----------------------------------------------------------------------------
@@ -318,48 +366,17 @@ void Editor::drawBehaviorTree()
     if (!m_renderer)
         return;
 
-    // Get current view (non-const because we'll modify node_positions)
-    TreeView& current_view = getCurrentTreeView();
-
-    // Collect visible nodes from current root
+    // Collect the visible nodes of every root the view holds: its own root,
+    // plus the nodes not attached to a parent yet, so that a node just created
+    // is visible and can be linked.
     std::unordered_set<ID> visible_node_ids;
-    ID current_root_id = current_view.root_id;
-
-    // Nothing to draw until the view owns a root node.
-    if (current_root_id < 0)
+    for (ID root_id : collectViewRoots())
     {
-        return;
+        collectVisibleNodes(root_id, visible_node_ids);
     }
 
-    collectVisibleNodes(current_root_id, visible_node_ids);
-
-    // Only include orphan nodes when viewing the main tree, not subtrees
-    // This allows new unconnected nodes to be visible in the main tree
-    if (!current_view.is_subtree)
-    {
-        // Build set of subtree root IDs (these should not appear in main tree)
-        std::unordered_set<ID> subtree_root_ids;
-        for (auto const& [name, view] : m_tree_views)
-        {
-            if (view.is_subtree && view.root_id >= 0)
-            {
-                subtree_root_ids.insert(view.root_id);
-            }
-        }
-
-        // Include orphan nodes (nodes without parents that aren't the root)
-        // BUT exclude subtree definition roots
-        for (auto const& [id, node] : m_nodes)
-        {
-            if (node.parent == -1 && id != current_root_id &&
-                subtree_root_ids.find(id) == subtree_root_ids.end())
-            {
-                visible_node_ids.insert(id);
-                // Also collect their children if any
-                collectVisibleNodes(id, visible_node_ids);
-            }
-        }
-    }
+    // Non-const because the renderer writes the positions back when dragging.
+    TreeView& current_view = getCurrentTreeView();
 
     // Filter nodes to only visible ones and sync positions from current view
     std::unordered_map<ID, Node> visible_nodes;
@@ -421,6 +438,52 @@ void Editor::drawBehaviorTree()
 }
 
 // ----------------------------------------------------------------------------
+std::vector<Editor::ID> Editor::collectViewRoots()
+{
+    TreeView const& current_view = getCurrentTreeView();
+    std::vector<ID> roots;
+
+    if (findNode(current_view.root_id) != nullptr)
+    {
+        roots.push_back(current_view.root_id);
+    }
+
+    // A subtree tab only ever shows its own definition.
+    if (current_view.is_subtree)
+    {
+        return roots;
+    }
+
+    // The definition of a SubTree is edited in its own tab, never inlined in
+    // the main tree.
+    std::unordered_set<ID> subtree_root_ids;
+    for (auto const& [name, view] : m_tree_views)
+    {
+        if (view.is_subtree && view.root_id >= 0)
+        {
+            subtree_root_ids.insert(view.root_id);
+        }
+    }
+
+    std::vector<ID> orphans;
+    for (auto const& [id, node] : m_nodes)
+    {
+        if (node.parent == -1 && id != current_view.root_id &&
+            subtree_root_ids.find(id) == subtree_root_ids.end())
+        {
+            orphans.push_back(id);
+        }
+    }
+
+    // m_nodes is unordered: sort so that the auto-layout does not shuffle the
+    // orphans from one call to the next.
+    std::sort(orphans.begin(), orphans.end());
+    roots.insert(roots.end(), orphans.begin(), orphans.end());
+
+    return roots;
+}
+
+// ----------------------------------------------------------------------------
 void Editor::collectVisibleNodes(ID p_root_id,
                                  std::unordered_set<ID>& p_visible_nodes)
 {
@@ -428,8 +491,10 @@ void Editor::collectVisibleNodes(ID p_root_id,
     if (!node)
         return;
 
-    // Add this node to visible set
-    p_visible_nodes.insert(p_root_id);
+    // Already collected: a malformed tree holding a cycle would otherwise
+    // recurse forever.
+    if (!p_visible_nodes.insert(p_root_id).second)
+        return;
 
     // Process children
     for (ID child_id : node->children)
@@ -491,9 +556,13 @@ Editor::ID Editor::addNode(std::string const& p_type, std::string const& p_name)
     }
     setNodePosition(id, initial_position);
 
-    if (m_nodes.size() == 1u)
+    // Adopt the node as the root while the view has none, so that the very
+    // first node of a document, or the first one after the root was deleted,
+    // gives the tree something to hang from.
+    TreeView& current_view = getCurrentTreeView();
+    if (findNode(current_view.root_id) == nullptr)
     {
-        getCurrentTreeView().root_id = id;
+        current_view.root_id = id;
     }
 
     m_is_modified = true;
@@ -520,9 +589,19 @@ void Editor::addNodeAndLink(std::string const& p_type,
 // ----------------------------------------------------------------------------
 void Editor::deleteNode(ID const p_node_id)
 {
+    ID promoted_root = -1;
+
     Node* node = findNode(p_node_id);
     if (node)
     {
+        // Deleting the root would leave the view without one, and hence
+        // nothing to save: the first orphaned child takes over.
+        if (getCurrentTreeView().root_id == p_node_id &&
+            !node->children.empty())
+        {
+            promoted_root = node->children.front();
+        }
+
         // Remove from parent's children list
         if (node->parent >= 0)
         {
@@ -551,9 +630,16 @@ void Editor::deleteNode(ID const p_node_id)
     m_nodes.erase(p_node_id);
 
     // Update the root node if needed
-    if (getCurrentTreeView().root_id == p_node_id)
+    TreeView& current_view = getCurrentTreeView();
+    if (current_view.root_id == p_node_id)
     {
-        getCurrentTreeView().root_id = -1;
+        current_view.root_id = promoted_root;
+    }
+    current_view.node_positions.erase(p_node_id);
+
+    if (m_selected_node_id == p_node_id)
+    {
+        m_selected_node_id = -1;
     }
 
     m_is_modified = true;
@@ -570,6 +656,14 @@ void Editor::createLink(ID const p_from_node, ID const p_to_node)
     // Check if the link already exists
     if (std::find(from->children.begin(), from->children.end(), p_to_node) !=
         from->children.end())
+    {
+        return;
+    }
+
+    // An arc always goes from a parent down to a child. Accepting the opposite
+    // direction, from a node up to one of its own ancestors, would close a
+    // cycle and leave a graph no longer serializable as a tree.
+    if (p_from_node == p_to_node || isAncestorOf(p_to_node, p_from_node))
     {
         return;
     }
@@ -592,9 +686,53 @@ void Editor::createLink(ID const p_from_node, ID const p_to_node)
     from->children.push_back(p_to_node);
     to->parent = p_from_node;
 
+    // The former root just got a parent: the tree now hangs from whatever is
+    // above it, otherwise saving and laying out would ignore the new levels.
+    TreeView& current_view = getCurrentTreeView();
+    if (current_view.root_id == p_to_node)
+    {
+        current_view.root_id = topmostAncestor(p_from_node);
+    }
+
     m_is_modified = true;
 
     onLinkCreated.emit(p_from_node, p_to_node);
+}
+
+// ----------------------------------------------------------------------------
+bool Editor::isAncestorOf(ID p_candidate, ID p_node)
+{
+    if (p_candidate < 0)
+        return false;
+
+    std::unordered_set<ID> walked;
+    for (Node* node = findNode(p_node); node != nullptr;
+         node = findNode(node->parent))
+    {
+        if (node->parent == p_candidate)
+            return true;
+        if (!walked.insert(node->id).second)
+            break;
+    }
+
+    return false;
+}
+
+// ----------------------------------------------------------------------------
+Editor::ID Editor::topmostAncestor(ID p_node)
+{
+    std::unordered_set<ID> walked;
+    ID topmost = p_node;
+
+    for (Node* node = findNode(p_node); node != nullptr;
+         node = findNode(node->parent))
+    {
+        if (!walked.insert(node->id).second)
+            break;
+        topmost = node->id;
+    }
+
+    return topmost;
 }
 
 // ----------------------------------------------------------------------------
@@ -700,134 +838,156 @@ Editor::TreeView* Editor::findTreeViewByRootId(ID p_root_id)
 // ----------------------------------------------------------------------------
 void Editor::autoLayoutNodes()
 {
-    ID root_id = getCurrentTreeView().root_id;
-    if (root_id < 0)
+    std::vector<ID> const roots = collectViewRoots();
+    if (roots.empty())
         return;
 
-    Node* root = findNode(root_id);
-    if (!root)
-        return;
+    std::unordered_map<ID, float> breadths;
+    std::unordered_set<ID> placed;
+    float breadth = c_layout_origin;
 
-    float max_extent = 0;
-    layoutNodeRecursive(root, 100.0f, 100.0f, max_extent);
+    // Every root of the view is laid out, the main tree first and the nodes not
+    // attached to it yet next to it, each in its own lane.
+    for (ID root_id : roots)
+    {
+        float const subtree_breadth = measureSubtree(root_id, breadths);
+        if (subtree_breadth <= 0.0f)
+            continue;
+
+        placeSubtree(root_id, breadth, c_layout_origin, breadths, placed);
+        breadth += subtree_breadth + c_layout_forest_gap;
+    }
+
+    syncNodePositionsFromView();
 }
 
 // ----------------------------------------------------------------------------
-void Editor::layoutNodeRecursive(Node* p_node,
-                                 float p_x,
-                                 float p_y,
-                                 float& p_max_extent)
+ImVec2 Editor::nodeSize(Node const& p_node) const
 {
-    if (!p_node)
+    if (m_renderer)
+    {
+        return m_renderer->measureNode(p_node);
+    }
+    return ImVec2(c_layout_fallback_width, c_layout_fallback_height);
+}
+
+// ----------------------------------------------------------------------------
+float Editor::measureSubtree(ID p_node_id,
+                             std::unordered_map<ID, float>& p_breadths)
+{
+    auto const known = p_breadths.find(p_node_id);
+    if (known != p_breadths.end())
+    {
+        return known->second;
+    }
+
+    Node const* node = findNode(p_node_id);
+    if (node == nullptr)
+    {
+        return 0.0f;
+    }
+
+    // Reserve the slot before recursing: a node reachable twice contributes
+    // nothing the second time instead of looping forever.
+    p_breadths[p_node_id] = 0.0f;
+
+    bool const top_to_bottom =
+        (getCurrentTreeView().layout_direction == LayoutDirection::TopToBottom);
+    ImVec2 const size = nodeSize(*node);
+    float const own_breadth = top_to_bottom ? size.x : size.y;
+
+    float children_breadth = 0.0f;
+    for (ID child_id : node->children)
+    {
+        float const child_breadth = measureSubtree(child_id, p_breadths);
+        if (child_breadth <= 0.0f)
+            continue;
+
+        if (children_breadth > 0.0f)
+        {
+            children_breadth += c_layout_sibling_gap;
+        }
+        children_breadth += child_breadth;
+    }
+
+    float const breadth = std::max(own_breadth, children_breadth);
+    p_breadths[p_node_id] = breadth;
+    return breadth;
+}
+
+// ----------------------------------------------------------------------------
+void Editor::placeSubtree(ID p_node_id,
+                          float p_breadth,
+                          float p_depth,
+                          std::unordered_map<ID, float> const& p_breadths,
+                          std::unordered_set<ID>& p_placed)
+{
+    Node const* node = findNode(p_node_id);
+    if (node == nullptr)
         return;
 
-    // Groot-style layout with proper spacing
-    constexpr float NODE_HORIZONTAL_SPACING = 40.0f;
-    constexpr float NODE_VERTICAL_SPACING = 60.0f;
-    constexpr float MIN_NODE_WIDTH = 150.0f;
-    constexpr float MIN_NODE_HEIGHT = 80.0f;
-
-    // Use minimum dimensions for layout
-    ImVec2 node_size(MIN_NODE_WIDTH, MIN_NODE_HEIGHT);
-
-    // Get layout direction from current view
-    LayoutDirection layout_dir = getCurrentTreeView().layout_direction;
-
-    // If the node has no children, set its position and return
-    if (p_node->children.empty())
-    {
-        setNodePosition(p_node->id, ImVec2(p_x, p_y));
-
-        if (layout_dir == LayoutDirection::LeftToRight)
-        {
-            p_max_extent = std::max(p_max_extent, p_y + node_size.y);
-        }
-        else // TopToBottom
-        {
-            p_max_extent = std::max(p_max_extent, p_x + node_size.x);
-        }
+    if (!p_placed.insert(p_node_id).second)
         return;
+
+    auto breadthOf = [&p_breadths](ID p_id) {
+        auto const it = p_breadths.find(p_id);
+        return (it != p_breadths.end()) ? it->second : 0.0f;
+    };
+
+    bool const top_to_bottom =
+        (getCurrentTreeView().layout_direction == LayoutDirection::TopToBottom);
+    ImVec2 const size = nodeSize(*node);
+    float const own_breadth = top_to_bottom ? size.x : size.y;
+    float const own_depth = top_to_bottom ? size.y : size.x;
+    float const slot = breadthOf(p_node_id);
+
+    float const centered = p_breadth + (slot - own_breadth) * 0.5f;
+    setNodePosition(p_node_id,
+                    top_to_bottom ? ImVec2(centered, p_depth)
+                                  : ImVec2(p_depth, centered));
+
+    // Children of a leaf-shaped node take less room than the node itself: they
+    // are centered under it rather than aligned on its left edge.
+    float children_breadth = 0.0f;
+    for (ID child_id : node->children)
+    {
+        float const child_breadth = breadthOf(child_id);
+        if (child_breadth <= 0.0f)
+            continue;
+
+        if (children_breadth > 0.0f)
+        {
+            children_breadth += c_layout_sibling_gap;
+        }
+        children_breadth += child_breadth;
     }
 
-    // Layout children recursively first (post-order)
-    float child_start_pos =
-        (layout_dir == LayoutDirection::LeftToRight) ? p_y : p_x;
+    float child_breadth_cursor = p_breadth + (slot - children_breadth) * 0.5f;
+    float const child_depth = p_depth + own_depth + c_layout_depth_gap;
 
-    std::vector<ImVec2> child_positions;
-
-    for (size_t i = 0; i < p_node->children.size(); ++i)
+    for (ID child_id : node->children)
     {
-        Node* child = findNode(p_node->children[i]);
-        if (child)
-        {
-            float child_extent_before = p_max_extent;
+        float const child_breadth = breadthOf(child_id);
+        if (child_breadth <= 0.0f)
+            continue;
 
-            if (layout_dir == LayoutDirection::LeftToRight)
-            {
-                // Left to right: parent to children goes right (X increases)
-                // Siblings spread vertically (Y increases)
-                float child_x = p_x + node_size.x + NODE_VERTICAL_SPACING;
-                layoutNodeRecursive(
-                    child, child_x, child_start_pos, p_max_extent);
-                child_positions.push_back(getNodePosition(child->id));
-
-                // Move to next sibling position vertically (use minimum
-                // dimensions)
-                child_start_pos += std::max(p_max_extent - child_extent_before,
-                                            MIN_NODE_HEIGHT) +
-                                   NODE_HORIZONTAL_SPACING;
-            }
-            else // TopToBottom
-            {
-                // Top to bottom: parent to children goes down (Y increases)
-                // Siblings spread horizontally (X increases)
-                float child_y = p_y + node_size.y + NODE_VERTICAL_SPACING;
-                layoutNodeRecursive(
-                    child, child_start_pos, child_y, p_max_extent);
-                child_positions.push_back(getNodePosition(child->id));
-
-                // Move to next sibling position horizontally (use minimum
-                // dimensions)
-                child_start_pos += std::max(p_max_extent - child_extent_before,
-                                            MIN_NODE_WIDTH) +
-                                   NODE_HORIZONTAL_SPACING;
-            }
-        }
+        placeSubtree(
+            child_id, child_breadth_cursor, child_depth, p_breadths, p_placed);
+        child_breadth_cursor += child_breadth + c_layout_sibling_gap;
     }
+}
 
-    // Center parent relative to children
-    if (!child_positions.empty())
+// ----------------------------------------------------------------------------
+void Editor::syncNodePositionsFromView()
+{
+    TreeView const& current_view = getCurrentTreeView();
+    for (auto const& [id, position] : current_view.node_positions)
     {
-        if (layout_dir == LayoutDirection::LeftToRight)
+        auto node_it = m_nodes.find(id);
+        if (node_it != m_nodes.end())
         {
-            // Center vertically over children (children spread vertically)
-            float min_child_y = child_positions[0].y;
-            float max_child_y = child_positions[child_positions.size() - 1].y;
-            // Add height of last child (use minimum)
-            max_child_y += MIN_NODE_HEIGHT;
-            float center_y =
-                (min_child_y + max_child_y) / 2.0f - node_size.y / 2.0f;
-            ImVec2 pos = ImVec2(p_x, std::max(p_y, center_y));
-            setNodePosition(p_node->id, pos);
-            p_max_extent = std::max(p_max_extent, pos.x + node_size.x);
+            node_it->second.position = position;
         }
-        else // TopToBottom
-        {
-            // Center horizontally over children (children spread horizontally)
-            float min_child_x = child_positions[0].x;
-            float max_child_x = child_positions[child_positions.size() - 1].x;
-            // Add width of last child (use minimum)
-            max_child_x += MIN_NODE_WIDTH;
-            float center_x =
-                (min_child_x + max_child_x) / 2.0f - node_size.x / 2.0f;
-            ImVec2 pos = ImVec2(std::max(p_x, center_x), p_y);
-            setNodePosition(p_node->id, pos);
-            p_max_extent = std::max(p_max_extent, pos.y + node_size.y);
-        }
-    }
-    else
-    {
-        setNodePosition(p_node->id, ImVec2(p_x, p_y));
     }
 }
 
@@ -919,13 +1079,13 @@ bool Editor::collapseSubTree(Node* p_subtree_node)
 }
 
 // ----------------------------------------------------------------------------
-void Editor::loadFromYaml(std::string const& p_filepath)
+bool Editor::loadFromYaml(std::string const& p_filepath)
 {
     auto doc = bt::YamlDocument::parseFile(p_filepath);
     if (!doc)
     {
         std::cerr << "YAML parsing error: " << doc.getError() << std::endl;
-        return;
+        return false;
     }
 
     bt::YamlDocument yaml_doc = doc.moveValue();
@@ -938,6 +1098,7 @@ void Editor::loadFromYaml(std::string const& p_filepath)
     m_selected_node_id = -1;
     m_active_tree_name.clear();
     m_dfs_node_order.clear();
+    m_has_document = false;
 
     // Create a fresh blackboard and parse the Blackboard section
     m_blackboard = std::make_shared<bt::Blackboard>();
@@ -956,7 +1117,7 @@ void Editor::loadFromYaml(std::string const& p_filepath)
         if (root_id < 0)
         {
             std::cerr << "Failed to parse BehaviorTree section" << std::endl;
-            return;
+            return false;
         }
 
         // Extract filename without extension for the tree name
@@ -970,7 +1131,7 @@ void Editor::loadFromYaml(std::string const& p_filepath)
     else
     {
         std::cerr << "No BehaviorTree section found in YAML" << std::endl;
-        return;
+        return false;
     }
 
     // Parse SubTrees section
@@ -998,45 +1159,39 @@ void Editor::loadFromYaml(std::string const& p_filepath)
                 });
     }
 
-    // Auto-layout the nodes for each tree view
-    std::string saved_active_name = m_active_tree_name;
+    // Auto-layout the nodes of every view. The layout works on the active view,
+    // hence the round trip through m_active_tree_name.
+    std::string const saved_active_name = m_active_tree_name;
+    std::vector<std::string> view_names;
+    view_names.reserve(m_tree_views.size());
+    for (auto const& [name, view] : m_tree_views)
+    {
+        view_names.push_back(name);
+    }
 
-    for (auto& [name, view] : m_tree_views)
+    for (std::string const& name : view_names)
     {
         m_active_tree_name = name;
         autoLayoutNodes();
-
-        std::unordered_set<ID> visible_nodes;
-        if (view.root_id >= 0)
-        {
-            collectVisibleNodes(view.root_id, visible_nodes);
-        }
-        for (ID id : visible_nodes)
-        {
-            auto node_it = m_nodes.find(id);
-            auto pos_it = view.node_positions.find(id);
-            if (node_it != m_nodes.end() &&
-                pos_it != view.node_positions.end())
-            {
-                node_it->second.position = pos_it->second;
-            }
-        }
     }
 
     m_active_tree_name = saved_active_name;
 
     m_is_modified = false;
+    m_has_document = true;
     m_behavior_tree_filepath = p_filepath;
+
+    return true;
 }
 
 // ----------------------------------------------------------------------------
-void Editor::loadFromYamlString(std::string const& p_yaml_content)
+bool Editor::loadFromYamlString(std::string const& p_yaml_content)
 {
     auto doc = bt::YamlDocument::parseText(p_yaml_content);
     if (!doc)
     {
         std::cerr << "YAML parsing error: " << doc.getError() << std::endl;
-        return;
+        return false;
     }
 
     bt::YamlDocument yaml_doc = doc.moveValue();
@@ -1088,7 +1243,7 @@ void Editor::loadFromYamlString(std::string const& p_yaml_content)
         if (root_id < 0)
         {
             std::cerr << "Failed to parse BehaviorTree section" << std::endl;
-            return;
+            return false;
         }
 
         std::string tree_name = "Visualizer";
@@ -1100,29 +1255,46 @@ void Editor::loadFromYamlString(std::string const& p_yaml_content)
     else
     {
         std::cerr << "No BehaviorTree section found in YAML" << std::endl;
-        return;
+        return false;
     }
 
     autoLayoutNodes();
 
     m_is_modified = false;
+
+    return true;
 }
 
 // ----------------------------------------------------------------------------
-void Editor::saveToYaml(std::string const& p_filepath)
+bool Editor::saveToYaml(std::string const& p_filepath)
 {
     ID root_id = getCurrentTreeView().root_id;
-    if (root_id < 0)
+    Node* root = findNode(root_id);
+    if (root == nullptr)
     {
-        std::cerr << "No root node to save" << std::endl;
-        return;
+        std::cerr << "Nothing to save: the tree has no root node" << std::endl;
+        return false;
     }
 
-    Node* root = findNode(root_id);
-    if (!root)
+    // A behavior tree hangs from a single root: nodes left floating around
+    // cannot be written down. Say so rather than dropping them silently.
+    std::unordered_set<ID> saved_nodes;
+    collectVisibleNodes(root_id, saved_nodes);
+    for (auto const& [name, view] : m_tree_views)
     {
-        std::cerr << "Root node not found" << std::endl;
-        return;
+        if (view.is_subtree)
+        {
+            collectVisibleNodes(view.root_id, saved_nodes);
+        }
+    }
+
+    std::size_t const dangling = m_nodes.size() - saved_nodes.size();
+    if (dangling > 0U)
+    {
+        std::cerr << "Warning: " << dangling
+                  << " node(s) are not connected to the root and will not be "
+                     "saved"
+                  << std::endl;
     }
 
     std::ofstream file(p_filepath);
@@ -1130,7 +1302,7 @@ void Editor::saveToYaml(std::string const& p_filepath)
     {
         std::cerr << "Failed to open file for writing: " << p_filepath
                   << std::endl;
-        return;
+        return false;
     }
 
     std::ostringstream out;
@@ -1186,7 +1358,10 @@ void Editor::saveToYaml(std::string const& p_filepath)
     file.close();
 
     m_is_modified = false;
+    m_has_document = true;
     m_behavior_tree_filepath = p_filepath;
+
+    return true;
 }
 
 // ============================================================================
@@ -1269,7 +1444,12 @@ void Editor::serializeNodeToYaml(std::ostringstream& p_out,
     }
     p_out << p_node->type << ":\n";
 
-    int const inner = p_indent + 1;
+    // The "- " prefix shifts the type key one indentation level to the right,
+    // so the keys nested under it must follow. Without this the keys land at
+    // the level of the type itself and YAML reads them as its siblings: the
+    // name and, worse, the whole children list of every node but the root are
+    // lost on reload.
+    int const inner = p_indent + (p_sequence_item ? 2 : 1);
     appendYamlIndent(p_out, inner);
     p_out << "name: ";
     appendYamlScalar(p_out, p_node->name);
