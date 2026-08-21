@@ -46,6 +46,43 @@ static std::string getBlackboardValueString(bt::Blackboard const* blackboard,
 }
 
 // ----------------------------------------------------------------------------
+//! \brief One line of the port list of a node: the port name, then what it is
+//! bound to. A ${key} binding shows the blackboard value behind the key, a
+//! literal shows itself.
+// ----------------------------------------------------------------------------
+static std::string formatPort(bt::Blackboard const* p_blackboard,
+                              Editor::Port const& p_port)
+{
+    std::string line = "  - " + p_port.name;
+
+    bool const is_reference = (p_port.binding.size() > 3U) &&
+                              (p_port.binding.compare(0, 2, "${") == 0) &&
+                              (p_port.binding.back() == '}');
+    if (!is_reference)
+    {
+        if (!p_port.binding.empty())
+        {
+            line += " = " + p_port.binding;
+        }
+        return line;
+    }
+
+    std::string const key =
+        p_port.binding.substr(2U, p_port.binding.size() - 3U);
+    if (key != p_port.name)
+    {
+        line += " -> " + key;
+    }
+
+    std::string const value = getBlackboardValueString(p_blackboard, key);
+    if (!value.empty())
+    {
+        line += ": " + value;
+    }
+    return line;
+}
+
+// ----------------------------------------------------------------------------
 // Color lookup table for node types
 // ----------------------------------------------------------------------------
 static const std::unordered_map<std::string, ImU32> s_type_colors = {
@@ -54,11 +91,35 @@ static const std::unordered_map<std::string, ImU32> s_type_colors = {
     {"Parallel", IM_COL32(150, 200, 150, 255)},
     {"Decorator", IM_COL32(200, 100, 200, 255)},
     {"Inverter", IM_COL32(200, 100, 200, 255)},
-    {"Repeater", IM_COL32(200, 100, 200, 255)},
+    {"Repeat", IM_COL32(200, 100, 200, 255)},
+    {"UntilSuccess", IM_COL32(200, 100, 200, 255)},
+    {"UntilFailure", IM_COL32(200, 100, 200, 255)},
+    {"ForceSuccess", IM_COL32(200, 100, 200, 255)},
+    {"ForceFailure", IM_COL32(200, 100, 200, 255)},
+    {"RunOnce", IM_COL32(200, 100, 200, 255)},
+    {"Timeout", IM_COL32(200, 100, 200, 255)},
+    {"Delay", IM_COL32(200, 100, 200, 255)},
+    {"Cooldown", IM_COL32(200, 100, 200, 255)},
     {"Action", IM_COL32(100, 200, 100, 255)},
     {"Condition", IM_COL32(200, 200, 100, 255)},
+    {"Wait", IM_COL32(200, 200, 100, 255)},
+    {"SetBlackboard", IM_COL32(200, 200, 100, 255)},
     {"SubTree", IM_COL32(150, 100, 200, 255)},
 };
+
+// ----------------------------------------------------------------------------
+bool TreeRenderer::acceptsChildren(Editor::Node const& p_node) const
+{
+    if (!p_node.children.empty())
+        return true;
+
+    if (m_accepts_children)
+        return m_accepts_children(p_node.type);
+
+    return p_node.type == "Sequence" || p_node.type == "Selector" ||
+           p_node.type == "Parallel" || p_node.type == "Inverter" ||
+           p_node.type == "SubTree";
+}
 
 // ----------------------------------------------------------------------------
 void TreeRenderer::shutdown()
@@ -67,11 +128,12 @@ void TreeRenderer::shutdown()
 }
 
 // ----------------------------------------------------------------------------
-void TreeRenderer::drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_nodes,
-                                std::vector<Editor::Link> const& p_links,
-                                int p_layout_direction,
-                                bt::Blackboard* p_blackboard,
-                                bool p_read_only)
+void TreeRenderer::drawBehaviorTree(
+    std::unordered_map<ID, Editor::Node>& p_nodes,
+    std::vector<Editor::Link> const& p_links,
+    int p_layout_direction,
+    bt::Blackboard* p_blackboard,
+    bool p_read_only)
 {
     m_layout_direction = p_layout_direction;
     m_blackboard = p_blackboard;
@@ -80,6 +142,7 @@ void TreeRenderer::drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_node
     m_link_deleted_this_frame = false;
     m_link_dropped_in_void = false;
     m_toggled_subtree_id = -1;
+    m_box_select.released = false;
     // Clear visuals to only keep nodes from current tree view
     m_node_visuals.clear();
 
@@ -93,6 +156,13 @@ void TreeRenderer::drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_node
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     m_canvas_size = ImGui::GetContentRegionAvail();
     m_canvas_pos = ImGui::GetCursorScreenPos();
+
+    // ImGui reports the mouse buttons globally, so every interaction below has
+    // to check that the pointer really is over this canvas. Without it, a click
+    // in the blackboard panel or in a popup reaches the graph too.
+    m_canvas_hovered =
+        ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                               ImGuiHoveredFlags_AllowWhenBlockedByPopup);
 
     handleCanvasPanAndZoom();
     drawGrid(draw_list, m_canvas_pos);
@@ -115,10 +185,7 @@ void TreeRenderer::drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_node
 
         // All nodes have input pins (including root for visual consistency)
         bool has_input = true;
-        bool has_output = !node.children.empty() || node.type == "Sequence" ||
-                          node.type == "Selector" || node.type == "Parallel" ||
-                          node.type == "Inverter" || node.type == "Repeater" ||
-                          node.type == "SubTree";
+        bool has_output = acceptsChildren(node);
         bool is_top_to_bottom =
             (p_layout_direction == 1); // 1 = TopToBottom, 0 = LeftToRight
         calculatePinPositions(visual, has_input, has_output, is_top_to_bottom);
@@ -168,15 +235,13 @@ void TreeRenderer::drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_node
     // Handle interactions in edit mode
     if (!p_read_only)
     {
-        // Handle selection first
-        handleSelection(p_nodes, p_links);
-
-        // Then handle drags
         for (auto& [id, node] : p_nodes)
         {
             handleNodeDrag(node, !p_read_only);
             handleLinkCreation(node, !p_read_only);
         }
+
+        handleBoxSelection(p_nodes);
     }
 
     draw_list->PopClipRect();
@@ -184,7 +249,81 @@ void TreeRenderer::drawBehaviorTree(std::unordered_map<ID, Editor::Node>& p_node
 }
 
 // ----------------------------------------------------------------------------
-void TreeRenderer::drawNode(Editor::Node const& p_node, bool /*p_is_top_to_bottom*/)
+bool TreeRenderer::isOverAnyNode(ImVec2 p_mouse_pos) const
+{
+    for (auto const& [id, visual] : m_node_visuals)
+    {
+        if (visual.bounds.Contains(p_mouse_pos) ||
+            isPinHovered(visual.input_pin_pos, p_mouse_pos) ||
+            isPinHovered(visual.output_pin_pos, p_mouse_pos))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ----------------------------------------------------------------------------
+void TreeRenderer::handleBoxSelection(
+    std::unordered_map<ID, Editor::Node> const& p_nodes)
+{
+    ImVec2 const mouse_pos = ImGui::GetMousePos();
+
+    // A drag started on empty canvas is a rubber band. Starting it on a node
+    // would fight with moving that node.
+    if (!m_box_select.active && m_canvas_hovered &&
+        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+        !m_drag_state.is_dragging_node && !m_drag_state.is_dragging_link &&
+        !isOverAnyNode(mouse_pos))
+    {
+        m_box_select.active = true;
+        m_box_select.origin = mouse_pos;
+    }
+
+    if (!m_box_select.active)
+        return;
+
+    ImRect const box(std::min(m_box_select.origin.x, mouse_pos.x),
+                     std::min(m_box_select.origin.y, mouse_pos.y),
+                     std::max(m_box_select.origin.x, mouse_pos.x),
+                     std::max(m_box_select.origin.y, mouse_pos.y));
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(box.Min, box.Max, IM_COL32(255, 255, 100, 30));
+    draw_list->AddRect(box.Min, box.Max, IM_COL32(255, 255, 100, 160));
+
+    // Released outside the canvas too: dropping the band elsewhere must not
+    // leave it stuck on screen.
+    if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+        return;
+
+    m_box_select.active = false;
+    m_box_select.released = true;
+    m_box_select.nodes.clear();
+
+    for (auto const& [id, node] : p_nodes)
+    {
+        auto const it = m_node_visuals.find(id);
+        if ((it != m_node_visuals.end()) && box.Overlaps(it->second.bounds))
+        {
+            m_box_select.nodes.push_back(id);
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+bool TreeRenderer::getBoxSelection(std::vector<ID>& p_nodes) const
+{
+    if (!m_box_select.released)
+        return false;
+
+    p_nodes = m_box_select.nodes;
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+void TreeRenderer::drawNode(Editor::Node const& p_node,
+                            bool /*p_is_top_to_bottom*/)
 {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     NodeVisual const& visual = m_node_visuals[p_node.id];
@@ -265,19 +404,20 @@ void TreeRenderer::drawNode(Editor::Node const& p_node, bool /*p_is_top_to_botto
         text_pos.y += 18;
     }
 
-    // Inputs
+    // Inputs. On a SubTree node a port is a remapping: the key of the nested
+    // scope on the left, the parent key it reads from on the right.
+    bool const is_subtree = (p_node.type == "SubTree");
+
     if (!p_node.inputs.empty())
     {
         text_pos.y += 4;
-        draw_list->AddText(text_pos, IM_COL32(150, 200, 255, 255), "Inputs:");
+        draw_list->AddText(text_pos,
+                           IM_COL32(150, 200, 255, 255),
+                           is_subtree ? "In remapping:" : "Inputs:");
         text_pos.y += 16;
         for (const auto& input : p_node.inputs)
         {
-            std::string value_str =
-                getBlackboardValueString(m_blackboard, input);
-            std::string input_text = value_str.empty()
-                                         ? ("  - " + input)
-                                         : ("  - " + input + ": " + value_str);
+            std::string const input_text = formatPort(m_blackboard, input);
             draw_list->AddText(
                 text_pos, IM_COL32(180, 180, 180, 255), input_text.c_str());
             text_pos.y += 16;
@@ -288,15 +428,13 @@ void TreeRenderer::drawNode(Editor::Node const& p_node, bool /*p_is_top_to_botto
     if (!p_node.outputs.empty())
     {
         text_pos.y += 4;
-        draw_list->AddText(text_pos, IM_COL32(255, 200, 150, 255), "Outputs:");
+        draw_list->AddText(text_pos,
+                           IM_COL32(255, 200, 150, 255),
+                           is_subtree ? "Out remapping:" : "Outputs:");
         text_pos.y += 16;
         for (const auto& output : p_node.outputs)
         {
-            std::string value_str =
-                getBlackboardValueString(m_blackboard, output);
-            std::string output_text =
-                value_str.empty() ? ("  - " + output)
-                                  : ("  - " + output + ": " + value_str);
+            std::string const output_text = formatPort(m_blackboard, output);
             draw_list->AddText(
                 text_pos, IM_COL32(180, 180, 180, 255), output_text.c_str());
             text_pos.y += 16;
@@ -307,7 +445,7 @@ void TreeRenderer::drawNode(Editor::Node const& p_node, bool /*p_is_top_to_botto
     ImU32 border_color;
     float border_thickness;
 
-    if (p_node.id == m_selected_node_id)
+    if (m_selection.count(p_node.id) > 0U)
     {
         // Selected node gets a bright border
         border_color = IM_COL32(255, 255, 100, 255);
@@ -340,12 +478,7 @@ void TreeRenderer::drawNode(Editor::Node const& p_node, bool /*p_is_top_to_botto
     drawPin(visual.input_pin_pos, true, hovered);
 
     // Output pin (nodes that can have children)
-    bool can_have_children =
-        !p_node.children.empty() || p_node.type == "Sequence" ||
-        p_node.type == "Selector" || p_node.type == "Parallel" ||
-        p_node.type == "Inverter" || p_node.type == "Repeater" ||
-        p_node.type == "SubTree";
-    if (can_have_children)
+    if (acceptsChildren(p_node))
     {
         hovered = isPinHovered(visual.output_pin_pos, mouse_pos);
         drawPin(visual.output_pin_pos, false, hovered);
@@ -354,8 +487,8 @@ void TreeRenderer::drawNode(Editor::Node const& p_node, bool /*p_is_top_to_botto
 
 // ----------------------------------------------------------------------------
 void TreeRenderer::drawPin(ImVec2 p_position,
-                       bool p_is_input,
-                       bool p_is_hovered) const
+                           bool p_is_input,
+                           bool p_is_hovered) const
 {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -376,9 +509,9 @@ void TreeRenderer::drawPin(ImVec2 p_position,
 
 // ----------------------------------------------------------------------------
 void TreeRenderer::drawLink(ImVec2 p_start,
-                        ImVec2 p_end,
-                        bool p_is_selected,
-                        bool p_is_top_to_bottom) const
+                            ImVec2 p_end,
+                            bool p_is_selected,
+                            bool p_is_top_to_bottom) const
 {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -441,8 +574,20 @@ void TreeRenderer::handleCanvasPanAndZoom()
 {
     auto const& io = ImGui::GetIO();
 
-    // Pan with middle mouse button
-    if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+    // Pan with middle mouse button. Started over the canvas only, so that
+    // dragging in another window does not scroll the graph, but kept alive
+    // afterwards so that the pointer may leave while panning.
+    if (m_panning && !ImGui::IsMouseDown(ImGuiMouseButton_Middle))
+    {
+        m_panning = false;
+    }
+    else if (!m_panning && m_canvas_hovered &&
+             ImGui::IsMouseClicked(ImGuiMouseButton_Middle))
+    {
+        m_panning = true;
+    }
+
+    if (m_panning && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
     {
         ImVec2 delta = io.MouseDelta;
         m_canvas_offset.x += delta.x;
@@ -467,7 +612,7 @@ void TreeRenderer::handleNodeDrag(Editor::Node& node, bool is_edit_mode)
     ImVec2 mouse_pos = ImGui::GetMousePos();
 
     // Check if mouse is over the entire node (but not on pins)
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+    if (m_canvas_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
         visual.bounds.Contains(mouse_pos))
     {
         // Don't start dragging if clicking on pins
@@ -503,21 +648,17 @@ void TreeRenderer::handleNodeDrag(Editor::Node& node, bool is_edit_mode)
 }
 
 // ----------------------------------------------------------------------------
-void TreeRenderer::handleLinkCreation(Editor::Node const& p_node, bool p_is_edit_mode)
+void TreeRenderer::handleLinkCreation(Editor::Node const& p_node,
+                                      bool p_is_edit_mode)
 {
-    bool can_have_children =
-        !p_node.children.empty() || p_node.type == "Sequence" ||
-        p_node.type == "Selector" || p_node.type == "Parallel" ||
-        p_node.type == "Inverter" || p_node.type == "Repeater" ||
-        p_node.type == "SubTree";
-    if ((!p_is_edit_mode) || (!can_have_children))
+    if ((!p_is_edit_mode) || (!acceptsChildren(p_node)))
         return;
 
     NodeVisual const& visual = m_node_visuals[p_node.id];
     ImVec2 mouse_pos = ImGui::GetMousePos();
 
     // Check if mouse clicked on output pin
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    if (m_canvas_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     {
         if (isPinHovered(visual.output_pin_pos, mouse_pos))
         {
@@ -571,61 +712,10 @@ void TreeRenderer::handleLinkCreation(Editor::Node const& p_node, bool p_is_edit
         auto button_rect =
             ImRect(button_pos, ImVec2(button_pos.x + 30, button_pos.y + 16));
 
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+        if (m_canvas_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
             button_rect.Contains(mouse_pos))
         {
             m_toggled_subtree_id = p_node.id;
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
-void TreeRenderer::handleSelection(std::unordered_map<ID, Editor::Node> const& nodes,
-                               std::vector<Editor::Link> const& /*p_links*/)
-{
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-    {
-        ImVec2 mouse_pos = ImGui::GetMousePos();
-        bool found = false;
-
-        // Check if clicking on a node
-        for (auto& [id, node] : nodes)
-        {
-            NodeVisual const& visual = m_node_visuals[id];
-            if (visual.bounds.Contains(mouse_pos))
-            {
-                // Don't select if clicking on pins
-                if (!isPinHovered(visual.input_pin_pos, mouse_pos) &&
-                    !isPinHovered(visual.output_pin_pos, mouse_pos))
-                {
-                    m_selected_node_id = id;
-                    m_selected_link_from = -1;
-                    m_selected_link_to = -1;
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        // If not clicking on a node, deselect
-        if (!found && !m_drag_state.is_dragging_link)
-        {
-            m_selected_node_id = -1;
-            m_selected_link_from = -1;
-            m_selected_link_to = -1;
-        }
-    }
-
-    // Handle delete key
-    if (ImGui::IsKeyPressed(ImGuiKey_Delete))
-    {
-        if ((m_selected_link_from >= 0) && (m_selected_link_to >= 0))
-        {
-            m_deleted_link_from = m_selected_link_from;
-            m_deleted_link_to = m_selected_link_to;
-            m_link_deleted_this_frame = true;
-            m_selected_link_from = -1;
-            m_selected_link_to = -1;
         }
     }
 }
@@ -672,9 +762,9 @@ ImVec2 TreeRenderer::calculateNodeSize(const Editor::Node& p_node) const
 
 // ----------------------------------------------------------------------------
 void TreeRenderer::calculatePinPositions(NodeVisual& p_visual,
-                                     bool p_has_input,
-                                     bool p_has_output,
-                                     bool p_is_top_to_bottom) const
+                                         bool p_has_input,
+                                         bool p_has_output,
+                                         bool p_is_top_to_bottom) const
 {
     if (p_is_top_to_bottom)
     {
@@ -790,15 +880,24 @@ bool TreeRenderer::getLinkDroppedInVoid(ID& p_from_node) const
 // ----------------------------------------------------------------------------
 TreeRenderer::ID TreeRenderer::getHoveredNodeId() const
 {
+    if (!m_canvas_hovered)
+        return -1;
+
     ImVec2 mouse_pos = ImGui::GetMousePos();
 
     // Check if mouse is over any node
     for (const auto& [id, visual] : m_node_visuals)
     {
-        if (visual.bounds.Contains(mouse_pos))
-        {
-            return id;
-        }
+        if (!visual.bounds.Contains(mouse_pos))
+            continue;
+
+        // A pin belongs to the linking gesture, not to the node: reporting the
+        // node here would select it instead of starting the link.
+        if (isPinHovered(visual.input_pin_pos, mouse_pos) ||
+            isPinHovered(visual.output_pin_pos, mouse_pos))
+            continue;
+
+        return id;
     }
 
     return -1;

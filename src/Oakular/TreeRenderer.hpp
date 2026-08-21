@@ -13,10 +13,12 @@
 #include "Editor.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace oakular {
@@ -66,12 +68,25 @@ public:
                           bool p_read_only = false);
 
     // ------------------------------------------------------------------------
-    //! \brief Get the last selected node ID.
-    //! \return Selected node ID or -1 if none.
+    //! \brief Tell which nodes to draw as selected. The editor owns the
+    //! selection; the renderer only reflects it.
+    //! \param p_selection IDs of the selected nodes.
     // ------------------------------------------------------------------------
-    int getSelectedNodeId() const
+    void setSelection(std::unordered_set<ID> const& p_selection)
     {
-        return m_selected_node_id;
+        m_selection = p_selection;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Tell which node types may be given children, so that only those
+    //! offer an output pin to drag a link from. Without it the renderer falls
+    //! back to the built-in types it knows and the nodes a host registered
+    //! itself get no pin.
+    //! \param p_policy Predicate taking a node type name.
+    // ------------------------------------------------------------------------
+    void setChildPolicy(std::function<bool(std::string const&)> p_policy)
+    {
+        m_accepts_children = std::move(p_policy);
     }
 
     // ------------------------------------------------------------------------
@@ -79,6 +94,32 @@ public:
     //! \return Node ID under cursor or -1 if none.
     // ------------------------------------------------------------------------
     ID getHoveredNodeId() const;
+
+    // ------------------------------------------------------------------------
+    //! \brief Whether the mouse is over the canvas. Guards the editor against
+    //! reacting to clicks aimed at another window, such as the blackboard.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isCanvasHovered() const
+    {
+        return m_canvas_hovered;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Whether a mouse interaction with the canvas is in progress: a
+    //! node being moved, a link being pulled or a selection box being drawn.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isInteracting() const
+    {
+        return m_drag_state.is_dragging_node || m_drag_state.is_dragging_link ||
+               m_box_select.active;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Get the nodes enclosed by the selection box just released.
+    //! \param p_nodes Filled with the enclosed node IDs.
+    //! \return true when a box was released this frame.
+    // ------------------------------------------------------------------------
+    bool getBoxSelection(std::vector<ID>& p_nodes) const;
 
     // ------------------------------------------------------------------------
     //! \brief Get link creation info.
@@ -212,12 +253,26 @@ private:
     void handleLinkCreation(Editor::Node const& node, bool is_edit_mode);
 
     // ------------------------------------------------------------------------
-    //! \brief Handling the selection.
-    //! \param nodes The nodes to select.
-    //! \param links The links to select.
+    //! \brief Track the rubber band the user drags over empty canvas to select
+    //! several nodes at once.
+    //! \param p_nodes The nodes the box is tested against.
     // ------------------------------------------------------------------------
-    void handleSelection(std::unordered_map<ID, Editor::Node> const& nodes,
-                         std::vector<Editor::Link> const& links);
+    void
+    handleBoxSelection(std::unordered_map<ID, Editor::Node> const& p_nodes);
+
+    // ------------------------------------------------------------------------
+    //! \brief Whether the mouse is over a node, or over one of its pins.
+    //! \param p_mouse_pos Position of the mouse, in screen coordinates.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isOverAnyNode(ImVec2 p_mouse_pos) const;
+
+    // ------------------------------------------------------------------------
+    //! \brief Whether a node may be given children, and hence gets an output
+    //! pin. A node that already has some always does, so that the link drawn
+    //! to them starts from a visible pin.
+    //! \param p_node The node to test.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool acceptsChildren(Editor::Node const& p_node) const;
 
     // ------------------------------------------------------------------------
     //! \brief Checking if a pin is hovered.
@@ -275,12 +330,32 @@ private:
     ImVec2 m_canvas_pos = ImVec2(0, 0);
     float m_canvas_zoom = 1.0f;
 
+    // ------------------------------------------------------------------------
+    //! \brief State of the rubber band selection.
+    // ------------------------------------------------------------------------
+    struct BoxSelectState
+    {
+        bool active = false;   //!< True while the band is being dragged.
+        bool released = false; //!< True on the frame the band is released.
+        ImVec2 origin;         //!< Where the drag started, in screen space.
+        std::vector<ID> nodes; //!< Nodes the released band enclosed.
+    };
+
     DragState m_drag_state;
+    BoxSelectState m_box_select;
     std::unordered_map<ID, NodeVisual> m_node_visuals;
+    std::unordered_set<ID> m_selection;
     bt::Blackboard* m_blackboard =
         nullptr; //!< Pointer to the blackboard for displaying values
 
-    ID m_selected_node_id = -1;
+    //! \brief Tells which node types may be given children. Set by the editor,
+    //! which owns the palette.
+    std::function<bool(std::string const&)> m_accepts_children;
+
+    //! \brief Whether the mouse was over the canvas child window this frame.
+    bool m_canvas_hovered = false;
+    //! \brief Whether the canvas is being panned with the middle button.
+    bool m_panning = false;
     ID m_selected_link_from = -1;
     ID m_selected_link_to = -1;
     ID m_toggled_subtree_id = -1;

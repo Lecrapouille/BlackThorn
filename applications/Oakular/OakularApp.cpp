@@ -59,6 +59,26 @@ void OakularApp::onTeardown()
 void OakularApp::onUpdate(float const p_dt)
 {
     m_editor.update(p_dt);
+    refreshWindowTitle();
+}
+
+// ----------------------------------------------------------------------------
+void OakularApp::refreshWindowTitle()
+{
+    // The usual convention: the file name, followed by a star while there are
+    // changes left to write down.
+    std::string const document = m_editor.documentTitle();
+    std::string title = "Oakular - BlackThorn Editor";
+    if (!document.empty())
+    {
+        title = document + " - " + title;
+    }
+
+    if (title == m_window_title)
+        return;
+
+    m_window_title = title;
+    setTitle(m_window_title);
 }
 
 // ----------------------------------------------------------------------------

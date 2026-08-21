@@ -179,8 +179,11 @@ bool assignScalarFromText(BlackboardValue& p_value, std::string const& p_text)
 }
 
 //! \brief Names of the blackboard value types offered by the panel combos.
-constexpr std::array<char const*, 5> c_value_type_names = {
-    "string", "int", "double", "bool", "struct"};
+constexpr std::array<char const*, 5> c_value_type_names = {"string",
+                                                           "int",
+                                                           "double",
+                                                           "bool",
+                                                           "struct"};
 
 //! \brief Index of the "struct" entry in \c c_value_type_names.
 constexpr int c_struct_type_index = 4;
@@ -233,14 +236,79 @@ struct BlackboardDrawContext
     bool& add_field_open;
     //! \brief Dotted path of the struct receiving the new field.
     std::string& add_field_parent_path;
+    //! \brief Dotted path of the entry whose delete button was pressed.
+    std::string remove_request;
     //! \brief Set when any value was edited during this frame.
     bool modified = false;
+    //! \brief Whether the entries may be edited at all. A subtree scope is a
+    //! preview of what the remapping will feed it, not a place to type in.
+    bool read_only = false;
 };
 
-void drawBlackboardEntry(std::string const& p_key,
-                         BlackboardValue& p_value,
-                         std::string const& p_full_path,
-                         BlackboardDrawContext& p_context);
+//! \brief Width of the type column of the blackboard table.
+constexpr float c_type_column_width = 92.0f;
+//! \brief Width of the column holding the per-entry buttons.
+constexpr float c_action_column_width = 48.0f;
+
+void drawBlackboardRow(std::string const& p_key,
+                       BlackboardValue& p_value,
+                       std::string const& p_full_path,
+                       BlackboardDrawContext& p_context);
+
+// ----------------------------------------------------------------------------
+//! \brief Open the table the entries are laid out in: one row per entry, the
+//! nested ones indented under their parent by the tree nodes.
+// ----------------------------------------------------------------------------
+bool beginBlackboardTable(char const* p_id)
+{
+    if (!ImGui::BeginTable(p_id,
+                           4,
+                           ImGuiTableFlags_Resizable |
+                               ImGuiTableFlags_BordersInnerV |
+                               ImGuiTableFlags_RowBg |
+                               ImGuiTableFlags_NoBordersInBodyUntilResize))
+    {
+        return false;
+    }
+
+    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 0.45f);
+    ImGui::TableSetupColumn(
+        "Type", ImGuiTableColumnFlags_WidthFixed, c_type_column_width);
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 0.55f);
+    ImGui::TableSetupColumn(
+        "##actions", ImGuiTableColumnFlags_WidthFixed, c_action_column_width);
+    ImGui::TableHeadersRow();
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Fill the type column with the name of the type held by an entry.
+// ----------------------------------------------------------------------------
+void drawTypeCell(BlackboardValue const& p_value)
+{
+    ImGui::TableNextColumn();
+    ImGui::TextColored(
+        ImVec4(0.6f, 0.6f, 0.8f, 1.0f), "%s", valueTypeName(p_value).c_str());
+}
+
+// ----------------------------------------------------------------------------
+//! \brief Draw the delete button of a row, asking for its removal.
+// ----------------------------------------------------------------------------
+void drawRemoveButton(std::string const& p_full_path,
+                      BlackboardDrawContext& p_context)
+{
+    if (p_context.read_only)
+        return;
+
+    if (ImGui::SmallButton("X"))
+    {
+        p_context.remove_request = p_full_path;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Remove %s", p_full_path.c_str());
+    }
+}
 
 // ----------------------------------------------------------------------------
 //! \brief Draw an editable scalar value.
@@ -250,36 +318,44 @@ void drawScalarEntry(std::string const& p_key,
                      std::string const& p_full_path,
                      BlackboardDrawContext& p_context)
 {
-    std::string display_value = scalarToEditableText(p_value);
-    std::string type_str = valueTypeName(p_value);
+    ImGui::TableNextColumn();
+    ImGui::TreeNodeEx(
+        p_key.c_str(),
+        ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
+            ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_Bullet);
 
-    ImGui::TextColored(
-        ImVec4(0.6f, 0.6f, 0.8f, 1.0f), "[%s]", type_str.c_str());
-    ImGui::SameLine();
+    drawTypeCell(p_value);
 
-    ImGui::Text("%s:", p_key.c_str());
-    ImGui::SameLine();
-
-    auto& buffer = p_context.edit_buffers;
-    if (buffer.find(p_full_path) == buffer.end())
+    ImGui::TableNextColumn();
+    if (p_context.read_only)
     {
-        buffer[p_full_path] = display_value;
+        ImGui::TextUnformatted(scalarToEditableText(p_value).c_str());
+    }
+    else
+    {
+        auto& buffer = p_context.edit_buffers;
+        if (buffer.find(p_full_path) == buffer.end())
+        {
+            buffer[p_full_path] = scalarToEditableText(p_value);
+        }
+
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        std::string const input_id = "##" + p_full_path;
+        if (ImGui::InputText(input_id.c_str(),
+                             &buffer[p_full_path],
+                             ImGuiInputTextFlags_EnterReturnsTrue) &&
+            assignScalarFromText(p_value, buffer[p_full_path]))
+        {
+            p_context.modified = true;
+        }
     }
 
-    ImGui::PushItemWidth(100);
-    std::string input_id = "##" + p_full_path;
-    if (ImGui::InputText(input_id.c_str(),
-                         &buffer[p_full_path],
-                         ImGuiInputTextFlags_EnterReturnsTrue) &&
-        assignScalarFromText(p_value, buffer[p_full_path]))
-    {
-        p_context.modified = true;
-    }
-    ImGui::PopItemWidth();
+    ImGui::TableNextColumn();
+    drawRemoveButton(p_full_path, p_context);
 }
 
 // ----------------------------------------------------------------------------
-//! \brief Draw a struct (map) entry as a collapsible tree node.
+//! \brief Draw a struct (map) entry as a collapsible row.
 // ----------------------------------------------------------------------------
 void drawStructEntry(std::string const& p_key,
                      BlackboardValue& p_value,
@@ -288,39 +364,78 @@ void drawStructEntry(std::string const& p_key,
 {
     auto& map = std::get<BlackboardMap>(p_value.asBase());
 
-    ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.8f, 1.0f), "[struct]");
-    ImGui::SameLine();
+    ImGui::TableNextColumn();
+    bool const node_open =
+        ImGui::TreeNodeEx(p_key.c_str(), ImGuiTreeNodeFlags_SpanFullWidth);
 
-    std::string node_label =
-        p_key + " (" + std::to_string(map.size()) + " fields)";
-    std::string tree_id = "##tree_" + p_full_path;
+    drawTypeCell(p_value);
 
-    bool node_open = ImGui::TreeNode((node_label + tree_id).c_str());
+    ImGui::TableNextColumn();
+    ImGui::TextDisabled(
+        "%zu field%s", map.size(), (map.size() == 1U) ? "" : "s");
 
-    ImGui::SameLine();
-    std::string add_btn_id = "+##add_" + p_full_path;
-    if (ImGui::SmallButton(add_btn_id.c_str()))
+    // The buttons sit in their own column: the tree node used to span the whole
+    // row and swallow the clicks aimed at them.
+    ImGui::TableNextColumn();
+    if (!p_context.read_only)
     {
-        p_context.add_field_open = true;
-        p_context.add_field_parent_path = p_full_path;
-    }
-
-    if (node_open)
-    {
-        for (auto& [field_key, field_value] : map)
+        if (ImGui::SmallButton("+"))
         {
-            ImGui::PushID(field_key.c_str());
-            std::string child_path = p_full_path + "." + field_key;
-            drawBlackboardEntry(field_key, field_value, child_path, p_context);
-            ImGui::PopID();
+            p_context.add_field_open = true;
+            p_context.add_field_parent_path = p_full_path;
         }
-
-        ImGui::TreePop();
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Add a field to %s", p_full_path.c_str());
+        }
+        ImGui::SameLine();
     }
+    drawRemoveButton(p_full_path, p_context);
+
+    if (!node_open)
+        return;
+
+    // Sorted so that the fields do not dance around from frame to frame: the
+    // storage is an unordered map.
+    std::vector<std::string> field_keys;
+    field_keys.reserve(map.size());
+    for (auto const& [field_key, field_value] : map)
+    {
+        field_keys.push_back(field_key);
+    }
+    std::sort(field_keys.begin(), field_keys.end());
+
+    for (std::string const& field_key : field_keys)
+    {
+        ImGui::PushID(field_key.c_str());
+        drawBlackboardRow(field_key,
+                          map[field_key],
+                          p_full_path + "." + field_key,
+                          p_context);
+        ImGui::PopID();
+    }
+
+    // A field asked to be removed: this is the only place holding its map.
+    if (!p_context.remove_request.empty())
+    {
+        std::string const prefix = p_full_path + ".";
+        if (p_context.remove_request.compare(0, prefix.size(), prefix) == 0)
+        {
+            std::string const field =
+                p_context.remove_request.substr(prefix.size());
+            if (field.find('.') == std::string::npos && map.erase(field) > 0U)
+            {
+                p_context.modified = true;
+                p_context.remove_request.clear();
+            }
+        }
+    }
+
+    ImGui::TreePop();
 }
 
 // ----------------------------------------------------------------------------
-//! \brief Draw an array entry as a collapsible tree node.
+//! \brief Draw an array entry as a collapsible row.
 // ----------------------------------------------------------------------------
 void drawArrayEntry(std::string const& p_key,
                     BlackboardValue& p_value,
@@ -331,32 +446,52 @@ void drawArrayEntry(std::string const& p_key,
     {
         auto& vec = *doubles;
 
-        ImGui::TextColored(ImVec4(0.6f, 0.8f, 0.6f, 1.0f), "[array<double>]");
-        ImGui::SameLine();
+        ImGui::TableNextColumn();
+        bool const node_open =
+            ImGui::TreeNodeEx(p_key.c_str(), ImGuiTreeNodeFlags_SpanFullWidth);
 
-        std::string node_label =
-            p_key + " [" + std::to_string(vec.size()) + " items]";
-        std::string tree_id = "##tree_" + p_full_path;
+        drawTypeCell(p_value);
 
-        if (ImGui::TreeNode((node_label + tree_id).c_str()))
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(
+            "%zu item%s", vec.size(), (vec.size() == 1U) ? "" : "s");
+
+        ImGui::TableNextColumn();
+        drawRemoveButton(p_full_path, p_context);
+
+        if (!node_open)
+            return;
+
+        for (size_t i = 0; i < vec.size(); ++i)
         {
-            for (size_t i = 0; i < vec.size(); ++i)
-            {
-                ImGui::PushID(static_cast<int>(i));
-                std::string idx_label = "[" + std::to_string(i) + "]:";
-                ImGui::Text("%s", idx_label.c_str());
-                ImGui::SameLine();
+            ImGui::PushID(static_cast<int>(i));
+            std::string const item_path =
+                p_full_path + "[" + std::to_string(i) + "]";
 
-                std::string item_path =
-                    p_full_path + "[" + std::to_string(i) + "]";
+            ImGui::TableNextColumn();
+            ImGui::TreeNodeEx(("[" + std::to_string(i) + "]").c_str(),
+                              ImGuiTreeNodeFlags_Leaf |
+                                  ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                                  ImGuiTreeNodeFlags_Bullet);
+
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("double");
+
+            ImGui::TableNextColumn();
+            if (p_context.read_only)
+            {
+                ImGui::Text("%g", vec[i]);
+            }
+            else
+            {
                 auto& buffer = p_context.edit_buffers;
                 if (buffer.find(item_path) == buffer.end())
                 {
                     buffer[item_path] = std::to_string(vec[i]);
                 }
 
-                ImGui::PushItemWidth(80);
-                std::string input_id = "##" + item_path;
+                ImGui::SetNextItemWidth(-FLT_MIN);
+                std::string const input_id = "##" + item_path;
                 if (ImGui::InputText(input_id.c_str(),
                                      &buffer[item_path],
                                      ImGuiInputTextFlags_EnterReturnsTrue))
@@ -370,79 +505,100 @@ void drawArrayEntry(std::string const& p_key,
                     {
                     }
                 }
-                ImGui::PopItemWidth();
-                ImGui::PopID();
             }
-            ImGui::TreePop();
+
+            ImGui::TableNextColumn();
+            ImGui::PopID();
         }
+
+        ImGui::TreePop();
+        return;
     }
-    else if (auto* items = std::get_if<BlackboardList>(&p_value.asBase()))
+
+    auto* items = std::get_if<BlackboardList>(&p_value.asBase());
+    if (items == nullptr)
+        return;
+
+    auto& vec = *items;
+
+    ImGui::TableNextColumn();
+    bool const node_open =
+        ImGui::TreeNodeEx(p_key.c_str(), ImGuiTreeNodeFlags_SpanFullWidth);
+
+    drawTypeCell(p_value);
+
+    ImGui::TableNextColumn();
+    ImGui::TextDisabled(
+        "%zu item%s", vec.size(), (vec.size() == 1U) ? "" : "s");
+
+    ImGui::TableNextColumn();
+    drawRemoveButton(p_full_path, p_context);
+
+    if (!node_open)
+        return;
+
+    for (size_t i = 0; i < vec.size(); ++i)
     {
-        auto& vec = *items;
-
-        ImGui::TextColored(ImVec4(0.6f, 0.8f, 0.6f, 1.0f), "[array]");
-        ImGui::SameLine();
-
-        std::string node_label =
-            p_key + " [" + std::to_string(vec.size()) + " items]";
-        std::string tree_id = "##tree_" + p_full_path;
-
-        if (ImGui::TreeNode((node_label + tree_id).c_str()))
-        {
-            for (size_t i = 0; i < vec.size(); ++i)
-            {
-                ImGui::PushID(static_cast<int>(i));
-                std::string idx_key = "[" + std::to_string(i) + "]";
-                std::string item_path =
-                    p_full_path + "[" + std::to_string(i) + "]";
-                drawBlackboardEntry(idx_key, vec[i], item_path, p_context);
-                ImGui::PopID();
-            }
-            ImGui::TreePop();
-        }
+        ImGui::PushID(static_cast<int>(i));
+        drawBlackboardRow("[" + std::to_string(i) + "]",
+                          vec[i],
+                          p_full_path + "[" + std::to_string(i) + "]",
+                          p_context);
+        ImGui::PopID();
     }
+
+    ImGui::TreePop();
 }
 
 // ----------------------------------------------------------------------------
-//! \brief Draw any blackboard entry, dispatching on its runtime type.
+//! \brief Draw one row of the blackboard table, dispatching on the runtime type
+//! of the entry. Assumes a table row was started by the caller.
 // ----------------------------------------------------------------------------
-void drawBlackboardEntry(std::string const& p_key,
-                         BlackboardValue& p_value,
-                         std::string const& p_full_path,
-                         BlackboardDrawContext& p_context)
+void drawBlackboardRow(std::string const& p_key,
+                       BlackboardValue& p_value,
+                       std::string const& p_full_path,
+                       BlackboardDrawContext& p_context)
 {
-    auto const& base = p_value.asBase();
+    ImGui::TableNextRow();
 
-    if (std::holds_alternative<std::monostate>(base))
-    {
-        ImGui::TextColored(
-            ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s: <null>", p_key.c_str());
-        return;
-    }
+    auto const& base = p_value.asBase();
 
     if (std::holds_alternative<BlackboardMap>(base))
     {
         drawStructEntry(p_key, p_value, p_full_path, p_context);
+        return;
     }
-    else if (std::holds_alternative<BlackboardList>(base) ||
-             std::holds_alternative<std::vector<double>>(base))
+
+    if (std::holds_alternative<BlackboardList>(base) ||
+        std::holds_alternative<std::vector<double>>(base))
     {
         drawArrayEntry(p_key, p_value, p_full_path, p_context);
+        return;
     }
-    else if (std::holds_alternative<std::any>(base))
+
+    if (std::holds_alternative<std::monostate>(base) ||
+        std::holds_alternative<std::any>(base))
     {
-        // Host-owned C++ type: the editor knows nothing about its layout, so it
-        // is shown read-only with the type name the compiler gave it.
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.8f, 1.0f),
-                           "[%s]",
-                           valueTypeName(p_value).c_str());
-        ImGui::SameLine();
-        ImGui::Text("%s: <custom>", p_key.c_str());
+        // Host-owned C++ type, or nothing at all: the editor knows nothing
+        // about the layout, so the row is read-only.
+        ImGui::TableNextColumn();
+        ImGui::TreeNodeEx(
+            p_key.c_str(),
+            ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_Bullet);
+
+        drawTypeCell(p_value);
+
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(std::holds_alternative<std::any>(base) ? "<custom>"
+                                                                   : "<null>");
+
+        ImGui::TableNextColumn();
+        drawRemoveButton(p_full_path, p_context);
+        return;
     }
-    else
-    {
-        drawScalarEntry(p_key, p_value, p_full_path, p_context);
-    }
+
+    drawScalarEntry(p_key, p_value, p_full_path, p_context);
 }
 
 // ----------------------------------------------------------------------------
@@ -488,6 +644,7 @@ void Editor::drawEditorWindow(char const* p_title)
         case Mode::Creation:
             if (m_has_document)
             {
+                showDocumentStatusBar();
                 showEditorTabs();
                 showAddNodePalette();
             }
@@ -528,6 +685,34 @@ void Editor::showNoDocumentPanel()
     {
         onFileDialogRequested.emit(FileDialog::Load);
     }
+}
+
+// ----------------------------------------------------------------------------
+void Editor::showDocumentStatusBar()
+{
+    // The tab bar only shows up once the document has a subtree, and the host
+    // window title is not ours to set: without this line nothing would tell the
+    // user that the tree holds unsaved changes.
+    if (m_is_modified)
+    {
+        ImGui::TextColored(
+            ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "%s", documentTitle().c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("(unsaved changes)");
+    }
+    else
+    {
+        ImGui::TextDisabled("%s", documentTitle().c_str());
+    }
+
+    std::size_t const selected = m_selected_nodes.size();
+    if (selected > 1U)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("| %zu nodes selected", selected);
+    }
+
+    ImGui::Separator();
 }
 
 // ----------------------------------------------------------------------------
@@ -631,8 +816,14 @@ void Editor::drawMenuBar()
 
     if (ImGui::BeginMenu("Edit"))
     {
-        // Auto-layout the nodes
-        if (ImGui::MenuItem("Auto Layout", "Ctrl+L", false, editable))
+        // A toggle, not an action: when ticked, a node created or linked lands
+        // at the place the structure gives it without further asking.
+        if (ImGui::MenuItem("Auto Layout", nullptr, m_auto_layout, editable))
+        {
+            setAutoLayoutEnabled(!m_auto_layout);
+        }
+
+        if (ImGui::MenuItem("Layout Now", "Ctrl+L", false, editable))
         {
             autoLayoutNodes();
         }
@@ -671,6 +862,36 @@ void Editor::drawMenuBar()
             m_show_palettes.node_creation = true;
             m_show_palettes.position = ImGui::GetMousePos();
             m_pending_link_from_node = -1;
+        }
+
+        if (ImGui::MenuItem("New SubTree", nullptr, false, editable))
+        {
+            std::string const name = createSubTreeDefinition("SubTree");
+            m_active_tree_name = name;
+            m_request_tab_change = true;
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem(
+                "Select All", "Ctrl+A", false, editable && !m_nodes.empty()))
+        {
+            std::unordered_set<ID> visible;
+            for (ID root_id : collectViewRoots())
+            {
+                collectVisibleNodes(root_id, visible);
+            }
+            m_selected_nodes = visible;
+            m_selected_node_id =
+                visible.empty() ? -1 : *m_selected_nodes.begin();
+        }
+
+        if (ImGui::MenuItem("Delete Selection",
+                            "Del",
+                            false,
+                            editable && !m_selected_nodes.empty()))
+        {
+            deleteSelection();
         }
         ImGui::EndMenu();
     }
@@ -754,6 +975,18 @@ void Editor::handleKeyboardShortcuts()
     if (ImGui::IsKeyPressed(ImGuiKey_L) && isEditable())
     {
         autoLayoutNodes();
+        return;
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_A) && isEditable())
+    {
+        std::unordered_set<ID> visible;
+        for (ID root_id : collectViewRoots())
+        {
+            collectVisibleNodes(root_id, visible);
+        }
+        m_selected_nodes = visible;
+        m_selected_node_id = visible.empty() ? -1 : *m_selected_nodes.begin();
         return;
     }
 
@@ -861,7 +1094,7 @@ void Editor::drawTreeTab(std::string const& p_name,
         // Clear selection when switching tabs
         if (m_active_tree_name != p_name)
         {
-            m_selected_node_id = -1;
+            clearSelection();
             m_active_tree_name = p_name;
         }
         drawBehaviorTree();
@@ -970,13 +1203,40 @@ void Editor::handleEditModeInteractions()
         m_pending_link_from_node = link_void_from;
     }
 
+    // A rubber band dragged over empty canvas replaces the selection, or adds
+    // to it when a modifier is held.
+    std::vector<ID> boxed;
+    if (m_renderer->getBoxSelection(boxed))
+    {
+        bool const additive = ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeyShift;
+        if (!additive)
+        {
+            clearSelection();
+        }
+        for (ID id : boxed)
+        {
+            m_selected_nodes.insert(id);
+            m_selected_node_id = id;
+        }
+        if (m_selected_nodes.empty())
+        {
+            m_selected_node_id = -1;
+        }
+    }
+
+    // Every mouse test below reads the global ImGui state, so nothing happens
+    // unless the pointer really is over the graph: a right click in the
+    // blackboard panel used to pop the node palette up.
+    bool const on_canvas = m_renderer->isCanvasHovered();
+
     // Get hovered node once per frame
-    ID hovered_id = m_renderer->getHoveredNodeId();
+    ID hovered_id = on_canvas ? m_renderer->getHoveredNodeId() : -1;
 
     // Double-click on node: SubTree -> open tab, other -> edit
-    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hovered_id >= 0)
+    if (on_canvas && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+        hovered_id >= 0)
     {
-        m_selected_node_id = hovered_id;
+        selectNode(hovered_id);
         Node* node = findNode(hovered_id);
         if (node && node->type == "SubTree" && !node->subtree_reference.empty())
         {
@@ -994,18 +1254,43 @@ void Editor::handleEditModeInteractions()
             m_show_palettes.node_edition = true;
         }
     }
-    // Single click: select node
-    else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    // Single click: select the node, or add it to the selection with Ctrl.
+    else if (on_canvas && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
     {
-        m_selected_node_id = hovered_id;
+        if (ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeyShift)
+        {
+            toggleNodeSelection(hovered_id);
+        }
+        else if (hovered_id >= 0)
+        {
+            // Keep a multiple selection alive when clicking inside it: this is
+            // what lets the user drag or extract the whole group.
+            if (m_selected_nodes.count(hovered_id) == 0U)
+            {
+                selectNode(hovered_id);
+            }
+            else
+            {
+                m_selected_node_id = hovered_id;
+            }
+        }
+        // Clicking empty canvas starts a rubber band; the selection is cleared
+        // when it is released, so nothing to do here.
     }
 
     // Right-click: context menu on node, or add palette on empty space
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    if (on_canvas && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
         if (hovered_id >= 0)
         {
-            m_selected_node_id = hovered_id;
+            if (m_selected_nodes.count(hovered_id) == 0U)
+            {
+                selectNode(hovered_id);
+            }
+            else
+            {
+                m_selected_node_id = hovered_id;
+            }
             ImGui::OpenPopup("NodeContextMenu");
         }
         else
@@ -1020,10 +1305,9 @@ void Editor::handleEditModeInteractions()
     showNodeEditPopup();
 
     // Keyboard shortcuts acting on the selection
-    if (m_selected_node_id >= 0 && ImGui::IsKeyPressed(ImGuiKey_Delete))
+    if (!m_selected_nodes.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete))
     {
-        deleteNode(m_selected_node_id);
-        m_selected_node_id = -1;
+        deleteSelection();
     }
 }
 
@@ -1042,8 +1326,17 @@ void Editor::showNodeContextMenu()
         return;
     }
 
+    bool const is_subtree_call = (selected->type == "SubTree");
+    std::size_t const selection_size = m_selected_nodes.size();
+
+    if (selection_size > 1U)
+    {
+        ImGui::TextDisabled("%zu nodes selected", selection_size);
+        ImGui::Separator();
+    }
+
     // Go to definition for SubTree nodes
-    if (selected->type == "SubTree" && !selected->subtree_reference.empty())
+    if (is_subtree_call && !selected->subtree_reference.empty())
     {
         if (ImGui::MenuItem("Go to Definition"))
         {
@@ -1062,20 +1355,205 @@ void Editor::showNodeContextMenu()
         m_show_palettes.node_edition = true;
         ImGui::CloseCurrentPopup();
     }
-    if (ImGui::MenuItem("Delete", "Del"))
+
+    // No interaction selects a link, so this is the only way to break one
+    // without deleting a node.
+    if (ImGui::MenuItem(
+            "Detach from parent", nullptr, false, selected->parent >= 0))
     {
-        deleteNode(m_selected_node_id);
-        m_selected_node_id = -1;
+        deleteLink(selected->parent, m_selected_node_id);
         ImGui::CloseCurrentPopup();
     }
-    if (ImGui::MenuItem("Set as Root"))
+
+    ImGui::Separator();
+
+    // Extracting a branch, and putting it back: the two halves of factoring a
+    // piece of behavior out into its own reusable tree.
+    if (!is_subtree_call)
     {
-        getCurrentTreeView().root_id = m_selected_node_id;
-        // Mark as modified since we changed the tree structure
-        m_is_modified = true;
+        if (ImGui::MenuItem("Extract to SubTree"))
+        {
+            convertToSubTree(m_selected_node_id);
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip("Move this node and its children into a new "
+                              "SubTree definition, and call it from here.");
+        }
+    }
+    else
+    {
+        bool const shared = countSubTreeReferences(selected->subtree_reference,
+                                                   m_selected_node_id) > 0U;
+        if (ImGui::MenuItem("Inline SubTree", nullptr, false, !shared))
+        {
+            inlineSubTree(m_selected_node_id);
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip(shared ? "Another SubTree node calls this "
+                                       "definition: inlining would break it."
+                                     : "Replace this node by the nodes of its "
+                                       "definition.");
+        }
+    }
+
+    ImGui::Separator();
+
+    char const* delete_label =
+        (selection_size > 1U) ? "Delete selection" : "Delete";
+    if (ImGui::MenuItem(delete_label, "Del"))
+    {
+        deleteSelection();
         ImGui::CloseCurrentPopup();
     }
+
     ImGui::EndPopup();
+}
+
+// ----------------------------------------------------------------------------
+void Editor::showPortTable(char const* p_label,
+                           std::vector<Port>& p_ports,
+                           std::string& p_new_name,
+                           bool const p_is_remapping)
+{
+    ImGui::PushID(p_label);
+    ImGui::Text("%s:", p_label);
+
+    if (!p_ports.empty() &&
+        ImGui::BeginTable("##ports",
+                          3,
+                          ImGuiTableFlags_SizingStretchProp |
+                              ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_RowBg))
+    {
+        ImGui::TableSetupColumn(p_is_remapping ? "Subtree key" : "Port",
+                                ImGuiTableColumnFlags_WidthStretch,
+                                0.4f);
+        ImGui::TableSetupColumn(p_is_remapping ? "Parent expression"
+                                               : "Bound to",
+                                ImGuiTableColumnFlags_WidthStretch,
+                                0.5f);
+        ImGui::TableSetupColumn(
+            "##remove", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+        ImGui::TableHeadersRow();
+
+        std::size_t doomed = p_ports.size();
+        for (std::size_t i = 0; i < p_ports.size(); ++i)
+        {
+            ImGui::TableNextRow();
+            ImGui::PushID(static_cast<int>(i));
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputText("##name", &p_ports[i].name);
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputText("##binding", &p_ports[i].binding);
+
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("X"))
+            {
+                doomed = i;
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndTable();
+
+        if (doomed < p_ports.size())
+        {
+            p_ports.erase(p_ports.begin() +
+                          static_cast<std::ptrdiff_t>(doomed));
+        }
+    }
+
+    ImGui::SetNextItemWidth(-90.0f);
+    ImGui::InputText("##new_port", &p_new_name);
+    ImGui::SameLine();
+    if (ImGui::Button("Add", ImVec2(80.0f, 0.0f)) && !p_new_name.empty())
+    {
+        // Defaults to reading the key of the same name, the common case; the
+        // user then edits the expression when a remapping is needed.
+        p_ports.push_back({p_new_name, "${" + p_new_name + "}"});
+        p_new_name.clear();
+    }
+
+    ImGui::PopID();
+}
+
+// ----------------------------------------------------------------------------
+void Editor::showAttributeTable(
+    std::vector<std::pair<std::string, std::string>>& p_attributes,
+    std::string& p_new_name)
+{
+    ImGui::PushID("attributes");
+    ImGui::Text("Attributes:");
+    ImGui::SetItemTooltip("Keys passed to the engine as written, for instance "
+                          "key and value on a SetBlackboard, times on a "
+                          "Repeat, or the _id read from the file.");
+
+    if (!p_attributes.empty() &&
+        ImGui::BeginTable("##attributes",
+                          3,
+                          ImGuiTableFlags_SizingStretchProp |
+                              ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_RowBg))
+    {
+        ImGui::TableSetupColumn(
+            "Key", ImGuiTableColumnFlags_WidthStretch, 0.4f);
+        ImGui::TableSetupColumn(
+            "Value", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+        ImGui::TableSetupColumn(
+            "##remove", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+        ImGui::TableHeadersRow();
+
+        std::size_t doomed = p_attributes.size();
+        for (std::size_t i = 0; i < p_attributes.size(); ++i)
+        {
+            ImGui::TableNextRow();
+            ImGui::PushID(static_cast<int>(i));
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputText("##key", &p_attributes[i].first);
+
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputText("##value", &p_attributes[i].second);
+
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("X"))
+            {
+                doomed = i;
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndTable();
+
+        if (doomed < p_attributes.size())
+        {
+            p_attributes.erase(p_attributes.begin() +
+                               static_cast<std::ptrdiff_t>(doomed));
+        }
+    }
+
+    ImGui::SetNextItemWidth(-90.0f);
+    ImGui::InputText("##new_attribute", &p_new_name);
+    ImGui::SameLine();
+    if (ImGui::Button("Add", ImVec2(80.0f, 0.0f)) && !p_new_name.empty())
+    {
+        p_attributes.emplace_back(p_new_name, std::string());
+        p_new_name.clear();
+    }
+
+    ImGui::PopID();
 }
 
 // ----------------------------------------------------------------------------
@@ -1095,6 +1573,8 @@ void Editor::showNodeEditPopup()
         m_node_edit.initialized = true;
         m_node_edit.new_input.clear();
         m_node_edit.new_output.clear();
+        m_node_edit.subtree_name.clear();
+        m_node_edit.new_attribute.clear();
 
         // Set window position and size before opening popup
         ImVec2 center = ImGui::GetMainViewport()->GetCenter();
@@ -1155,33 +1635,47 @@ void Editor::showNodeEditPopup()
         ImGui::InputText("##Name", &edited.name);
 
         // SubTree reference (only for SubTree nodes)
-        if (edited.type == "SubTree")
+        bool const is_subtree = (edited.type == "SubTree");
+        if (is_subtree)
         {
             ImGui::Spacing();
-            ImGui::Text("Reference:");
-            ImGui::SameLine();
-            ImGui::InputText("##SubTreeRef", &edited.subtree_reference);
+            ImGui::Text("Definition:");
 
-            // Show available SubTrees
             if (ImGui::BeginCombo("##AvailableSubTrees",
-                                  edited.subtree_reference.c_str()))
+                                  edited.subtree_reference.empty()
+                                      ? "(none)"
+                                      : edited.subtree_reference.c_str()))
             {
                 for (auto const& [name, view] : m_tree_views)
                 {
-                    if (view.is_subtree)
+                    if (!view.is_subtree)
+                        continue;
+
+                    bool const is_selected = (edited.subtree_reference == name);
+                    if (ImGui::Selectable(name.c_str(), is_selected))
                     {
-                        bool is_selected = (edited.subtree_reference == name);
-                        if (ImGui::Selectable(name.c_str(), is_selected))
-                        {
-                            edited.subtree_reference = name;
-                        }
-                        if (is_selected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
+                        edited.subtree_reference = name;
+                    }
+                    if (is_selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
                     }
                 }
                 ImGui::EndCombo();
+            }
+
+            // A definition has to exist for the tab to be reachable, so it is
+            // created from here rather than by typing a name that leads
+            // nowhere.
+            ImGui::InputText("##NewSubTreeName", &m_node_edit.subtree_name);
+            ImGui::SameLine();
+            if (ImGui::Button("New definition"))
+            {
+                edited.subtree_reference =
+                    createSubTreeDefinition(m_node_edit.subtree_name.empty()
+                                                ? edited.name
+                                                : m_node_edit.subtree_name);
+                m_node_edit.subtree_name.clear();
             }
         }
 
@@ -1192,61 +1686,26 @@ void Editor::showNodeEditPopup()
         // Only show inputs/outputs for nodes that can have blackboard ports
         if (canHaveBlackboardPorts(edited.type))
         {
-            // Inputs section
-            ImGui::Text("Blackboard Inputs:");
-
-            for (size_t i = 0; i < edited.inputs.size(); ++i)
+            if (is_subtree)
             {
-                ImGui::PushID(static_cast<int>(i));
-                ImGui::BulletText("%s", edited.inputs[i].c_str());
-                ImGui::SameLine();
-                if (ImGui::SmallButton("X"))
-                {
-                    edited.inputs.erase(edited.inputs.begin() +
-                                        static_cast<std::ptrdiff_t>(i));
-                    ImGui::PopID();
-                    break;
-                }
-                ImGui::PopID();
+                ImGui::TextWrapped(
+                    "Port remapping: the left column is the key seen inside "
+                    "the subtree, the right one the expression evaluated in "
+                    "this tree. Use ${key} to wire a blackboard entry.");
+                ImGui::Spacing();
             }
 
-            ImGui::InputText("##NewInput", &m_node_edit.new_input);
-            ImGui::SameLine();
-            if (ImGui::Button("Add Input") && !m_node_edit.new_input.empty())
-            {
-                edited.inputs.push_back(m_node_edit.new_input);
-                m_node_edit.new_input.clear();
-            }
+            showPortTable(is_subtree ? "Into the subtree" : "Inputs",
+                          edited.inputs,
+                          m_node_edit.new_input,
+                          is_subtree);
 
             ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
 
-            // Outputs section
-            ImGui::Text("Blackboard Outputs:");
-
-            for (size_t i = 0; i < edited.outputs.size(); ++i)
-            {
-                ImGui::PushID(1000 + static_cast<int>(i));
-                ImGui::BulletText("%s", edited.outputs[i].c_str());
-                ImGui::SameLine();
-                if (ImGui::SmallButton("X"))
-                {
-                    edited.outputs.erase(edited.outputs.begin() +
-                                         static_cast<std::ptrdiff_t>(i));
-                    ImGui::PopID();
-                    break;
-                }
-                ImGui::PopID();
-            }
-
-            ImGui::InputText("##NewOutput", &m_node_edit.new_output);
-            ImGui::SameLine();
-            if (ImGui::Button("Add Output") && !m_node_edit.new_output.empty())
-            {
-                edited.outputs.push_back(m_node_edit.new_output);
-                m_node_edit.new_output.clear();
-            }
+            showPortTable(is_subtree ? "Back to this tree" : "Outputs",
+                          edited.outputs,
+                          m_node_edit.new_output,
+                          is_subtree);
 
             ImGui::Spacing();
             ImGui::Separator();
@@ -1264,19 +1723,20 @@ void Editor::showNodeEditPopup()
             ImGui::Spacing();
         }
 
+        showAttributeTable(edited.attributes, m_node_edit.new_attribute);
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
         // Validation info
-        bool is_decorator =
-            (edited.type == "Inverter" || edited.type == "Repeater");
-        if (is_decorator && node->children.size() > 1)
+        if (isDecoratorType(edited.type) && node->children.size() > 1)
         {
             ImGui::TextColored(
                 ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
                 "Warning: Decorators should have exactly 1 child");
         }
-        bool is_leaf =
-            (edited.type == "Action" || edited.type == "Condition" ||
-             edited.type == "Success" || edited.type == "Failure");
-        if (is_leaf && !node->children.empty())
+        if (nodeCategory(edited.type) == "Leaf" && !node->children.empty())
         {
             ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f),
                                "Warning: Leaf nodes cannot have children");
@@ -1302,6 +1762,7 @@ void Editor::showNodeEditPopup()
             m_node_edit.initialized = false;
             m_node_edit.new_input.clear();
             m_node_edit.new_output.clear();
+            m_node_edit.new_attribute.clear();
         }
 
         ImGui::SameLine(0, spacing);
@@ -1313,6 +1774,18 @@ void Editor::showNodeEditPopup()
             node->subtree_reference = edited.subtree_reference;
             node->inputs = edited.inputs;
             node->outputs = edited.outputs;
+            node->attributes = edited.attributes;
+
+            // A SubTree node without a reachable definition is a dead end: give
+            // it one rather than leaving a node nothing can open.
+            if ((node->type == "SubTree") &&
+                (m_tree_views.find(node->subtree_reference) ==
+                 m_tree_views.end()))
+            {
+                node->subtree_reference = createSubTreeDefinition(
+                    node->subtree_reference.empty() ? node->name
+                                                    : node->subtree_reference);
+            }
 
             m_is_modified = true;
             onNodeModified.emit(m_selected_node_id);
@@ -1320,6 +1793,7 @@ void Editor::showNodeEditPopup()
             m_node_edit.initialized = false;
             m_node_edit.new_input.clear();
             m_node_edit.new_output.clear();
+            m_node_edit.new_attribute.clear();
         }
 
         ImGui::EndPopup();
@@ -1331,6 +1805,7 @@ void Editor::showNodeEditPopup()
         m_node_edit.initialized = false;
         m_node_edit.new_input.clear();
         m_node_edit.new_output.clear();
+        m_node_edit.new_attribute.clear();
     }
 }
 
@@ -1339,12 +1814,53 @@ void Editor::showNodeEditPopup()
 // ============================================================================
 
 // ----------------------------------------------------------------------------
+void Editor::showInheritedKeys()
+{
+    if (!m_blackboard)
+        return;
+
+    std::vector<std::string> keys = m_blackboard->keys();
+    std::sort(keys.begin(), keys.end());
+
+    if (keys.empty())
+    {
+        ImGui::TextDisabled("The parent scope is empty.");
+        return;
+    }
+
+    if (!ImGui::BeginTable("##inherited",
+                           2,
+                           ImGuiTableFlags_BordersInnerV |
+                               ImGuiTableFlags_RowBg))
+    {
+        return;
+    }
+
+    ImGui::TableSetupColumn("Inherited key",
+                            ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableHeadersRow();
+
+    for (std::string const& key : keys)
+    {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(key.c_str());
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled(
+            "%s", bt::Blackboard::displayKey(m_blackboard.get(), key).c_str());
+    }
+
+    ImGui::EndTable();
+}
+
+// ----------------------------------------------------------------------------
 void Editor::drawBlackboardPanel()
 {
     if (!m_show_blackboard_panel || !m_blackboard)
         return;
 
-    ImGui::SetNextWindowSize(ImVec2(350, 500), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(420, 520), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Blackboard", &m_show_blackboard_panel))
     {
         ImGui::End();
@@ -1353,87 +1869,143 @@ void Editor::drawBlackboardPanel()
 
     auto& state = m_blackboard_panel;
 
-    ImGui::Text("Add Variable:");
-    ImGui::PushItemWidth(100);
-    ImGui::InputText("Name##NewVar", &state.new_var_name);
-    ImGui::SameLine();
+    // The tab being edited decides the scope. A subtree owns a child scope, as
+    // at runtime: it reads what it does not define from the tree calling it.
+    refreshActiveSubTreeScope();
 
-    // Only show value input for non-struct types
-    if (state.new_var_type != c_struct_type_index)
+    TreeView& view = getCurrentTreeView();
+    bool const nested = view.is_subtree;
+    bt::Blackboard::Ptr scope = activeBlackboard();
+    if (!scope)
     {
-        ImGui::InputText("Value##NewVar", &state.new_var_value);
+        ImGui::End();
+        return;
+    }
+
+    if (nested)
+    {
+        ImGui::TextColored(
+            ImVec4(0.7f, 0.6f, 0.9f, 1.0f), "Scope: %s", view.name.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("(nested)");
+        ImGui::TextWrapped(
+            "A subtree has no blackboard section of its own in the file: what "
+            "it sees comes from the port remapping of the SubTree nodes "
+            "calling it, plus the keys of the parent scope. Edit the remapping "
+            "on the node itself.");
     }
     else
     {
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(empty struct)");
-    }
-    ImGui::PopItemWidth();
-
-    ImGui::PushItemWidth(80);
-    ImGui::Combo("Type##NewVar",
-                 &state.new_var_type,
-                 c_value_type_names.data(),
-                 static_cast<int>(c_value_type_names.size()));
-    ImGui::PopItemWidth();
-
-    ImGui::SameLine();
-    if (ImGui::Button("Add") && !state.new_var_name.empty())
-    {
-        m_blackboard->set(
-            state.new_var_name,
-            makeValueFromText(state.new_var_type, state.new_var_value));
-
-        state.new_var_name.clear();
-        state.new_var_value.clear();
-        m_is_modified = true;
+        ImGui::TextColored(
+            ImVec4(0.7f, 0.8f, 0.9f, 1.0f), "Scope: %s", view.name.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("(root)");
     }
 
     ImGui::Separator();
-    ImGui::Text("Variables:");
+
+    // Folded by default: the form used to take four lines above the entries the
+    // user actually came to read.
+    if (!nested && ImGui::CollapsingHeader("New variable"))
+    {
+        float const field_width =
+            std::max(80.0f, ImGui::GetContentRegionAvail().x * 0.4f);
+
+        ImGui::PushItemWidth(field_width);
+        ImGui::InputText("Name##NewVar", &state.new_var_name);
+        ImGui::Combo("Type##NewVar",
+                     &state.new_var_type,
+                     c_value_type_names.data(),
+                     static_cast<int>(c_value_type_names.size()));
+
+        // Only show value input for non-struct types
+        if (state.new_var_type != c_struct_type_index)
+        {
+            ImGui::InputText("Value##NewVar", &state.new_var_value);
+        }
+        else
+        {
+            ImGui::TextDisabled("(created empty, add fields afterwards)");
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::BeginDisabled(state.new_var_name.empty());
+        if (ImGui::Button("Add variable", ImVec2(140.0f, 0.0f)))
+        {
+            scope->set(
+                state.new_var_name,
+                makeValueFromText(state.new_var_type, state.new_var_value));
+
+            state.new_var_name.clear();
+            state.new_var_value.clear();
+            m_is_modified = true;
+        }
+        ImGui::EndDisabled();
+
+        ImGui::Separator();
+    }
 
     // Display existing variables using the recursive helpers
-    std::vector<std::string> keys_to_remove;
     BlackboardDrawContext context{state.edit_buffers,
                                   state.add_field_open,
                                   state.add_field_parent_path,
-                                  false};
+                                  std::string(),
+                                  false,
+                                  nested};
 
-    for (std::string const& key : m_blackboard->keys())
+    std::vector<std::string> keys = scope->keys();
+    std::sort(keys.begin(), keys.end());
+
+    if (keys.empty())
     {
-        auto raw_value = m_blackboard->raw(key);
-
-        if (!raw_value.has_value())
-            continue;
-
-        ImGui::PushID(key.c_str());
-
-        // Make a mutable copy for editing
-        BlackboardValue value_copy = *raw_value;
-
-        context.modified = false;
-        drawBlackboardEntry(key, value_copy, key, context);
-
-        if (context.modified)
+        ImGui::TextDisabled(nested ? "Nothing remapped into this scope yet."
+                                   : "No variable yet.");
+    }
+    else if (beginBlackboardTable("##blackboard"))
+    {
+        for (std::string const& key : keys)
         {
-            m_blackboard->set(key, value_copy);
-            m_is_modified = true;
+            auto raw_value = scope->raw(key);
+            if (!raw_value.has_value())
+                continue;
+
+            ImGui::PushID(key.c_str());
+
+            // Make a mutable copy for editing
+            BlackboardValue value_copy = *raw_value;
+
+            context.modified = false;
+            drawBlackboardRow(key, value_copy, key, context);
+
+            if (context.modified)
+            {
+                scope->set(key, value_copy);
+                m_is_modified = true;
+            }
+
+            ImGui::PopID();
         }
 
-        // Delete button for top-level entries
-        ImGui::SameLine();
-        if (ImGui::SmallButton("X"))
-        {
-            keys_to_remove.push_back(key);
-        }
-
-        ImGui::PopID();
+        ImGui::EndTable();
     }
 
-    // Remove marked keys
-    for (auto const& key : keys_to_remove)
+    if (!context.remove_request.empty() &&
+        (context.remove_request.find('.') == std::string::npos) &&
+        (context.remove_request.find('[') == std::string::npos))
     {
-        m_blackboard->remove(key);
+        scope->remove(context.remove_request);
         m_is_modified = true;
+    }
+
+    if (nested)
+    {
+        ImGui::Spacing();
+        ImGui::Checkbox("Show keys inherited from the parent scope",
+                        &state.show_inherited);
+        if (state.show_inherited)
+        {
+            showInheritedKeys();
+        }
     }
 
     // Handle add field popup for structs
@@ -1481,7 +2053,7 @@ void Editor::drawBlackboardPanel()
                 splitPath(state.add_field_parent_path);
             std::string const& root_key = path_parts[0];
 
-            auto root_value = m_blackboard->raw(root_key);
+            auto root_value = scope->raw(root_key);
             if (root_value.has_value())
             {
                 BlackboardValue value_copy = *root_value;
@@ -1505,7 +2077,7 @@ void Editor::drawBlackboardPanel()
                     (*map)[state.add_field_name] = makeValueFromText(
                         state.add_field_type, state.add_field_value);
 
-                    m_blackboard->set(root_key, value_copy);
+                    scope->set(root_key, value_copy);
                     m_is_modified = true;
                 }
             }

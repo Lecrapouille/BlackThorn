@@ -112,6 +112,23 @@ public:
     };
 
     // ------------------------------------------------------------------------
+    //! \brief A blackboard port of a node, as written in the \c parameters
+    //! block of the YAML file.
+    //!
+    //! \c binding is what the engine resolves: either \c ${key} to read or
+    //! write the blackboard entry \c key, or a literal value. On a SubTree node
+    //! the port is the remapping of a key of the child scope onto a key of the
+    //! parent one.
+    // ------------------------------------------------------------------------
+    struct Port
+    {
+        //! \brief Name of the port, as the node code asks for it.
+        std::string name;
+        //! \brief Blackboard reference \c ${key} or literal value.
+        std::string binding;
+    };
+
+    // ------------------------------------------------------------------------
     //! \brief Graphical representation of a behavior tree node.
     // ------------------------------------------------------------------------
     struct Node
@@ -128,10 +145,15 @@ public:
         std::vector<ID> children;
         //! \brief Node parent
         ID parent = -1;
-        //! \brief Blackboard input parameters
-        std::vector<std::string> inputs;
-        //! \brief Blackboard output parameters
-        std::vector<std::string> outputs;
+        //! \brief Blackboard input ports, read by the node.
+        std::vector<Port> inputs;
+        //! \brief Blackboard output ports, written by the node.
+        std::vector<Port> outputs;
+        //! \brief Scalar keys read from the file that the editor does not
+        //! model, such as the \c _id of a node or the \c key and \c value of a
+        //! SetBlackboard. Written back verbatim so that opening a tree and
+        //! saving it does not quietly strip what makes it work.
+        std::vector<std::pair<std::string, std::string>> attributes;
         //! \brief SubTree reference (for SubTree nodes)
         std::string subtree_reference;
         //! \brief SubTree expansion state
@@ -158,6 +180,11 @@ public:
         LayoutDirection layout_direction = LayoutDirection::TopToBottom;
         //! \brief Stored node positions for this view (node_id -> position)
         std::unordered_map<ID, ImVec2> node_positions;
+        //! \brief Blackboard scope of the view. The main tree owns the root
+        //! blackboard; a subtree owns a child of it, exactly like the nested
+        //! blackboard \c bt::Builder creates at runtime, so that a key not
+        //! defined locally is read from the parent scope.
+        bt::Blackboard::Ptr blackboard;
     };
 
     // ------------------------------------------------------------------------
@@ -384,10 +411,97 @@ public:
     void autoLayoutNodes();
 
     // ------------------------------------------------------------------------
+    //! \brief Check whether the layout is recomputed after each structural
+    //! change instead of on explicit request only.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isAutoLayoutEnabled() const
+    {
+        return m_auto_layout;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Recompute the layout after each structural change, or leave the
+    //! nodes where the user dropped them.
+    //! \param p_enabled Whether to follow the structure.
+    // ------------------------------------------------------------------------
+    void setAutoLayoutEnabled(bool const p_enabled);
+
+    // ------------------------------------------------------------------------
+    //! \brief Reorder the children of every node after the position the user
+    //! gave them, left to right in a top-to-bottom layout, top to bottom in a
+    //! left-to-right one. This is what makes the drawing, and not the order the
+    //! links happened to be created in, decide the execution order.
+    // ------------------------------------------------------------------------
+    void reorderChildrenByPosition();
+
+    // ------------------------------------------------------------------------
     //! \brief Toggle the expansion state of a SubTree node.
     //! \param p_node_id The ID of the SubTree node.
     // ------------------------------------------------------------------------
     void toggleSubTreeExpansion(ID const p_node_id);
+
+    // ========================================================================
+    // SubTrees.
+    // ========================================================================
+
+    // ------------------------------------------------------------------------
+    //! \brief Create an empty SubTree definition, reachable as its own tab and
+    //! owning a blackboard scope nested in the one of the main tree.
+    //! \param p_name Wished name. A suffix is appended when already taken.
+    //! \return The name the definition was created under.
+    // ------------------------------------------------------------------------
+    std::string createSubTreeDefinition(std::string const& p_name);
+
+    // ------------------------------------------------------------------------
+    //! \brief Move a node and its descendants into a new SubTree definition,
+    //! leaving a SubTree node referencing it in their place.
+    //! \param p_node_id Root of the extracted branch.
+    //! \return Name of the created definition, empty on failure.
+    // ------------------------------------------------------------------------
+    std::string convertToSubTree(ID const p_node_id);
+
+    // ------------------------------------------------------------------------
+    //! \brief Inverse of \c convertToSubTree: replace a SubTree node by the
+    //! nodes of its definition. The definition is dropped when no other node
+    //! references it.
+    //! \param p_node_id The SubTree node to inline.
+    //! \return true when the node was replaced.
+    // ------------------------------------------------------------------------
+    bool inlineSubTree(ID const p_node_id);
+
+    // ========================================================================
+    // Selection.
+    // ========================================================================
+
+    // ------------------------------------------------------------------------
+    //! \brief Nodes currently selected. Holds \c selectedNode when not empty.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] std::unordered_set<ID> const& selectedNodes() const
+    {
+        return m_selected_nodes;
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Replace the selection by a single node, or clear it with -1.
+    //! \param p_node_id The node to select.
+    // ------------------------------------------------------------------------
+    void selectNode(ID const p_node_id);
+
+    // ------------------------------------------------------------------------
+    //! \brief Add a node to the selection, or remove it when already in.
+    //! \param p_node_id The node to toggle.
+    // ------------------------------------------------------------------------
+    void toggleNodeSelection(ID const p_node_id);
+
+    // ------------------------------------------------------------------------
+    //! \brief Empty the selection.
+    // ------------------------------------------------------------------------
+    void clearSelection();
+
+    // ------------------------------------------------------------------------
+    //! \brief Delete every selected node and its descendants.
+    // ------------------------------------------------------------------------
+    void deleteSelection();
 
     // ========================================================================
     // Node palette.
@@ -413,6 +527,21 @@ public:
         return m_node_types;
     }
 
+    // ------------------------------------------------------------------------
+    //! \brief Get the palette category of a node type.
+    //! \param p_type Node type name.
+    //! \return The category, empty when the type is not registered.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] std::string nodeCategory(std::string const& p_type) const;
+
+    // ------------------------------------------------------------------------
+    //! \brief Check whether a node type accepts a single child. Such nodes are
+    //! written with the \c child key the engine expects instead of
+    //! \c children.
+    //! \param p_type Node type name.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bool isDecoratorType(std::string const& p_type) const;
+
     // ========================================================================
     // State exposed to the host.
     // ========================================================================
@@ -434,12 +563,27 @@ public:
     }
 
     // ------------------------------------------------------------------------
-    //! \brief Get the edited blackboard, shareable with a running tree.
+    //! \brief Name of the open document as shown to the user: the file name,
+    //! "Untitled" for a document never saved, empty when none is open. A
+    //! trailing star marks unsaved changes.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] std::string documentTitle() const;
+
+    // ------------------------------------------------------------------------
+    //! \brief Get the edited blackboard, shareable with a running tree. This is
+    //! the root scope: the one of the main tree.
     // ------------------------------------------------------------------------
     [[nodiscard]] bt::Blackboard::Ptr blackboard() const
     {
         return m_blackboard;
     }
+
+    // ------------------------------------------------------------------------
+    //! \brief Blackboard scope of the tab being edited. A subtree tab owns a
+    //! child of the root scope: what it does not define is read from its
+    //! parent, as at runtime.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] bt::Blackboard::Ptr activeBlackboard();
 
     // ------------------------------------------------------------------------
     //! \brief Replace the edited blackboard by one owned by the host.
@@ -538,6 +682,44 @@ protected: // Widgets
     //! \brief Draw the modal popup for editing node properties.
     void showNodeEditPopup();
 
+    //! \brief Draw the line telling which document is open and whether it holds
+    //! unsaved changes.
+    void showDocumentStatusBar();
+
+    //! \brief List, read-only, the keys a nested scope reads from the scope of
+    //! the main tree.
+    void showInheritedKeys();
+
+    //! \brief Fill the blackboard scope of the open subtree tab from the port
+    //! remapping of the SubTree node calling it, the way \c bt::Builder fills
+    //! the nested blackboard at build time. The result is a preview: the scope
+    //! holds nothing of its own in the file.
+    void refreshActiveSubTreeScope();
+
+    //! \brief Draw the port table of the node edition popup.
+    //! \param p_label Section title.
+    //! \param p_ports Ports being edited.
+    //! \param p_new_name Buffer holding the name of the port being added.
+    //! \param p_is_remapping Whether the ports remap a SubTree onto its parent
+    //! scope, which changes the wording and the proposed keys.
+    void showPortTable(char const* p_label,
+                       std::vector<Port>& p_ports,
+                       std::string& p_new_name,
+                       bool const p_is_remapping);
+
+    //! \brief Draw the attribute table of the node edition popup, holding the
+    //! keys the editor does not interpret but the engine needs, such as the
+    //! \c key and \c value of a SetBlackboard or the \c times of a Repeat.
+    //! \param p_attributes Attributes being edited.
+    //! \param p_new_name Buffer holding the name of the attribute being added.
+    void showAttributeTable(
+        std::vector<std::pair<std::string, std::string>>& p_attributes,
+        std::string& p_new_name);
+
+    //! \brief Tell the renderer which node types accept children, so that the
+    //! output pin follows the palette instead of a list frozen in the renderer.
+    void publishChildPolicy();
+
     //! \brief Draw the visualizer status line (TCP server state).
     void showVisualizerPanel();
 
@@ -549,8 +731,19 @@ protected: // TreeView helpers
     //! \brief Get the current tree view (creates one if needed).
     TreeView& getCurrentTreeView();
 
+    //! \brief Create a tree view, giving it its blackboard scope.
+    //! \param p_name Name of the view, assumed free.
+    //! \param p_is_subtree Whether the view holds a SubTree definition.
+    //! \param p_root_id Root node, -1 when the view is still empty.
+    TreeView& createTreeView(std::string const& p_name,
+                             bool const p_is_subtree,
+                             ID const p_root_id);
+
     //! \brief Find a tree view by its root ID.
     TreeView* findTreeViewByRootId(ID p_root_id);
+
+    //! \brief Find the view a node belongs to, walking up its parents.
+    TreeView* findTreeViewOfNode(ID p_node_id);
 
     //! \brief Find a node by its ID.
     Node* findNode(ID const p_id);
@@ -566,6 +759,10 @@ protected: // TreeView helpers
     void collectVisibleNodes(ID p_root_id,
                              std::unordered_set<ID>& p_visible_nodes);
 
+    //! \brief Collect a node and all its descendants, stopping at SubTree nodes
+    //! whose content belongs to another view.
+    void collectBranch(ID p_node_id, std::unordered_set<ID>& p_branch);
+
     //! \brief Nodes acting as a root in the current view: the root of the view
     //! plus, in the main tree, the nodes not attached to a parent yet. Both the
     //! canvas and the auto-layout walk exactly these.
@@ -578,6 +775,21 @@ private: // SubTree management (internal)
 
     bool expandSubTree(Node* p_subtree_node);
     bool collapseSubTree(Node* p_subtree_node);
+
+    //! \brief Build a view name not taken yet, from a wished base name.
+    [[nodiscard]] std::string
+    uniqueTreeViewName(std::string const& p_base) const;
+
+    //! \brief Count the SubTree nodes referencing a definition.
+    [[nodiscard]] std::size_t countSubTreeReferences(std::string const& p_name,
+                                                     ID const p_ignored) const;
+
+    //! \brief Move a node and its descendants to another view, transferring
+    //! their stored positions.
+    void moveBranchToView(ID p_node_id,
+                          TreeView& p_from,
+                          TreeView& p_to,
+                          ImVec2 const p_offset);
 
 private: // Tree conversion (internal)
 
@@ -618,6 +830,13 @@ private: // Auto-layout (internal)
     //! \brief Copy the positions of the current view back into the nodes, so
     //! that a caller not going through the canvas sees them too.
     void syncNodePositionsFromView();
+
+    //! \brief Reorder the children of the nodes of a view after their position.
+    void reorderChildrenByPosition(TreeView const& p_view);
+
+    //! \brief Recompute the layout, but only when the user asked the editor to
+    //! keep it in sync with the structure. Called after every edition.
+    void layoutIfAuto();
 
 private: // Tree structure helpers (internal)
 
@@ -663,8 +882,14 @@ protected:
     std::unordered_map<ID, Node> m_nodes;
     //! \brief Auto-incremented unique node ID.
     ID m_unique_node_id = 1;
-    //! \brief Selected node ID.
+    //! \brief Selected node ID. When several nodes are selected this is the
+    //! last one clicked, the one the edition popup works on.
     ID m_selected_node_id = -1;
+    //! \brief Every selected node, holding \c m_selected_node_id when not
+    //! empty.
+    std::unordered_set<ID> m_selected_nodes;
+    //! \brief Whether the layout follows the structure at each change.
+    bool m_auto_layout = true;
     //! \brief Active tree view name
     std::string m_active_tree_name;
     //! \brief Flag to request programmatic tab change (used once then reset)
@@ -702,6 +927,10 @@ protected:
         std::string new_input;
         //! \brief Output port name being typed.
         std::string new_output;
+        //! \brief SubTree definition name being typed.
+        std::string subtree_name;
+        //! \brief Attribute name being typed.
+        std::string new_attribute;
     } m_node_edit;
 
     // ------------------------------------------------------------------------
@@ -728,6 +957,11 @@ protected:
         std::string add_field_value;
         //! \brief Type index of the field being created.
         int add_field_type = 0;
+        //! \brief Whether the keys inherited from the parent scope are listed
+        //! below the local ones. Only a subtree scope has a parent.
+        bool show_inherited = true;
+        //! \brief Whether the "new variable" form is unfolded.
+        bool add_variable_open = false;
     } m_blackboard_panel;
 };
 

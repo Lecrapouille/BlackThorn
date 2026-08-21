@@ -65,6 +65,10 @@ private: // Application-owned widgets
     //! \brief Save the tree, then close the window once it reached the disk.
     void saveThenQuit();
 
+    //! \brief Keep the window title in sync with the document the editor holds
+    //! and with its unsaved changes.
+    void refreshWindowTitle();
+
 private:
 
     //! \brief The editor, embedded exactly like any other host would.
@@ -73,6 +77,9 @@ private:
     bool m_show_quit_confirmation = false;
     //! \brief Whether the pending save shall be followed by a quit.
     bool m_quit_after_save = false;
+    //! \brief Title last handed to the window manager, to avoid pushing the
+    //! same string at every frame.
+    std::string m_window_title;
 };
 
 } // namespace oakular
