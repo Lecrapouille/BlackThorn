@@ -19,6 +19,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -416,6 +417,32 @@ public:
     }
 
     // ------------------------------------------------------------------------
+    //! \brief Source of the time read by Timeout, Delay, Wait and Cooldown.
+    // ------------------------------------------------------------------------
+    using ClockFunction = std::function<std::chrono::steady_clock::time_point()>;
+
+    // ------------------------------------------------------------------------
+    //! \brief Replace the wall clock read by the timed nodes. A simulator
+    //! passes its simulated time: the timed nodes then follow it and a run
+    //! is reproducible. SubTrees take the clock of their parent tree when
+    //! they start. An empty function restores the wall clock.
+    //! \param[in] p_clock Returns the current time.
+    // ------------------------------------------------------------------------
+    void clock(ClockFunction p_clock)
+    {
+        m_clock = p_clock ? std::move(p_clock)
+                          : ClockFunction(&std::chrono::steady_clock::now);
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Current time of the clock of the tree.
+    // ------------------------------------------------------------------------
+    [[nodiscard]] std::chrono::steady_clock::time_point now() const
+    {
+        return m_clock();
+    }
+
+    // ------------------------------------------------------------------------
     //! \brief Reset the root node and clear the cached tree status.
     // ------------------------------------------------------------------------
     void reset();
@@ -579,6 +606,8 @@ private:
     TreeMetadata m_metadata;
     //! \brief Shared blackboard for nodes in this tree.
     Blackboard::Ptr m_blackboard = nullptr;
+    //! \brief Time read by the timed nodes (wall clock by default).
+    ClockFunction m_clock = &std::chrono::steady_clock::now;
     //! \brief Optional client streaming runtime state to a visualizer.
     std::shared_ptr<VisualizerClient> m_visualizer = nullptr;
     //! \brief Output port remapping toward a parent blackboard.

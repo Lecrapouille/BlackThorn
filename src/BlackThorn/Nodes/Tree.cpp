@@ -24,7 +24,6 @@ namespace bt {
 
 namespace {
 
-using Clock = std::chrono::steady_clock;
 using Ms = std::chrono::milliseconds;
 
 // ---------------------------------------------------------------------------
@@ -307,11 +306,11 @@ Status Tree::setUpNode(std::size_t p_index)
             {
                 runtime.duration_ms_runtime[p_index] = node_config.duration_ms;
             }
-            runtime.time_points[p_index] = Clock::now();
+            runtime.time_points[p_index] = now();
             return Status::RUNNING;
 
         case NodeKind::Delay:
-            runtime.time_points[p_index] = Clock::now();
+            runtime.time_points[p_index] = now();
             runtime.setFlag(p_index, false);
             return Status::RUNNING;
 
@@ -319,7 +318,7 @@ Status Tree::setUpNode(std::size_t p_index)
             if (runtime.flag(p_index))
             {
                 auto elapsed = std::chrono::duration_cast<Ms>(
-                    Clock::now() - runtime.time_points[p_index]);
+                    now() - runtime.time_points[p_index]);
                 if (elapsed.count() <
                     static_cast<long long>(node_config.duration_ms))
                 {
@@ -330,13 +329,14 @@ Status Tree::setUpNode(std::size_t p_index)
             return Status::RUNNING;
 
         case NodeKind::Wait:
-            runtime.time_points[p_index] = Clock::now();
+            runtime.time_points[p_index] = now();
             return Status::RUNNING;
 
         case NodeKind::SubTree:
             if (auto& subtree = static_cast<SubTreeNode&>(node_ref);
                 subtree.subtree().hasRoot())
             {
+                subtree.subtree().clock(m_clock);
                 subtree.subtree().reset();
             }
             return Status::RUNNING;
@@ -603,7 +603,7 @@ Status Tree::runNode(std::size_t p_index)
 
         case NodeKind::Timeout: {
             auto elapsed = std::chrono::duration_cast<Ms>(
-                Clock::now() - runtime.time_points[p_index]);
+                now() - runtime.time_points[p_index]);
             if (elapsed.count() >=
                 static_cast<long long>(runtime.duration_ms_runtime[p_index]))
             {
@@ -621,7 +621,7 @@ Status Tree::runNode(std::size_t p_index)
             if (!runtime.flag(p_index))
             {
                 auto elapsed = std::chrono::duration_cast<Ms>(
-                    Clock::now() - runtime.time_points[p_index]);
+                    now() - runtime.time_points[p_index]);
                 if (elapsed.count() <
                     static_cast<long long>(node_config.duration_ms))
                 {
@@ -636,7 +636,7 @@ Status Tree::runNode(std::size_t p_index)
             Status status = tickDecoratorChild(p_index);
             if (status != Status::RUNNING)
             {
-                runtime.time_points[p_index] = Clock::now();
+                runtime.time_points[p_index] = now();
                 runtime.setFlag(p_index, true);
             }
             return status;
@@ -650,7 +650,7 @@ Status Tree::runNode(std::size_t p_index)
 
         case NodeKind::Wait: {
             auto elapsed = std::chrono::duration_cast<Ms>(
-                Clock::now() - runtime.time_points[p_index]);
+                now() - runtime.time_points[p_index]);
             if (elapsed.count() >=
                 static_cast<long long>(node_config.duration_ms))
             {
