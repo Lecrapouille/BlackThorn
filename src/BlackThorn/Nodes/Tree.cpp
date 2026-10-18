@@ -184,6 +184,22 @@ void Tree::haltNodeInternal(std::size_t p_index)
     else
     {
         node(p_index).onHaltPublic();
+        // A halted action must stop its work like a reset one: the reset
+        // function of a callback leaf is where it cancels it.
+        if ((node_kind == NodeKind::Callback ||
+             node_kind == NodeKind::Condition) &&
+            config(p_index).on_reset)
+        {
+            config(p_index).on_reset();
+        }
+    }
+}
+
+void Tree::haltChildrenAfter(std::size_t p_index, std::size_t p_offset)
+{
+    for (std::size_t i = p_offset + 1u; i < m_runtime.childCount(p_index); ++i)
+    {
+        haltNode(m_runtime.childAt(p_index, i));
     }
 }
 
@@ -390,6 +406,11 @@ Status Tree::runNode(std::size_t p_index)
                     runtime.childAt(p_index, runtime.child_cursors[p_index]));
                 if (status != Status::SUCCESS)
                 {
+                    if (node_kind == NodeKind::ReactiveSequence)
+                    {
+                        haltChildrenAfter(p_index,
+                                          runtime.child_cursors[p_index]);
+                    }
                     return status;
                 }
                 ++runtime.child_cursors[p_index];
@@ -416,6 +437,11 @@ Status Tree::runNode(std::size_t p_index)
                     runtime.childAt(p_index, runtime.child_cursors[p_index]));
                 if (status != Status::FAILURE)
                 {
+                    if (node_kind == NodeKind::ReactiveSelector)
+                    {
+                        haltChildrenAfter(p_index,
+                                          runtime.child_cursors[p_index]);
+                    }
                     return status;
                 }
                 ++runtime.child_cursors[p_index];
