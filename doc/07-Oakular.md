@@ -73,7 +73,7 @@ In your program, create a client, connect it, and give it to the tree. Then ever
 
 ## 🔌 4. The protocol
 
-Text messages over TCP, port **8888** by default (`VisualizerClient::connect(host, port)`, `oakular::Server::start(port)`).
+Text messages over TCP, port **8888** by default. Change it on both sides: `VisualizerClient::connect(host, port)` in your program, and `./build/Oakular --port N` (or `oakular::Server(port)` in your own host).
 
 **The tree**, sent once after the connection:
 

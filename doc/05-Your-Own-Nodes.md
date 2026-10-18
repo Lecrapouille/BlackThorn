@@ -138,14 +138,14 @@ The creator runs once per node of the file: put the per-node state (here `active
 
 ## 🛑 5. Stop the work: reset and halt
 
-A long action may be stopped before it ends. Two different events can stop it, and your node must handle both if it drives something real:
+A long action may be stopped before it ends. Give `CallbackLeaf` a second function, the **reset function**: BlackThorn calls it every time the node must stop or forget its work.
 
-| Event | Who triggers it | What BlackThorn calls |
-|-------|-----------------|-----------------------|
-| **halt** | a `Timeout` whose time is over; `tree->halt()` | the virtual `onHalt()` of the node |
-| **reset** | `tree->reset()`; a `Repeat`, `UntilSuccess` or `UntilFailure` that runs its child again | the reset function given to `CallbackLeaf` |
+| Event | Who triggers it |
+|-------|-----------------|
+| **halt** | a `Timeout` whose time is over; a `ReactiveSequence` or `ReactiveSelector` whose earlier child decided; `tree->halt()` |
+| **reset** | `tree->reset()`; a `Repeat`, `UntilSuccess` or `UntilFailure` that runs its child again |
 
-> ⚠️ The reset function is **not** called on a halt. A node that only gives a reset function keeps working after a `Timeout` stopped it. Override `onHalt()` too.
+On a halt, BlackThorn first calls the virtual `onHalt()` of the node (override it in a derived class if halting needs something more than a reset), then the reset function. Write the reset function so that calling it twice does no harm: RobotIK keeps an `active` flag for this ([§4](#-4-give-your-own-objects-to-a-node)).
 
 ```cpp
 //! A long action that stops its motor when it is halted or reset.
@@ -155,15 +155,8 @@ public:
 
     Drive()
         : CallbackLeaf([]() { return bt::Status::RUNNING; },   // never ends
-                       []() { std::cout << "  reset: stop the motor\n"; })
+                       []() { std::cout << "  stop the motor\n"; })
     {
-    }
-
-protected:
-
-    void onHalt() override
-    {
-        std::cout << "  halt: stop the motor\n";
     }
 };
 ```
@@ -176,10 +169,10 @@ tick 1:
 tick 2:
   tree -> RUNNING
 tick 3:
-  halt: stop the motor
+  stop the motor
   tree -> FAILURE
 tree->reset():
-  reset: stop the motor
+  stop the motor
 ```
 
 ---
@@ -276,16 +269,27 @@ tick 4:
   tree -> SUCCESS
 ```
 
-🔍 Look at tick 3: the battery is at -10 % and the robot still cleans. The `Sequence` resumes at the running `Clean` and never asks `BatteryOk` again ([chapter 4](04-Nodes.md#sequence)). Only the `Timeout` stops it, at tick 4, and the `Selector` goes to the charger. Two fixes:
+🔍 Look at tick 3: the battery is at -10 % and the robot still cleans. The `Sequence` resumes at the running `Clean` and never asks `BatteryOk` again ([chapter 4](04-Nodes.md#sequence)). Only the `Timeout` stops it, at tick 4, and the `Selector` goes to the charger.
 
-- re-check the battery inside `Clean` (return `FAILURE` when it is low), or
-- use a `ReactiveSequence`, which asks `BatteryOk` at every tick (C++ only, §7).
+The fix: replace `Sequence` by `ReactiveSequence` in the file. It asks `BatteryOk` again at every tick, and halts `Clean` as soon as the answer is no:
+
+```text
+tick 1:
+  Clean: battery 50%
+  tree -> RUNNING
+tick 2:
+  Clean: battery 20%
+  tree -> RUNNING
+tick 3:
+  MoveTo: going to the dock
+  tree -> SUCCESS
+```
 
 ---
 
 ## 🌲 7. Build a tree in C++, without YAML
 
-A tree can be built in code: `Tree::create()`, then `createRoot<T>(...)`, then `addChild<T>(...)` on composites (or `createChild<T>(...)` on decorators). The arguments go to the constructor of `T` ([chapter 4 §5](04-Nodes.md#-5-the-same-nodes-in-c)). This is also the only way to use the reactive composites today:
+A tree can be built in code: `Tree::create()`, then `createRoot<T>(...)`, then `addChild<T>(...)` on composites (or `createChild<T>(...)` on decorators). The arguments go to the constructor of `T` ([chapter 4 §5](04-Nodes.md#-5-the-same-nodes-in-c)). The same `ReactiveSequence`, built in code:
 
 ```cpp
 int battery = 80;

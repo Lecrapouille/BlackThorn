@@ -2,7 +2,7 @@
 
 This page is for people who never wrote a behavior tree. It explains the words you will meet in the rest of the documentation, then what BlackThorn does with them. No C++ here: only ideas and pictures.
 
-If you already know behavior trees, read only [§5 Why BlackThorn?](#-5-why-blackthorn) and go to [02-Getting-Started.md](02-Getting-Started.md).
+If you already know behavior trees, go to [02-Getting-Started.md](02-Getting-Started.md).
 
 ---
 
@@ -123,20 +123,7 @@ A node that is `RUNNING` can also be **halted**: its parent stops it before it e
 
 ## ✨ 5. Why BlackThorn?
 
-BlackThorn is a C++17 behavior tree library for robotics, simulation and games. It comes with **Oakular**, an editor and live visualizer.
-
-| | BlackThorn | [BehaviorTree.CPP](https://www.behaviortree.dev/) | [BrainTree](https://github.com/arvidsson/BrainTree) |
-|---|---|---|---|
-| Tree file | one YAML file: tree, blackboard and subtrees | XML (and a second file for the editor) | none (C++ only) |
-| Blackboard | yes, with nested maps and lists, and scopes for subtrees | yes | yes, flat |
-| Subtrees | yes, with port remapping | yes | no |
-| Editor and live view | Oakular, open source, embeddable in your own window | Groot (paid for the full version) | no |
-| Clock of timed nodes | wall clock, or your simulated clock | wall clock | none |
-| Memory | nodes stored together, data-oriented runtime | one object per node | one object per node |
-
-BlackThorn started from BrainTree and adds what it misses (blackboard, files, subtrees, editor), while staying smaller and simpler to read than BehaviorTree.CPP.
-
-**The names.** *BlackThorn* plays with "BT" (behavior tree); the blackthorn is a thorny tree (*prunellier* or *épine noire* in French). *Oakular* mixes "oak" and "ocular": it is the eye that looks at the tree.
+Why another library when BehaviorTree.CPP exists, where BlackThorn comes from, and how it compares: this is the first thing the [README](../README.md#-why-another-behavior-tree-library) tells. In short: one readable YAML file per tree, a real blackboard, a free editor that shows the tree running, simulated time for tests, and a small, data-oriented code base.
 
 ---
 

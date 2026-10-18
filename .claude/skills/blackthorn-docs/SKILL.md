@@ -14,14 +14,14 @@ glossary). Emojis in headings, as in the other chapters.
 
 | File | Holds |
 |------|-------|
-| README.md | pitch, YAML + C++ glance, why, quick start, doc table |
+| README.md | what it is for (no jargon), the story (BT.CPP, BrainTree), why BlackThorn (comparison), YAML + C++ glance, quick start, doc table |
 | doc/README.md | index: Learn (1–5), Reference (6–9), quick paths |
-| 01-Introduction.md | glossary, statuses, one tick, comparison with BT.CPP / BrainTree |
+| 01-Introduction.md | glossary, statuses, one tick (§5 points to the README for "why") |
 | 02-Getting-Started.md | prerequisites, build, examples, Oakular live view, first-tree tutorial |
 | 03-YAML-Format.md | sections, node syntax, YAML-readable types, parameters/ports, `_id`, SubTrees, builder errors |
 | 04-Nodes.md | every node: behavior table, YAML fields, C++ constructors |
 | 05-Your-Own-Nodes.md | factory, lambdas, CallbackLeaf + ports, creators, halt vs reset, clock, C++ trees |
-| 06-Blackboard.md | API, strict types, nested values, `${}`, subtree scopes |
+| 06-Blackboard.md | API, number conversions, nested values, `${}`, subtree scopes |
 | 07-Oakular.md | modes, visualizer, protocol, embedding, BlackThorn.mk, build switches |
 | 08-API-Reference.md | classes by task |
 | 09-Examples.md | one section per doc/examples folder |
@@ -32,6 +32,10 @@ chapter tables: keep them in sync when a chapter is added or renamed.
 
 ## Rules
 
+- The README sells before it teaches: what the library is for in plain words
+  (no jargon, no code), the story (why it exists, what was wrong with the
+  others), why it is better (comparison table), and only then code, quick
+  start and the doc table. Never open a README with API details.
 - Every code excerpt must compile and every quoted output must come from a
   real run (write the program in a scratch folder, link the sources as in
   02-Getting-Started.md §4 step 3, paste the output).

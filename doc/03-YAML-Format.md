@@ -80,12 +80,10 @@ children:
 
 | Family | Types |
 |--------|-------|
-| Composites | `Sequence`, `Selector`, `Parallel` |
+| Composites | `Sequence`, `Selector`, `ReactiveSequence`, `ReactiveSelector`, `SequenceWithMemory`, `SelectorWithMemory`, `Parallel` |
 | Decorators | `Inverter`, `ForceSuccess`, `ForceFailure`, `Repeat` (or `Repeater`), `UntilSuccess`, `UntilFailure`, `Timeout`, `Delay`, `Cooldown`, `RunOnce` |
 | Leaves | `Action`, `Condition`, `Success`, `Failure`, `Wait`, `SetBlackboard` |
 | Other | `SubTree` |
-
-> ⚠️ `ReactiveSequence`, `SequenceWithMemory`, `ReactiveSelector` and `SelectorWithMemory` exist in C++ but the builder does not read them yet: a file that uses them fails with `Unknown node type: ReactiveSequence`. Build them in C++ ([chapter 5](05-Your-Own-Nodes.md#-7-build-a-tree-in-c-without-yaml)).
 
 The fields of each type are listed in [chapter 4](04-Nodes.md).
 

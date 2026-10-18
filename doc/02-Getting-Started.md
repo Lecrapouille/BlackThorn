@@ -75,7 +75,7 @@ Run them from the root of the repository: they read their YAML file with a path 
 ### 🔭 Watch a tree live
 
 1. Start the editor: `./build/Oakular`.
-2. In the menu, choose **Mode → Visualizer**. Oakular waits for a program on TCP port 8888.
+2. In the menu, choose **Mode → Visualizer**. Oakular waits for a program on TCP port 8888 (another port: `./build/Oakular --port 9090`, and the same port in `connect`).
 3. In another terminal, run `./build/Example-Patrol`. It connects, sends its tree, then the status of each node after every tick. The nodes turn green, yellow and red as the tree runs.
 
 ---

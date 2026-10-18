@@ -71,7 +71,7 @@ bt::Tree::Ptr tree = result.moveValue();      // takes the tree out
 | `Status tick()` | runs one tick from the root; `FAILURE` when there is no valid root |
 | `Status status() const` | the status of the last tick |
 | `void reset()` | puts every node back to `INVALID` (calls the reset functions of the actions) |
-| `void halt()` | stops the running nodes (calls their `onHalt()`) |
+| `void halt()` | stops the running nodes (calls their `onHalt()`, then the reset functions of the actions) |
 | `bool isValid() const` | the tree has a root and every node has its children |
 | `void clock(std::function<time_point()>)` | the clock of the timed nodes; empty function = wall clock |
 | `time_point now() const` | the current time of this clock |
@@ -104,7 +104,7 @@ std::string const& bt::to_string(bt::Status);   // "RUNNING", ...
 | `blackboard()`, `setBlackboard(ptr)` | the blackboard of its scope |
 | `getInput<T>(port)` *(protected)* | reads a port: `std::optional<T>` |
 | `setOutput(port, value)` *(protected)* | writes a port |
-| `virtual void onHalt()` *(protected)* | called when a running node is halted |
+| `virtual void onHalt()` *(protected)* | called when a running node is halted (before the reset function of a `CallbackLeaf`) |
 | `virtual void onTearDown(Status)` *(protected)* | called when the node ends with `SUCCESS` or `FAILURE` |
 
 ### Leaves you derive from or create
@@ -132,8 +132,8 @@ The constructors of every built-in node are in [chapter 4 §5](04-Nodes.md#-5-th
 | Method | Does |
 |--------|------|
 | `Blackboard(Ptr parent = nullptr)` | a blackboard, child of `parent` when given |
-| `set(key, value)` | writes; the type is the type of `value` |
-| `std::optional<T> get<T>(key)` | reads; empty if missing or of another type |
+| `set(key, value)`, `set<T>(key, value)` | writes; the type is the type of `value`, or `T` |
+| `std::optional<T> get<T>(key)` | reads; numbers convert without loss; empty if missing or not readable as `T` |
 | `T getOrDefault<T>(key, default)` | reads, or `default` |
 | `has(key)`, `remove(key)`, `keys()` | presence, removal, list |
 | `Ptr createChild()` | a child scope (what subtrees use) |
