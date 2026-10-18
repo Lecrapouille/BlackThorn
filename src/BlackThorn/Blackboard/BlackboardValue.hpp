@@ -20,7 +20,9 @@
 #pragma once
 
 #include <any>
+#include <cmath>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -115,6 +117,51 @@ inline constexpr bool is_blackboard_value_v = is_blackboard_value<T>::value;
 //!
 //! Handles direct variant alternatives and \c std::any unboxing.
 // ------------------------------------------------------------------------
+// ------------------------------------------------------------------------
+//! \brief Convert a number stored with another arithmetic type into \c T.
+//!
+//! YAML gives \c 1 as an \c int and \c 1.0 as a \c double: a node asking for a
+//! \c double must still read \c 1. The conversion is refused when it would
+//! change the value: a fractional number into an integer, a negative number
+//! into an unsigned type, or a value out of the range of \c T.
+//! \param[in] p_value Stored value.
+//! \return The converted number, or \c std::nullopt.
+// ------------------------------------------------------------------------
+template <typename T>
+std::optional<T> numberAs(BlackboardValue const& p_value)
+{
+    std::optional<T> result;
+    std::visit(
+        [&result](auto const& p_number) {
+            using Source = std::decay_t<decltype(p_number)>;
+            if constexpr (std::is_arithmetic_v<Source> &&
+                          !std::is_same_v<Source, bool>)
+            {
+                long double const wide = static_cast<long double>(p_number);
+                if constexpr (std::is_integral_v<T>)
+                {
+                    if ((wide != std::trunc(wide)) ||
+                        (wide < static_cast<long double>(
+                                    std::numeric_limits<T>::lowest())) ||
+                        (wide > static_cast<long double>(
+                                    std::numeric_limits<T>::max())))
+                    {
+                        return;
+                    }
+                }
+                result = static_cast<T>(p_number);
+            }
+        },
+        p_value.asBase());
+    return result;
+}
+
+// ------------------------------------------------------------------------
+//! \brief Read \p p_value as a \c T.
+//!
+//! Numbers convert between \c int, \c size_t, \c float and \c double when the
+//! value stays the same (see \ref numberAs); other types must match exactly.
+// ------------------------------------------------------------------------
 template <typename T>
 std::optional<T> valueAs(BlackboardValue const& p_value)
 {
@@ -145,6 +192,11 @@ std::optional<T> valueAs(BlackboardValue const& p_value)
         if (auto const* direct = std::get_if<Decayed>(&p_value.asBase()))
         {
             return *direct;
+        }
+        if constexpr (std::is_arithmetic_v<Decayed> &&
+                      !std::is_same_v<Decayed, bool>)
+        {
+            return numberAs<Decayed>(p_value);
         }
     }
 
@@ -180,6 +232,12 @@ BlackboardValue toStoredValue(T&& p_value)
                        std::is_same_v<Decayed, std::any>)
     {
         return std::forward<T>(p_value);
+    }
+    else if constexpr (std::is_same_v<Decayed, char const*> ||
+                       std::is_same_v<Decayed, char*>)
+    {
+        // A string literal is text, not a pointer to keep in a std::any.
+        return std::string(p_value);
     }
     else
     {

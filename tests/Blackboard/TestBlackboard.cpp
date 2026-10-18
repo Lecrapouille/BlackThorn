@@ -255,10 +255,48 @@ TEST(TestBlackboard, TypeSafety)
     EXPECT_TRUE(bb->get<int>("value").has_value());
     EXPECT_EQ(bb->get<int>("value").value(), 42);
 
-    // WHEN: Retrieving with wrong types
+    // WHEN: Retrieving a number as a string
     // THEN: EXPECT nullopt
-    EXPECT_FALSE(bb->get<double>("value").has_value());
     EXPECT_FALSE(bb->get<std::string>("value").has_value());
+    EXPECT_FALSE(bb->get<bool>("value").has_value());
+}
+
+// ------------------------------------------------------------------------
+//! \brief Numbers convert between arithmetic types when the value stays the
+//! same: YAML gives "1" as an int to a node reading a double.
+// ------------------------------------------------------------------------
+TEST(TestBlackboard, NumbersConvertWithoutLoss)
+{
+    auto bb = std::make_shared<bt::Blackboard>();
+    bb->set("count", 42);
+    bb->set("ratio", 0.5);
+    bb->set("whole", 3.0);
+    bb->set("negative", -2);
+
+    EXPECT_DOUBLE_EQ(bb->get<double>("count").value(), 42.0);
+    EXPECT_FLOAT_EQ(bb->get<float>("count").value(), 42.0f);
+    EXPECT_EQ(bb->get<size_t>("count").value(), 42u);
+    EXPECT_EQ(bb->get<int>("whole").value(), 3);
+
+    // A conversion that would change the value is refused.
+    EXPECT_FALSE(bb->get<int>("ratio").has_value());
+    EXPECT_FALSE(bb->get<size_t>("negative").has_value());
+}
+
+// ------------------------------------------------------------------------
+//! \brief set<T> accepts a variable, and a string literal is stored as text.
+// ------------------------------------------------------------------------
+TEST(TestBlackboard, SetExplicitTypeAndStringLiteral)
+{
+    auto bb = std::make_shared<bt::Blackboard>();
+    int battery = 75;
+    bb->set<int>("battery", battery);
+    bb->set<double>("speed", 2);
+    bb->set("target", "Drone-A");
+
+    EXPECT_EQ(bb->get<int>("battery").value(), 75);
+    EXPECT_DOUBLE_EQ(bb->get<double>("speed").value(), 2.0);
+    EXPECT_EQ(bb->get<std::string>("target").value(), "Drone-A");
 }
 
 // ------------------------------------------------------------------------

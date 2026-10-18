@@ -62,11 +62,20 @@ public:
     //! \param[in] p_key Entry name.
     //! \param[in] p_value Value to store (converted via \ref
     //! detail::toStoredValue).
+    //! \tparam T Optional stored type: \c set<int>("k", x) stores \c int(x),
+    //! \c set("k", x) stores the type of \c x.
     // ------------------------------------------------------------------------
-    template <typename T>
-    void set(Key const& p_key, T&& p_value)
+    template <typename T = void, typename U>
+    void set(Key const& p_key, U&& p_value)
     {
-        m_data[p_key] = detail::toStoredValue(std::forward<T>(p_value));
+        if constexpr (std::is_void_v<T>)
+        {
+            m_data[p_key] = detail::toStoredValue(std::forward<U>(p_value));
+        }
+        else
+        {
+            m_data[p_key] = detail::toStoredValue(T(std::forward<U>(p_value)));
+        }
         invalidateKey(p_key);
     }
 
