@@ -203,6 +203,24 @@ TEST(TestReactiveSequence, RestartsOnEachTick)
     EXPECT_EQ(counter, 2); // First child executed again
 }
 
+TEST(TestReactiveSequence, HaltsTheRunningChildWhenAConditionFails)
+{
+    bool ok = true;
+    int halted = 0;
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::ReactiveSequence>();
+    sequence.addChild<bt::Condition>([&ok]() { return ok; });
+    sequence.addChild<LambdaTestAction>([]() { return bt::Status::RUNNING; },
+                                        [&halted]() { ++halted; });
+
+    EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(halted, 0);
+
+    ok = false;
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(halted, 1); // the action was stopped, not abandoned
+}
+
 TEST(TestReactiveSequence, AllSuccess)
 {
     auto tree = bt::Tree::create();

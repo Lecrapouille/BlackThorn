@@ -73,3 +73,20 @@ TEST(TestClock, EmptyFunctionRestoresTheWallClock)
     auto const before = std::chrono::steady_clock::now();
     EXPECT_GE(tree->now(), before);
 }
+
+TEST(TestClock, TimeoutCallsTheResetFunctionOfItsHaltedChild)
+{
+    ManualClock clock;
+    int stopped = 0;
+    auto tree = bt::Tree::create();
+    tree->clock([&clock] { return clock.time; });
+    auto& timeout = tree->createRoot<bt::Timeout>(50);
+    timeout.createChild<bt::CallbackLeaf>([]() { return bt::Status::RUNNING; },
+                                          [&stopped]() { ++stopped; });
+
+    EXPECT_EQ(tree->tick(), bt::Status::RUNNING);
+    EXPECT_EQ(stopped, 0);
+    clock.advance(std::chrono::milliseconds(50));
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(stopped, 1);
+}

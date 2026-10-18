@@ -579,6 +579,14 @@ private:
     void haltNodeInternal(std::size_t p_index);
 
     // ------------------------------------------------------------------------
+    //! \brief Halt the running children of a composite placed after a child.
+    //! Used by the reactive composites when an earlier child decides.
+    //! \param[in] p_index Storage index of the composite.
+    //! \param[in] p_offset Position of the child that decided.
+    // ------------------------------------------------------------------------
+    void haltChildrenAfter(std::size_t p_index, std::size_t p_offset);
+
+    // ------------------------------------------------------------------------
     //! \brief Return the storage index of a decorator child.
     //! \param[in] p_index Storage index of the decorator node.
     // ------------------------------------------------------------------------
