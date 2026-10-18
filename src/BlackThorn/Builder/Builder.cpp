@@ -214,6 +214,27 @@ parseChildren(ParsingContext const& p_context,
 }
 
 // ----------------------------------------------------------------------------
+//! \brief Create a composite of type \c T that only has children (the
+//! reactive and "WithMemory" sequences and selectors).
+// ----------------------------------------------------------------------------
+template <typename T>
+static Return<uint32_t> createChildrenComposite(ParsingContext const& p_context,
+                                                YamlNode const& p_content)
+{
+    auto& node = p_context.tree->emplaceNode<T>();
+    node.name = getNodeName(p_content);
+    assignNodeId(node.index(), p_context, p_content);
+    auto children = parseChildren(p_context, p_content, "children");
+    if (!children)
+        return Return<uint32_t>::error(children.getError());
+    for (uint32_t child_idx : children.getValue())
+    {
+        node.addChildIndex(child_idx);
+    }
+    return Return<uint32_t>::success(static_cast<uint32_t>(node.index()));
+}
+
+// ----------------------------------------------------------------------------
 //! \brief Static creator functions for each node type
 // ----------------------------------------------------------------------------
 static Return<uint32_t> createSequence(ParsingContext const& p_context,
@@ -862,6 +883,12 @@ static NodeCreatorMap& getNodeCreators()
     static NodeCreatorMap creators = {
         {Sequence::toString(), createSequence},
         {Selector::toString(), createSelector},
+        {ReactiveSequence::toString(), createChildrenComposite<ReactiveSequence>},
+        {SequenceWithMemory::toString(),
+         createChildrenComposite<SequenceWithMemory>},
+        {ReactiveSelector::toString(), createChildrenComposite<ReactiveSelector>},
+        {SelectorWithMemory::toString(),
+         createChildrenComposite<SelectorWithMemory>},
         {Parallel::toString(), createParallel},
         {Inverter::toString(), createInverter},
         {Repeater::toString(), createRepeater},

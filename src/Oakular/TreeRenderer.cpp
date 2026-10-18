@@ -88,6 +88,10 @@ static std::string formatPort(bt::Blackboard const* p_blackboard,
 static const std::unordered_map<std::string, ImU32> s_type_colors = {
     {"Sequence", IM_COL32(100, 150, 200, 255)},
     {"Selector", IM_COL32(200, 150, 100, 255)},
+    {"ReactiveSequence", IM_COL32(100, 150, 200, 255)},
+    {"SequenceWithMemory", IM_COL32(100, 150, 200, 255)},
+    {"ReactiveSelector", IM_COL32(200, 150, 100, 255)},
+    {"SelectorWithMemory", IM_COL32(200, 150, 100, 255)},
     {"Parallel", IM_COL32(150, 200, 150, 255)},
     {"Decorator", IM_COL32(200, 100, 200, 255)},
     {"Inverter", IM_COL32(200, 100, 200, 255)},
@@ -117,6 +121,10 @@ bool TreeRenderer::acceptsChildren(Editor::Node const& p_node) const
         return m_accepts_children(p_node.type);
 
     return p_node.type == "Sequence" || p_node.type == "Selector" ||
+           p_node.type == "ReactiveSequence" ||
+           p_node.type == "SequenceWithMemory" ||
+           p_node.type == "ReactiveSelector" ||
+           p_node.type == "SelectorWithMemory" ||
            p_node.type == "Parallel" || p_node.type == "Inverter" ||
            p_node.type == "SubTree";
 }

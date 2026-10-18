@@ -1342,3 +1342,23 @@ BehaviorTree:
     // Third tick completes the 3 repetitions
     EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
 }
+TEST(TestBuilder, ParseReactiveAndMemoryComposites)
+{
+    for (char const* type : { "ReactiveSequence", "SequenceWithMemory",
+                              "ReactiveSelector", "SelectorWithMemory" })
+    {
+        std::string const yaml = std::string("BehaviorTree:\n  ") + type +
+                                 ":\n    children:\n      - Success:\n";
+        bt::NodeFactory factory;
+        auto result = bt::Builder::fromText(factory, yaml);
+        ASSERT_TRUE(result.isSuccess()) << type << ": " << result.getError();
+        auto tree = result.moveValue();
+        EXPECT_STREQ(tree->getRoot().typeName(), type);
+        EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+
+        // What the exporter writes, the builder reads back.
+        auto again = bt::Builder::fromText(factory, bt::Exporter::toYAML(*tree));
+        ASSERT_TRUE(again.isSuccess()) << again.getError();
+        EXPECT_STREQ(again.getValue()->getRoot().typeName(), type);
+    }
+}
