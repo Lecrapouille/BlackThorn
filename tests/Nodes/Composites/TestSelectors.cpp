@@ -166,3 +166,23 @@ TEST(TestSelectorWithMemory, RemembersProgress)
     EXPECT_EQ(selector.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 0); // Still not reached
 }
+
+TEST(TestSelectorWithMemory, StartsAgainFromTheChildThatSucceeded)
+{
+    int first = 0;
+    auto tree = bt::Tree::create();
+    auto& selector = tree->createRoot<bt::SelectorWithMemory>();
+    selector.addChild<bt::Condition>([&first]() {
+        ++first;
+        return false;
+    });
+    selector.addChild<bt::Success>();
+
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(first, 1);
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(first, 1); // the child that already failed is skipped
+    tree->reset();
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(first, 2); // reset() forgets the position
+}

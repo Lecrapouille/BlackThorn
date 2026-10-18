@@ -261,12 +261,12 @@ Status Tree::setUpNode(std::size_t p_index)
 
     if (isComposite(node_kind))
     {
-        if (node_kind == NodeKind::ReactiveSequence ||
-            node_kind == NodeKind::ReactiveSelector)
-        {
-            runtime.child_cursors[p_index] = 0;
-        }
-        else
+        // The "WithMemory" composites keep their cursor between two runs: a
+        // sequence that failed retries the failed child, a selector that
+        // succeeded starts again from the child that succeeded. reset() puts
+        // the cursor back to the first child.
+        if (node_kind != NodeKind::SequenceWithMemory &&
+            node_kind != NodeKind::SelectorWithMemory)
         {
             runtime.child_cursors[p_index] = 0;
         }
