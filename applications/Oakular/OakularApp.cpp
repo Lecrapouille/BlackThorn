@@ -24,8 +24,10 @@ static constexpr char const* c_load_dialog_key = "LoadYamlDlgKey";
 static constexpr char const* c_save_dialog_key = "SaveYamlDlgKey";
 
 // ----------------------------------------------------------------------------
-OakularApp::OakularApp(size_t const p_width, size_t const p_height)
-    : Application(p_width, p_height)
+OakularApp::OakularApp(size_t const p_width,
+                       size_t const p_height,
+                       uint16_t const p_port)
+    : Application(p_width, p_height), m_port(p_port)
 {
 }
 
@@ -43,7 +45,7 @@ bool OakularApp::onSetup()
     m_editor.onQuitRequested.connect([this]() { requestQuit(); });
 
 #if defined(OAKULAR_HAS_SERVER)
-    m_editor.attachServer(std::make_shared<Server>());
+    m_editor.attachServer(std::make_shared<Server>(m_port));
 #endif
 
     return m_editor.setup();

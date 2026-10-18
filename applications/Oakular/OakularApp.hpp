@@ -12,6 +12,8 @@
 #include "Application/Application.hpp"
 #include "Oakular/Oakular.hpp"
 
+#include <cstdint>
+
 namespace oakular {
 
 // ****************************************************************************
@@ -30,8 +32,11 @@ public:
     //! \brief Constructor.
     //! \param p_width Initial framebuffer width.
     //! \param p_height Initial framebuffer height.
+    //! \param p_port TCP port listened to in Visualizer mode.
     // ------------------------------------------------------------------------
-    explicit OakularApp(size_t const p_width, size_t const p_height);
+    OakularApp(size_t const p_width,
+               size_t const p_height,
+               uint16_t const p_port = 8888);
 
     // ------------------------------------------------------------------------
     //! \brief Destructor.
@@ -73,6 +78,8 @@ private:
 
     //! \brief The editor, embedded exactly like any other host would.
     Editor m_editor;
+    //! \brief TCP port of the visualizer server.
+    uint16_t m_port;
     //! \brief Flag to open the quit confirmation popup.
     bool m_show_quit_confirmation = false;
     //! \brief Whether the pending save shall be followed by a quit.
