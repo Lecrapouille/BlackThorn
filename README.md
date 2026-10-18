@@ -1,158 +1,101 @@
-# 🌳 BlackThorn - C++ behavior tree Library
+# 🌳 BlackThorn — a C++ behavior tree library
 
 ![blackthorn](doc/logos/blackthorn.png)
 
 > ⚠️ The API is still evolving. Expect breaking changes while the library matures.
 
-**BlackThorn** is a modern C++17 behavior tree library designed for robotics, simulation, and games, featuring its integrated editor and real-time visualizer, **Oakular**.
+**BlackThorn** is a C++17 behavior tree library for robotics, simulation and games. It comes with **Oakular**, an editor and live visualizer that you can run alone or embed in your own application.
 
-A behavior tree (BT) is a mathematical model — specifically, a directed acyclic graph — for expressing decision logic in plan execution, serving as an alternative to state machines. Behavior trees describe the switching between a finite set of tasks in a modular fashion. While a BT can be represented as a state machine, such representations can become unwieldy. The key strength of behavior trees lies in their ability to compose highly complex tasks from simple ones, without requiring knowledge of how those simple tasks are implemented.
+A **behavior tree** decides what a robot or a game character does next. You build a big behavior from small bricks (*open the door*, *walk*, *is the battery OK?*) without each brick knowing the others. Unlike a state machine, adding a behavior does not add arrows everywhere. New to behavior trees? Read [the introduction](doc/01-Introduction.md) first: ten minutes, no code.
 
-This project builds upon [BrainTree](https://github.com/arvidsson/BrainTree) by adding missing features such as blackboards, file-based tree descriptions, and an editor. It also serves as a modernization of the [BehaviorTree.CPP](https://www.behaviortree.dev/) which has a complex code base. Key distinctions are BlackThorn uses unified YAML files for both tree structure and blackboard data (instead of BehaviorTree.CPP's two-part XML approach: one for the tree, one for the editor), provides subtree support (absent in BrainTree) and scoped blackboards (missing some features compared to BehaviorTree.CPP), and includes a fully open-source editor and real-time visualizer (proprietary in BehaviorTree.CPP).
-
-BlackThorn is a wordplay on "BT" (behavior tree) and serves as the name of the behavior tree library itself (the "tree"—prunellier or épine noire in French). Oakular is a wordplay combining "Oak" and "Ocular."
-
-## 💻 Quick Start
-
-- Prerequisites Ubuntu:
-
-```bash
-sudo apt-get install libsfml-dev
+```yaml
+BehaviorTree:                       # tree.yaml
+  Selector:
+    children:
+      - Sequence:
+          children:
+            - Condition: { name: BatteryOk }
+            - Timeout:
+                milliseconds: 3000
+                child:
+                  - Action: { name: Clean }
+      - Action: { name: GoCharge }
 ```
-
-- Prerequisites Fedora:
-
-```bash
-sudo dnf install SFML-devel
-```
-
-- Download and compilation:
-
-```bash
-git clone https://github.com/Lecrapouille/BlackThorn --recurse
-
-cd BlackThorn
-make download-external-libs
-make -j8          # builds library + editor + examples
-
-./build/Oakular
-./build/Example-GameState   # doc/examples/GameState
-./build/Example-Patrol      # doc/examples/Patrol
-./build/Example-Embedded    # doc/examples/Embedded
-```
-
-See [Getting Started Guide](doc/getting-started.md) for installation and basic usage.
-
-## 🧩 Embedding BlackThorn in your own project
-
-Both layers are embeddable. The behavior tree engine (`bt::`) has no graphical
-dependency at all, and the editor (`oakular::`) is a pure Dear ImGui component:
-it never creates a window, an OpenGL context or an ImGui context, and it never
-calls GLFW. A host that already owns its window and its ImGui context writes:
 
 ```cpp
-#include "Oakular/Oakular.hpp"
+bt::NodeFactory factory;
+factory.registerCondition("BatteryOk", [&]() { return battery > 20; });
+factory.registerAction("Clean", [&]() { return robot.clean(); });     // RUNNING, SUCCESS or FAILURE
+factory.registerAction("GoCharge", [&]() { return robot.goCharge(); });
 
-oakular::Editor m_editor;               // no width, no height, no window
-
-// Expose your own domain nodes in the creation palette
-m_editor.registerNodeType("MoveToTarget", "Robot");
-
-// Once per frame, outside of the ImGui draw calls
-void MyApp::onUpdate(float dt) { m_editor.update(dt); }
-
-// Inside your menu bar, between BeginMenuBar and EndMenuBar
-void MyApp::onDrawMenuBar() { m_editor.drawMenuBar(); }
-
-// Inside your frame, between ImGui::NewFrame() and ImGui::Render()
-void MyApp::onDrawMainPanel() { m_editor.draw("Behavior Tree Editor"); }
+auto result = bt::Builder::fromFile(factory, "tree.yaml");
+bt::Tree::Ptr tree = result.moveValue();
+while (running) { tree->tick(); }   // once per cycle of your main loop
 ```
 
-Actions the editor cannot perform on its own are signals your host connects to:
-`onFileDialogRequested` (open your own file browser, then call `loadFromYaml` or
-`saveToYaml`) and `onQuitRequested`. See
-[doc/examples/Embedded](doc/examples/Embedded/Embedded.cpp) for a complete host,
-and [src/Oakular/README.md](src/Oakular/README.md) for the full editor API.
+---
 
-### Two ways to consume the libraries
+## ✨ Why BlackThorn?
 
-Define `BLACKTHORN_DIR` then include [BlackThorn.mk](BlackThorn.mk), which
-exposes the sources, includes and flags of both layers:
+- 📝 **One YAML file** holds the tree, the starting blackboard and the subtrees. Oakular reads and writes the same file.
+- 🧠 **A real blackboard**: nested maps and lists, `${key}` references, one scope per subtree, ports remapped in the file.
+- 👁️ **Oakular**, an open-source editor and live visualizer: draw a tree, or watch the nodes of a running program turn green, yellow and red.
+- 🧩 **Embeddable**: the engine has no graphical dependency; the editor is a plain Dear ImGui component that never opens a window. RobotIK puts it in its simulator.
+- ⏰ **Simulated time**: `Timeout`, `Delay`, `Cooldown` and `Wait` read the clock you give, so a simulation gives the same result fast or slow.
+- ⚡ **Data-oriented runtime**: the state of the nodes is stored in arrays, not scattered in objects. `make benchmark` compares it with BehaviorTree.CPP.
 
-```make
-BLACKTHORN_DIR := $(P)/external/BlackThorn
-IMGUI_DIR := $(P)/external/imgui      # reuse the ImGui clone of your project
-include $(BLACKTHORN_DIR)/BlackThorn.mk
-```
+BlackThorn started from [BrainTree](https://github.com/arvidsson/BrainTree) and adds what it misses (blackboard, files, subtrees, editor), while staying smaller and easier to read than [BehaviorTree.CPP](https://www.behaviortree.dev/) (XML in two files, editor not fully open source). [Chapter 1](doc/01-Introduction.md#-5-why-blackthorn) compares the three.
 
-**Compile the sources** (simplest, and what `doc/examples/Embedded` does):
+*BlackThorn* plays with "BT"; the blackthorn is a thorny tree (*prunellier* or *épine noire* in French). *Oakular* mixes "oak" and "ocular".
 
-```make
-INCLUDES += $(BLACKTHORN_INCLUDES) $(OAKULAR_INCLUDES)
-VPATH += $(BLACKTHORN_VPATH) $(OAKULAR_VPATH)
-SRC_FILES += $(BLACKTHORN_SOURCES) $(OAKULAR_SOURCES)
-DEFINES += $(BLACKTHORN_DEFINES) $(OAKULAR_DEFINES)
-PKG_LIBS += $(BLACKTHORN_PKG_LIBS) $(OAKULAR_PKG_LIBS)
-USER_CXXFLAGS += $(OAKULAR_CXXFLAGS)
-```
+---
 
-**Or link the pre-built archives**, after `make -C $(BLACKTHORN_DIR)`:
-
-```make
-INCLUDES += $(BLACKTHORN_INCLUDES) $(OAKULAR_INCLUDES)
-DEFINES += $(BLACKTHORN_DEFINES) $(OAKULAR_DEFINES)
-NOT_PKG_LIBS += $(OAKULAR_ARCHIVES) $(BLACKTHORN_ARCHIVES)
-PKG_LIBS += $(BLACKTHORN_PKG_LIBS) $(OAKULAR_PKG_LIBS)
-```
-
-Drop the `OAKULAR_*` variables to embed the engine alone, without the editor.
-
-### What the host must provide
-
-- **Dear ImGui**, compiled exactly once in the final binary: `imgui.cpp`,
-  `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`,
-  `misc/cpp/imgui_stdlib.cpp`, plus the backends of your choice. Oakular
-  consumes the headers only, so point `IMGUI_DIR` at your own clone to guarantee
-  a single copy.
-- **A file browser**, if you want load and save: Oakular does not impose
-  `ImGuiFileDialog`, it emits `onFileDialogRequested` instead.
-- **A window and an ImGui context**, created before the first `draw()`.
-
-### Optional features
-
-Both switches are off by default only if you say so; they default to enabled and
-are the only reason `sfml-network` is needed:
-
-| Switch | Default | Effect when set to `0` |
-|---|---|---|
-| `BLACKTHORN_WITH_NETWORK` | `1` | Drops `bt::VisualizerClient`: a tree can no longer stream its runtime state |
-| `OAKULAR_WITH_SERVER` | `1` | Drops `oakular::Server`: the editor keeps its Creation mode but its Visualizer mode reports itself unavailable |
+## 🚀 Quick start
 
 ```bash
-make BLACKTHORN_WITH_NETWORK=0 OAKULAR_WITH_SERVER=0 -j8   # no SFML at all
+# Ubuntu: sudo apt-get install libsfml-dev libglfw3-dev libglew-dev
+# Fedora: sudo dnf install SFML-devel glfw-devel glew-devel
+git clone https://github.com/Lecrapouille/BlackThorn --recurse-submodules
+cd BlackThorn
+make download-external-libs
+make -j"$(nproc)"                  # library, Oakular, examples, benchmarks
+
+./build/Oakular                    # the editor (Mode → Visualizer to watch a tree)
+./build/Example-Patrol             # a tree with subtrees, sent to Oakular
 ```
 
-A host that wants the visualizer on its own terms keeps `OAKULAR_WITH_SERVER=1`
-and injects its server with `editor.attachServer(...)`: the editor never creates
-one by itself.
+Your first tree, step by step: [doc/02-Getting-Started.md](doc/02-Getting-Started.md). Use BlackThorn in your project (with [BlackThorn.mk](BlackThorn.mk)): [doc/07-Oakular.md](doc/07-Oakular.md#-5-embed-oakular-in-your-application).
 
-## Internal Documentation
+---
 
-- 📖 [Getting Started](doc/getting-started.md) - Installation and quick start
-- 🌲 [Behavior Tree Primer](doc/bt-primer.md) - Core concepts, status, execution cycle, workflow
-- 📚 [API Reference](doc/api-reference.md) - Complete API documentation
-- 📝 [YAML Format](doc/yaml-format.md) - YAML file structure and syntax
-- 🎯 [Node Types Guide](doc/nodes-guide.md) - All available node types
-- 🧠 [Blackboard Guide](doc/blackboard-guide.md) - Blackboard usage and best practices
-- 🖥️ [Visualizer Architecture & Guide](doc/visualizer-architecture.md) - Oakular visualizer architecture and usage
-- 💡 [Examples Guide](doc/examples/examples-guide.md) - Complete examples walkthrough
+## 📚 Documentation
 
-## Additional Resources
+| # | Chapter | Contents |
+|---|---------|----------|
+| | [doc/README.md](doc/README.md) | Reading order and quick paths |
+| 1 | [Introduction](doc/01-Introduction.md) | 🌱 Behavior trees in ten minutes: tick, status, nodes, blackboard |
+| 2 | [Getting started](doc/02-Getting-Started.md) | 🚀 Build, run the examples, write your first tree |
+| 3 | [The YAML format](doc/03-YAML-Format.md) | 📝 Tree, blackboard and subtrees in one file |
+| 4 | [The nodes](doc/04-Nodes.md) | 🎯 Every built-in node and when to use it |
+| 5 | [Your own nodes](doc/05-Your-Own-Nodes.md) | 🔨 Actions, conditions, ports, halt and reset, simulated clock |
+| 6 | [The blackboard](doc/06-Blackboard.md) | 🧠 Types, nested values, scopes of subtrees |
+| 7 | [Oakular](doc/07-Oakular.md) | 👁️ Editor, live visualizer, protocol, embedding |
+| 8 | [API reference](doc/08-API-Reference.md) | 📖 The classes, by task |
+| 9 | [Examples](doc/09-Examples.md) | 🌟 What each example shows |
+| | [src/Oakular/README.md](src/Oakular/README.md) | 🖥️ The `oakular::Editor` API |
+
+Coding agents: [AGENTS.md](AGENTS.md) and the skills of `.claude/skills/`.
+
+---
+
+## 🔗 Read more
 
 - [Introduction to behavior trees](https://roboticseabass.com/2021/05/08/introduction-to-behavior-trees/) – roboticseabass.com
-- [Behavior trees in Detail](https://lisyarus.github.io/blog/posts/behavior-trees.html) – lisyarus.github.io
-- [BehaviorTree.CPP Documentation](https://www.behaviortree.dev/) – related library with similar concepts
+- [Behavior trees in detail](https://lisyarus.github.io/blog/posts/behavior-trees.html) – lisyarus.github.io
+- [BehaviorTree.CPP documentation](https://www.behaviortree.dev/) – a related library with the same ideas
 
-## License
+---
+
+## 📝 License
 
 Dual license: GNU GPL v3 or later, or a commercial license. See [LICENSING.md](LICENSING.md).

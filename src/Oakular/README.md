@@ -3,24 +3,17 @@
 Oakular is the graphical layer of BlackThorn. It offers two modes:
 
 - **Creation**: build and edit behavior trees graphically, load and save them as YAML.
-- **Visualizer**: display, in real time, the execution of a tree running in another
-  process, fed over TCP by a `bt::VisualizerClient`.
+- **Visualizer**: display, in real time, the execution of a tree running in another process, fed over TCP by a `bt::VisualizerClient`.
 
 ## The embedding contract
 
-`oakular::Editor` is a pure Dear ImGui component. It guarantees three things, and
-they are what makes it embeddable in any host:
+`oakular::Editor` is a pure Dear ImGui component. It guarantees three things, and they are what makes it embeddable in any host:
 
-1. It never creates a window, an OpenGL context or an ImGui context, and never
-   calls GLFW. The host owns the frame.
-2. It compiles no third-party source into its archive. It consumes the Dear ImGui
-   headers only, at a path the host imposes through `IMGUI_DIR`, so that a single
-   copy of ImGui ends up in the final binary.
-3. It exposes no symbol in the global namespace: everything lives in `oakular`,
-   and the engine in `bt`.
+1. It never creates a window, an OpenGL context or an ImGui context, and never calls GLFW. The host owns the frame.
+2. It compiles no third-party source into its archive. It consumes the Dear ImGui headers only, at a path the host imposes through `IMGUI_DIR`, so that a single copy of ImGui ends up in the final binary.
+3. It exposes no symbol in the global namespace: everything lives in `oakular`, and the engine in `bt`.
 
-Anything the editor cannot do on its own — browsing the file system, closing the
-window — it asks for through a signal.
+Anything the editor cannot do on its own — browsing the file system, closing the window — it asks for through a signal.
 
 ## Minimal host
 
@@ -39,9 +32,7 @@ editor.draw("Behavior Tree Editor");
 editor.drawMenuBar();
 ```
 
-`doc/examples/Embedded/Embedded.cpp` is a complete host: its own GLFW window, its
-own ImGui context, its own dockspace, and no dependency on the `Application`
-layer of the standalone application.
+`doc/examples/Embedded/Embedded.cpp` is a complete host: its own GLFW window, its own ImGui context, its own dockspace, and no dependency on the `Application` layer of the standalone application.
 
 ## API
 
@@ -74,9 +65,7 @@ layer of the standalone application.
 
 ### Documents
 
-The editor edits a document, and there is none until the host, or the user
-through the `File` menu, asks for one. Without a document there is nothing to add
-a node to: the palette, the auto-layout and both save entries stay disabled.
+The editor edits a document, and there is none until the host, or the user through the `File` menu, asks for one. Without a document there is nothing to add a node to: the palette, the auto-layout and both save entries stay disabled.
 
 | Method | Purpose |
 |---|---|
@@ -87,62 +76,36 @@ a node to: the palette, the auto-layout and both save entries stay disabled.
 
 ### Tree edition
 
-`reset()`, `setMode()`, `mode()`, `addNode()`, `addNodeAndLink()`, `deleteNode()`,
-`createLink()`, `deleteLink()`, `loadFromYaml()`, `loadFromYamlString()`,
-`saveToYaml()`, `autoLayoutNodes()`, `setAutoLayoutEnabled()`,
-`reorderChildrenByPosition()`, `toggleSubTreeExpansion()`, `isModified()`,
-`filepath()`, `documentTitle()`.
+`reset()`, `setMode()`, `mode()`, `addNode()`, `addNodeAndLink()`, `deleteNode()`, `createLink()`, `deleteLink()`, `loadFromYaml()`, `loadFromYamlString()`, `saveToYaml()`, `autoLayoutNodes()`, `setAutoLayoutEnabled()`, `reorderChildrenByPosition()`, `toggleSubTreeExpansion()`, `isModified()`, `filepath()`, `documentTitle()`.
 
-An arc always goes from the output pin of a parent down to the input pin of a
-child. `createLink()` refuses the opposite direction, from a node up to one of
-its own ancestors, which would close a cycle and leave a graph no longer
-serializable as a tree.
+An arc always goes from the output pin of a parent down to the input pin of a child. `createLink()` refuses the opposite direction, from a node up to one of its own ancestors, which would close a cycle and leave a graph no longer serializable as a tree.
 
-The root of a tab follows its structure: the first node created becomes it, a
-node gaining a parent hands it over, and deleting it promotes its first child.
-There is nothing to designate by hand.
+The root of a tab follows its structure: the first node created becomes it, a node gaining a parent hands it over, and deleting it promotes its first child. There is nothing to designate by hand.
 
 ### SubTrees and selection
 
-`createSubTreeDefinition()`, `convertToSubTree()`, `inlineSubTree()`,
-`selectedNodes()`, `selectNode()`, `toggleNodeSelection()`, `clearSelection()`,
-`deleteSelection()`, `blackboard()`, `activeBlackboard()`.
+`createSubTreeDefinition()`, `convertToSubTree()`, `inlineSubTree()`, `selectedNodes()`, `selectNode()`, `toggleNodeSelection()`, `clearSelection()`, `deleteSelection()`, `blackboard()`, `activeBlackboard()`.
 
-`blackboard()` is the root scope, the one written to the `Blackboard` section.
-`activeBlackboard()` is the scope of the open tab, a child of the root one for a
-subtree.
+`blackboard()` is the root scope, the one written to the `Blackboard` section. `activeBlackboard()` is the scope of the open tab, a child of the root one for a subtree.
 
 ### Extending the node palette
 
-The palette lists the built-in node types `bt::Builder` knows how to
-instantiate. A host declares its own domain nodes so that they can be placed
-graphically, mirroring what it registers in its `bt::NodeFactory`:
+The palette lists the built-in node types `bt::Builder` knows how to instantiate. A host declares its own domain nodes so that they can be placed graphically, mirroring what it registers in its `bt::NodeFactory`:
 
 ```cpp
 editor.registerNodeType("MoveToTarget", "Robot");
 editor.registerNodeType("BatteryAboveThreshold", "Robot", /* can_have_ports */ true);
 ```
 
-The category groups the entries in the palette, and decides how many children a
-node takes: none for `Leaf`, one for `Decorator`, any number otherwise. Only the
-node types that accept one more child offer a pin to drag a link from, and
-`createLink()` refuses the ones that would overflow. A decorator is written under
-the `child` key `bt::Builder` expects, everything else under `children`.
+The category groups the entries in the palette, and decides how many children a node takes: none for `Leaf`, one for `Decorator`, any number otherwise. Only the node types that accept one more child offer a pin to drag a link from, and `createLink()` refuses the ones that would overflow. A decorator is written under the `child` key `bt::Builder` expects, everything else under `children`.
 
-`can_have_ports` decides whether the node edition popup offers blackboard input
-and output ports.
+`can_have_ports` decides whether the node edition popup offers blackboard input and output ports.
 
-A port is a name and a binding: `${key}` to read or write that blackboard entry,
-or a literal value. Both are written to the `parameters` block of the node, which
-is what `bt::Builder` resolves.
+A port is a name and a binding: `${key}` to read or write that blackboard entry, or a literal value. Both are written to the `parameters` block of the node, which is what `bt::Builder` resolves.
 
 ### Attributes
 
-Some node types are configured by keys the editor does not interpret: the `key`
-and `value` of a `SetBlackboard`, the `times` of a `Repeat`, the `_id` the
-visualizer correlates runtime state with. They are read from the file, listed in
-the `Attributes` table of the node edition popup, and written back as they are,
-so that opening a tree and saving it does not strip what makes it run.
+Some node types are configured by keys the editor does not interpret: the `key` and `value` of a `SetBlackboard`, the `times` of a `Repeat`, the `_id` the visualizer correlates runtime state with. They are read from the file, listed in the `Attributes` table of the node edition popup, and written back as they are, so that opening a tree and saving it does not strip what makes it run.
 
 ### Signals
 
@@ -156,16 +119,13 @@ so that opening a tree and saving it does not strip what makes it run.
 
 ### Visualizer server
 
-The editor never creates a server: the host injects one, which is what lets an
-embedded editor stay away from TCP entirely.
+The editor never creates a server: the host injects one, which is what lets an embedded editor stay away from TCP entirely.
 
 ```cpp
 editor.attachServer(std::make_shared<oakular::Server>());
 ```
 
-Available only when built with `OAKULAR_WITH_SERVER=1` (the default), which
-defines `OAKULAR_HAS_SERVER`. Without a server the Visualizer mode reports itself
-unavailable and the Creation mode is unaffected.
+Available only when built with `OAKULAR_WITH_SERVER=1` (the default), which defines `OAKULAR_HAS_SERVER`. Without a server the Visualizer mode reports itself unavailable and the Creation mode is unaffected.
 
 ## Files
 
@@ -181,13 +141,11 @@ src/Oakular/
 
 ## Dependencies
 
-- **Dear ImGui**: headers only. The host compiles it, `misc/cpp/imgui_stdlib.cpp`
-  included, and owns the context.
+- **Dear ImGui**: headers only. The host compiles it, `misc/cpp/imgui_stdlib.cpp` included, and owns the context.
 - **BlackThorn**: the behavior tree engine, `libblackthorn.a`.
 - **SFML Network**: only for the optional visualizer server.
 
-Notably absent: GLFW, GLEW and OpenGL are dependencies of the host, not of the
-editor. `ImGuiFileDialog` is a choice of the host too.
+Notably absent: GLFW, GLEW and OpenGL are dependencies of the host, not of the editor. `ImGuiFileDialog` is a choice of the host too.
 
 ## Keyboard shortcuts
 
@@ -207,14 +165,11 @@ editor. `ImGuiFileDialog` is a choice of the host too.
 | `Delete` | Delete the selection |
 | Double click | Edit a node, or open the definition of a SubTree |
 
-The mouse only acts on the canvas: clicking in the blackboard panel or in a
-dialog of the host leaves the graph alone.
+The mouse only acts on the canvas: clicking in the blackboard panel or in a dialog of the host leaves the graph alone.
 
 ## SubTrees
 
-A SubTree node is a call site; what it runs is a definition edited in its own
-tab. Picking `SubTree` in the palette creates both, so the definition is
-reachable right away: double click the node, or use `Go to Definition`.
+A SubTree node is a call site; what it runs is a definition edited in its own tab. Picking `SubTree` in the palette creates both, so the definition is reachable right away: double click the node, or use `Go to Definition`.
 
 Two inverse operations factor behavior in and out:
 
@@ -225,13 +180,9 @@ Two inverse operations factor behavior in and out:
 
 ### Blackboard scopes and port remapping
 
-Each definition owns a blackboard scope nested in the one of the main tree,
-mirroring the child blackboard `bt::Builder` creates at runtime: a key the
-subtree does not define is read from the tree calling it.
+Each definition owns a blackboard scope nested in the one of the main tree, mirroring the child blackboard `bt::Builder` creates at runtime: a key the subtree does not define is read from the tree calling it.
 
-The wiring lives on the SubTree node, as a table of ports: the left column is
-the key seen inside the subtree, the right one the expression evaluated in the
-calling tree. It is written to the `parameters` block the engine reads:
+The wiring lives on the SubTree node, as a table of ports: the left column is the key seen inside the subtree, the right one the expression evaluated in the calling tree. It is written to the `parameters` block the engine reads:
 
 ```yaml
 - SubTree:
@@ -244,36 +195,21 @@ calling tree. It is written to the `parameters` block the engine reads:
       - result
 ```
 
-`parameters` is the only port block `bt::Builder` understands. The `outputs`
-list carries no meaning for the engine: the editor uses it to put the ports back
-on the right side when the file is reopened, the direction being inferred at
-build time from the blackboard.
+`parameters` is the only port block `bt::Builder` understands. The `outputs` list carries no meaning for the engine: the editor uses it to put the ports back on the right side when the file is reopened, the direction being inferred at build time from the blackboard.
 
-The blackboard panel follows the open tab. A subtree scope is shown read-only,
-since the file has no place to store it: what it holds is derived from the
-remapping of the node calling it, plus the inherited keys.
+The blackboard panel follows the open tab. A subtree scope is shown read-only, since the file has no place to store it: what it holds is derived from the remapping of the node calling it, plus the inherited keys.
 
 ## Layout
 
-`Auto Layout` is a toggle, on by default: the tree is laid out again after every
-structural change, so a node just created lands where the structure puts it.
-Turn it off to place the nodes by hand, and use `Layout Now` on demand.
+`Auto Layout` is a toggle, on by default: the tree is laid out again after every structural change, so a node just created lands where the structure puts it. Turn it off to place the nodes by hand, and use `Layout Now` on demand.
 
-The order of the children follows their placement, left to right in a
-top-to-bottom layout and top to bottom in a left-to-right one, the way Groot
-behaves. Dragging a node past its sibling therefore changes the execution order,
-and the file records what the canvas shows.
+The order of the children follows their placement, left to right in a top-to-bottom layout and top to bottom in a left-to-right one, the way Groot behaves. Dragging a node past its sibling therefore changes the execution order, and the file records what the canvas shows.
 
 ## Saving
 
-The file written back is the one `bt::Builder` reads: `parameters` for the ports,
-`child` or `children` depending on the node type, and the attributes the editor
-does not interpret kept as they are. Definitions are written in alphabetical
-order so that saving twice gives the same file.
+The file written back is the one `bt::Builder` reads: `parameters` for the ports, `child` or `children` depending on the node type, and the attributes the editor does not interpret kept as they are. Definitions are written in alphabetical order so that saving twice gives the same file.
 
-Two conversions still happen through the blackboard and lose information, listed
-in `TODO.txt`: a round double is written as an integer, and a `${var}` value of
-the `Blackboard` section is written as the value it was resolved to.
+Two conversions still happen through the blackboard and lose information, listed in `TODO.txt`: a round double is written as an integer, and a `${var}` value of the `Blackboard` section is written as the value it was resolved to.
 
 ## Future improvements
 
