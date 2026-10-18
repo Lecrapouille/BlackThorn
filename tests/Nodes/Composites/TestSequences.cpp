@@ -245,3 +245,40 @@ TEST(TestSequenceWithMemory, RemembersProgress)
     EXPECT_EQ(sequence.tick(), bt::Status::RUNNING);
     EXPECT_EQ(counter, 1); // First child NOT executed again
 }
+
+TEST(TestSequenceWithMemory, RetriesTheFailedChildOnly)
+{
+    int first = 0;
+    bool second_ok = false;
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::SequenceWithMemory>();
+    sequence.addChild<CounterAction>(&first);
+    sequence.addChild<LambdaTestAction>([&second_ok]() {
+        return second_ok ? bt::Status::SUCCESS : bt::Status::FAILURE;
+    });
+
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(first, 1);
+
+    // The next run starts again at the child that failed.
+    second_ok = true;
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(first, 1);
+
+    // After a success, the sequence starts again from the first child.
+    EXPECT_EQ(tree->tick(), bt::Status::SUCCESS);
+    EXPECT_EQ(first, 2);
+}
+
+TEST(TestSequence, RestartsFromTheFirstChildAfterAFailure)
+{
+    int first = 0;
+    auto tree = bt::Tree::create();
+    auto& sequence = tree->createRoot<bt::Sequence>();
+    sequence.addChild<CounterAction>(&first);
+    sequence.addChild<StatusAction>(bt::Status::FAILURE);
+
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(tree->tick(), bt::Status::FAILURE);
+    EXPECT_EQ(first, 2);
+}
