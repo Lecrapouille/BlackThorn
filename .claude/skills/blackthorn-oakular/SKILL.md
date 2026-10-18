@@ -32,7 +32,7 @@ RobotIK embeds it in its simulator: keep `BlackThorn.mk` variables stable
 | `Editor.hpp/.cpp` | document, tree model, YAML load/save, palette (`m_node_types` list), layout, modes |
 | `EditorWidgets.cpp` | ImGui widgets: popups, blackboard panel, visualizer panel |
 | `TreeRenderer.hpp/.cpp` | canvas: nodes, links, pan/zoom, colors per type and per status |
-| `Server.hpp/.cpp` | SFML TCP server, port 8888, only with `OAKULAR_WITH_SERVER=1` (`OAKULAR_HAS_SERVER`) |
+| `Server.hpp/.cpp` | SFML TCP server, port 8888 by default (`Server(port)`, app option `--port N`), only with `OAKULAR_WITH_SERVER=1` (`OAKULAR_HAS_SERVER`) |
 | `applications/Oakular/` | standalone app: GLFW window, ImGuiFileDialog, wires the signals |
 
 ## Protocol (client `src/BlackThorn/Network/VisualizerClient.cpp`)

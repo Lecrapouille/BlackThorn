@@ -41,13 +41,15 @@ YAML types: `Sequence`, `Selector`, `Parallel` (needs
 forever, port `repetitions`), `UntilSuccess`/`UntilFailure` (`attempts`),
 `Timeout`/`Delay`/`Cooldown`/`Wait` (`milliseconds`, default 1000; Timeout
 port `milliseconds`), `RunOnce`, `Action`, `Condition`, `Success`, `Failure`,
-`SetBlackboard` (`key`, `value`: stored as string), `SubTree`. Reactive and
-WithMemory composites: C++ only (`Unknown node type` in YAML).
+`SetBlackboard` (`key`, `value`: stored as string), `SubTree`,
+`ReactiveSequence`/`ReactiveSelector` (restart from child 0 each tick, halt the
+running child when an earlier one decides), `SequenceWithMemory`/
+`SelectorWithMemory` (next run resumes at the child that failed/succeeded).
 
 Semantics to remember: `Sequence`/`Selector` resume at the RUNNING child and
 do not re-tick earlier children (a condition before a long action is checked
-once) → re-check inside the action, wrap the action in `Timeout`, or build a
-`ReactiveSequence` in C++.
+once) → use `ReactiveSequence`, re-check inside the action, or wrap it in
+`Timeout`.
 
 ## C++
 
@@ -71,14 +73,15 @@ while (running) { bt::Status s = tree->tick(); }
 
 Node with ports: derive `bt::CallbackLeaf`, pass `[this]() {...}` and the
 blackboard to its constructor; inside read `getInput<T>("port")`
-(`std::optional`, strict type), write `setOutput("port", v)`.
-Stop work: reset function (2nd ctor arg) runs on `tree->reset()` and when a
-Repeat/Until re-runs the child; **override `onHalt()`** for `Timeout` and
-`tree->halt()` (reset function is NOT called on halt).
+(`std::optional`; numbers convert only without loss), write `setOutput("port", v)`.
+Stop work: the reset function (2nd ctor arg) runs on halt (Timeout, reactive
+composites, `tree->halt()`, after `onHalt()`) and on reset (`tree->reset()`,
+Repeat/Until re-running the child): make it idempotent.
 Build without YAML: `Tree::create()`, `createRoot<T>()`, `addChild<T>()`,
 `createChild<T>()` (decorators).
-Blackboard: `set(key, v)` (let the type deduce; `set<int>(k, lvalue)` does
-not compile), `get<T>`, `getOrDefault`, `has`, `createChild`, `dump()`.
+Blackboard: `set(key, v)` (string literal → `std::string`), `set<T>(key, v)`
+(converts), `get<T>` (int/size_t/float/double convert without loss),
+`getOrDefault`, `has`, `createChild`, `dump()`.
 
 ## Builder errors
 

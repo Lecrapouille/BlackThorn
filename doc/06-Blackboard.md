@@ -20,7 +20,7 @@ In C++:
 ```cpp
 auto blackboard = std::make_shared<bt::Blackboard>();
 blackboard->set("battery", 75);                       // 🔋 int
-blackboard->set("target", std::string("Drone-A"));    // 🎯 std::string
+blackboard->set("target", "Drone-A");                 // 🎯 std::string
 blackboard->set("speed", 1.5);                        // ⚡ double
 
 std::optional<int> battery = blackboard->get<int>("battery");
@@ -34,15 +34,14 @@ int level = blackboard->getOrDefault<int>("battery", 100);  // 100 when missing
 
 | Method | Does |
 |--------|------|
-| `set(key, value)` | writes (the type is the type of `value`) |
-| `get<T>(key)` | `std::optional<T>`, empty when the key is missing **or has another type** |
+| `set(key, value)` | writes; the type is the type of `value` (a string literal is stored as `std::string`) |
+| `set<T>(key, value)` | writes `value` converted to `T`: `set<double>("speed", 2)` |
+| `get<T>(key)` | `std::optional<T>`, empty when the key is missing or cannot be read as `T` (§2) |
 | `getOrDefault<T>(key, default)` | the value, or `default` |
 | `has(key)` | `true` when the key exists |
 | `remove(key)` | removes a key of this scope |
 | `keys()` | the keys of this scope |
 | `dump()` | a text listing, to print while debugging |
-
-> 💡 Let C++ deduce the type: `set("battery", battery)`. With an explicit type and a variable, `set<int>("battery", battery)` does not compile (the parameter is a forwarding reference).
 
 Pass the blackboard to the builder so that the tree and your code share it: `bt::Builder::fromFile(factory, "tree.yaml", blackboard)`.
 
@@ -50,14 +49,26 @@ Pass the blackboard to the builder so that the tree and your code share it: `bt:
 
 ## 🔤 2. Types: what `get` can read
 
-`get<T>` is **strict**: it returns the value only when it was stored with the type `T`. No conversion happens. Real results:
+Numbers convert between `int`, `size_t`, `float` and `double` **when the value stays the same**. Everything else must be read with the type it was stored with. Real results:
 
-| Stored | `get<int>` | `get<double>` | `get<std::string>` |
-|--------|-----------|---------------|--------------------|
-| `set("battery", 75)` | ✅ `75` | ❌ empty | ❌ empty |
-| `set("ratio", 0.5)` | ❌ empty | ✅ `0.5` | ❌ empty |
+```cpp
+bb.set("battery", 75);
+bb.set("ratio", 0.5);
+bb.set("target", "Drone-A");
+```
 
-So in YAML, **write the type you will read**: `speed: 1.0` for a `double`, not `speed: 1`.
+```text
+get<int>("battery") -> 75
+get<double>("battery") -> 75
+get<double>("ratio") -> 0.5
+get<int>("ratio") -> empty
+get<std::string>("battery") -> empty
+get<std::string>("target") -> Drone-A
+```
+
+- `speed: 1` in YAML is an `int`, but a node can read it with `get<double>`.
+- `0.5` cannot become an `int`, and `-2` cannot become a `size_t`: the value would change, so `get` returns empty.
+- A number is never read as a string, and a string is never read as a number.
 
 The YAML text decides the type:
 

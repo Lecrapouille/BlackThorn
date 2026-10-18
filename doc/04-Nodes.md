@@ -10,11 +10,12 @@ In this page you meet every built-in node: what it does, what it returns, its YA
 |------------|------|
 | do steps in order, stop at the first failure | ▶️ [`Sequence`](#sequence) |
 | try options in order, stop at the first success | ➡️ [`Selector`](#selector) |
-| re-check a condition at every tick while an action runs | ⏮️ [`ReactiveSequence`](#reactivesequence-and-reactiveselector) (C++ only) |
+| re-check a condition at every tick while an action runs | ⏮️ [`ReactiveSequence`](#reactivesequence-and-reactiveselector) |
 | run several children in the same tick | ⏸️ [`Parallel`](#parallel) |
 | turn "no" into "yes" | 🌖 [`Inverter`](#inverter) |
 | try a step that may fail without failing the whole tree | 🟢 [`ForceSuccess`](#forcesuccess-and-forcefailure) |
 | repeat N times | 🔂 [`Repeat`](#repeat) |
+| retry a failed step without redoing the steps before it | ⏯️ [`SequenceWithMemory`](#sequencewithmemory-and-selectorwithmemory) |
 | retry until it works | 🎉 [`UntilSuccess`](#untilsuccess-and-untilfailure) |
 | give up after a time | ⏱️ [`Timeout`](#timeout) |
 | wait before starting | ⏳ [`Delay`](#delay), [`Wait`](#wait) |
@@ -57,7 +58,7 @@ A composite ticks its children one after the other, in the order of the file, an
 
 > ⚠️ If `Walk` fails, `CloseDoor` never runs: the door stays open. Put the clean-up in a `Selector` branch, or in a `ForceSuccess`, if it must happen.
 
-Because the sequence resumes at the running child, the children **before** it are not ticked again. A condition in front of a long action is checked only once. To re-check it at every tick, use a `ReactiveSequence`, or a `Timeout` around the action ([chapter 5](05-Your-Own-Nodes.md) shows both).
+Because the sequence resumes at the running child, the children **before** it are not ticked again. A condition in front of a long action is checked only once. To re-check it at every tick, use a `ReactiveSequence`, or a `Timeout` around the action ([chapter 5 §6](05-Your-Own-Nodes.md#tutorial-the-cleaning-robot) shows both).
 
 ### Selector
 
@@ -89,13 +90,37 @@ ReactiveSequence
 └── Action     Clean         ← stops as soon as BatteryOk fails
 ```
 
-Use them for safety checks that must stay true during a long action. They are **C++ only** today: the YAML builder does not read them ([chapter 5 §7](05-Your-Own-Nodes.md#-7-build-a-tree-in-c-without-yaml)).
+Use them for safety checks that must stay true during a long action.
 
-> ⚠️ When an earlier child fails, the child that was `RUNNING` is not halted today: it simply stops being ticked. If it drives a motor, stop it from your own code.
+When an earlier child decides (the condition fails in a `ReactiveSequence`, or succeeds in a `ReactiveSelector`), the child that was `RUNNING` is **halted**: its reset function is called, so a motor stops ([chapter 5 §5](05-Your-Own-Nodes.md#-5-stop-the-work-reset-and-halt)).
+
+```yaml
+- ReactiveSequence:
+    children:
+      - Condition: { name: BatteryOk }
+      - Action: { name: Clean }
+```
 
 ### SequenceWithMemory and SelectorWithMemory
 
-⏯️ ↪️ Meant to keep their position between ticks. Today they behave exactly like `Sequence` and `Selector`, which already resume at the running child. C++ only, like the reactive ones.
+⏯️ ↪️ Same rules as `Sequence` and `Selector`, but they **remember their position after they end**:
+
+| Node | After it ends with… | The next run starts at… |
+|------|---------------------|-------------------------|
+| `SequenceWithMemory` | `FAILURE` (child *k* failed) | child *k*: the steps that already succeeded are not done again |
+| `SequenceWithMemory` | `SUCCESS` | the first child |
+| `SelectorWithMemory` | `SUCCESS` (child *k* succeeded) | child *k*: the options that already failed are not tried again |
+| `SelectorWithMemory` | `FAILURE` | the first child |
+
+`tree->reset()` sends them back to the first child. A plain `Sequence` starts again from the first child after a failure.
+
+```yaml
+- SequenceWithMemory:        # pick, carry, drop: a failed drop does not pick again
+    children:
+      - Action: { name: Pick }
+      - Action: { name: Carry }
+      - Action: { name: Drop }
+```
 
 ### Parallel
 

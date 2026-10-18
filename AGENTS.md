@@ -50,16 +50,18 @@ make BLACKTHORN_WITH_NETWORK=0 OAKULAR_WITH_SERVER=0   # no SFML
 
 - A node is a map in YAML: `- Success:` (colon), never `- Success`.
 - The YAML builder reads only the types of `getNodeCreators()` in
-  `Builder.cpp`. `ReactiveSequence`, `SequenceWithMemory`, `ReactiveSelector`,
-  `SelectorWithMemory` are C++ only today; `Parallel` needs thresholds or
-  policies. Keep doc/03 §2 and doc/04 in sync when this changes.
+  `Builder.cpp`; `Parallel` needs thresholds or policies. What the exporter
+  writes, the builder must read back (Oakular saves through the exporter
+  format). Keep doc/03 §2 and doc/04 in sync.
 - Node state lives in `Tree::Runtime` arrays indexed by `Node::index()`, not
   in node objects. Built-in behavior is a `case` in `Tree.cpp`.
-- `Blackboard::get<T>` is strict: no conversion between `int` and `double`.
+- `Blackboard::get<T>` converts numbers only without loss (`detail::numberAs`);
+  other types must match.
 - Timed nodes read `Tree::now()` (`tree->clock(fn)`), never
   `steady_clock::now()` directly: simulators rely on it.
-- A `CallbackLeaf` reset function runs on `reset()`, not on `halt()`;
-  `onHalt()` is the halt hook (a `Timeout` halts its child).
+- A `CallbackLeaf` reset function runs on `reset()` and on `halt()` (after
+  `onHalt()`): it is where actions stop their work. Halts come from
+  `Timeout`, reactive composites and `tree->halt()`.
 - `oakular::Editor` never creates a window, a GL context or an ImGui context,
   never compiles ImGui sources, never calls GLFW. Ask the host with a signal.
 - Network code stays behind `BLACKTHORN_HAS_NETWORK` / `OAKULAR_HAS_SERVER`.

@@ -34,9 +34,9 @@ checklist. RobotIK (`../../src/Robotik`) compiles these sources too.
 ## Rules
 
 - Timed behavior reads `now()` of the tree (`Tree::now()`), never the wall clock.
-- A composite/decorator that stops a RUNNING child must `haltNode(child)`;
-  remember that `CallbackLeaf` gets `onHalt()` on halt, its reset function only
-  on reset.
+- A composite/decorator that stops a RUNNING child must `haltNode(child)`
+  (see `haltChildrenAfter` for the reactive composites); a halted
+  `CallbackLeaf` gets `onHalt()` then its reset function.
 - Never block in `runNode`; one `tick()` = one pass. Loops across ticks
   (`Repeat`, `UntilSuccess`) reset the child and return `RUNNING`.
 - Validation of YAML fields belongs in the builder: return
