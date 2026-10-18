@@ -122,7 +122,8 @@ Some node types are configured by keys the editor does not interpret: the `key` 
 The editor never creates a server: the host injects one, which is what lets an embedded editor stay away from TCP entirely.
 
 ```cpp
-editor.attachServer(std::make_shared<oakular::Server>());
+editor.attachServer(std::make_shared<oakular::Server>());      // port 8888
+// or, on another port: editor.attachServer(std::make_shared<oakular::Server>(9090));
 ```
 
 Available only when built with `OAKULAR_WITH_SERVER=1` (the default), which defines `OAKULAR_HAS_SERVER`. Without a server the Visualizer mode reports itself unavailable and the Creation mode is unaffected.

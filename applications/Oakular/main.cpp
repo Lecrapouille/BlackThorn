@@ -16,14 +16,50 @@
 
 #include "OakularApp.hpp"
 
+#include <cstdlib>
 #include <iostream>
+#include <string>
 
-int main()
+// ----------------------------------------------------------------------------
+static int usage(char const* p_program)
 {
+    std::cout << "Usage: " << p_program << " [--port N]\n"
+              << "  --port N   TCP port listened to in Visualizer mode "
+                 "(default: 8888)\n";
+    return EXIT_SUCCESS;
+}
+
+// ----------------------------------------------------------------------------
+int main(int argc, char* argv[])
+{
+    uint16_t port = 8888;
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string const argument(argv[i]);
+        if ((argument == "--help") || (argument == "-h"))
+        {
+            return usage(argv[0]);
+        }
+        if ((argument == "--port") && ((i + 1) < argc))
+        {
+            long const value = std::strtol(argv[++i], nullptr, 10);
+            if ((value <= 0) || (value > 65535))
+            {
+                std::cerr << "Invalid port: " << argv[i] << std::endl;
+                return EXIT_FAILURE;
+            }
+            port = static_cast<uint16_t>(value);
+            continue;
+        }
+        std::cerr << "Unknown option: " << argument << std::endl;
+        usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
     try
     {
         // Create and run Oakular editor
-        oakular::OakularApp app(1600, 900);
+        oakular::OakularApp app(1600, 900, port);
 
         if (!app.run())
         {

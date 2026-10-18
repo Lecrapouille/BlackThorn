@@ -34,14 +34,30 @@ class Server
 {
 public:
 
+    // ------------------------------------------------------------------------
+    //! \brief Constructor.
+    //! \param p_port Port listened to by start() (default: 8888, the port of
+    //! bt::VisualizerClient).
+    // ------------------------------------------------------------------------
+    explicit Server(uint16_t const p_port = 8888) : m_port(p_port) {}
+
     ~Server();
 
     // ------------------------------------------------------------------------
-    //! \brief Start the TCP server
-    //! \param p_port Port to listen on (default: 8888)
+    //! \brief Start the TCP server on the port given to the constructor.
     //! \return true if server started successfully
     // ------------------------------------------------------------------------
-    bool start(uint16_t const p_port = 8888);
+    bool start()
+    {
+        return start(m_port);
+    }
+
+    // ------------------------------------------------------------------------
+    //! \brief Start the TCP server
+    //! \param p_port Port to listen on, kept for the next start().
+    //! \return true if server started successfully
+    // ------------------------------------------------------------------------
+    bool start(uint16_t const p_port);
 
     // ------------------------------------------------------------------------
     //! \brief Stop the server
