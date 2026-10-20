@@ -12,6 +12,8 @@
 
 #include "BlackThorn/BlackThorn.hpp"
 
+#include <limits>
+
 // ===========================================================================
 // Test Structures
 // ===========================================================================
@@ -281,6 +283,11 @@ TEST(TestBlackboard, NumbersConvertWithoutLoss)
     // A conversion that would change the value is refused.
     EXPECT_FALSE(bb->get<int>("ratio").has_value());
     EXPECT_FALSE(bb->get<size_t>("negative").has_value());
+
+    // Not a number is never an integer.
+    bb->set("nan", std::numeric_limits<double>::quiet_NaN());
+    EXPECT_FALSE(bb->get<int>("nan").has_value());
+    EXPECT_FALSE(bb->get<size_t>("nan").has_value());
 }
 
 // ------------------------------------------------------------------------
