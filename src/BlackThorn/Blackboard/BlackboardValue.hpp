@@ -145,7 +145,11 @@ std::optional<T> numberAs(BlackboardValue const& p_value)
                 long double const wide = static_cast<long double>(p_number);
                 if constexpr (std::is_integral_v<T>)
                 {
-                    if ((wide != std::trunc(wide)) ||
+                    // Not a number, or not a whole number: islessgreater
+                    // says it without comparing floats with != (which
+                    // -Wfloat-equal refuses).
+                    if (std::isnan(wide) ||
+                        std::islessgreater(wide, std::trunc(wide)) ||
                         (wide < static_cast<long double>(
                                     std::numeric_limits<T>::lowest())) ||
                         (wide > static_cast<long double>(
