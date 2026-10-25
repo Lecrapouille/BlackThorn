@@ -8,5 +8,25 @@
 
 - Node: supprimmer tous les virtuals par le pattern curiously recurring template pattern (CRTP)
 
-- Serialisation: saveToYaml perd les _id et transforme les parameters (avec leur
-  valeur) en inputs pointant sur eux-memes. Cf doc/examples/Nodes/SubTreeExample.yaml
+- Serialisation: BlackboardSerializer::dump ecrit les doubles ronds comme des
+  entiers (y: 5.0 => y: 5), donc un bt::Position relu depuis un fichier reecrit
+  par Oakular perd son type. Cf doc/examples/Patrol/Patrol.yaml
+
+- Serialisation: les ${var} du Blackboard sont resolus au chargement, donc
+  saveToYaml ecrit la valeur copiee et non la reference.
+  Cf selected_enemy dans doc/examples/GameState/GameState.yaml
+
+- Aucune interaction ne selectionne un arc: pas de suppression de lien au clavier.
+  Contournement actuel: bouton droit "Detach from parent" sur le fils.
+
+IMPORTANTS:
+
+- input/output: texte depasse le rectangle
+- dans sous noeud ajouter plus de 2 sous noeuds: ils sont stockés dans la racine
+- Noeuds actions/condition => bouton droit "Add as new action template"
+- Affichage trompeur du BB pour les listes => string 1;2;3
+- Remapping SubTreeRemapping.yaml douteux
+- Noeud SetBlackboard: il manque l'affichage des informations
+- Ajouter aux noeuds un champ description qu'on affichera avec un tooltip
+- un noeud peut il etre un ImGui::Begin afin de mettre des ImGui::Button
+- avec l'editeur on peut faire 2 roots => interderire
