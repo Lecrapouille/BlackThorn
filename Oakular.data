@@ -1,0 +1,302 @@
+# Demonstration YAML: uses SubTree nodes with a complex GameState structure.
+# The Builder will load nested maps and sequences into the blackboard, making
+# them available to all nodes or to the referenced subtree scope.
+
+Blackboard:
+  # High level snapshot similar to bt::GameState
+  game_state:
+    score: 1280
+    time: 42.5
+    enemies:
+      - name: "Drone-A"
+        health: 35
+        position:
+          x: 0.0
+          y: 5.0
+          z: 1.5
+      - name: "Drone-B"
+        health: 20
+        position:
+          x: -3.5
+          y: 2.25
+          z: 0.0
+
+  # Individual bt::Enemy entry reused by several actions
+  primary_enemy:
+    name: "Drone-A"
+    health: 35
+    position:
+      x: 0.0
+      y: 5.0
+      z: 1.5
+
+  # Copy the full enemy struct via ${var} resolution
+  selected_enemy: ${primary_enemy}
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: MissionRoot
+    children:
+      - SubTree:
+          _id: 2
+          name: EvaluateEnemies
+          reference: EvaluateEnemies
+      - Success:
+          _id: 3
+          name: MissionComplete
+
+SubTrees:
+  EvaluateEnemies:
+    Sequence:
+      _id: 4
+      name: EvaluateEnemies
+      children:
+        - Action:
+            _id: 5
+            name: LoadGameState
+            parameters:
+              snapshot: ${game_state}
+        - Action:
+            _id: 6
+            name: ChoosePrimaryEnemy
+            parameters:
+              candidate: ${selected_enemy}
+# Minimal YAML illustrating how to reference a reusable subtree
+# and how parameters are pushed into child blackboards.
+
+Blackboard:
+  greetings:
+    text: "Hello from parent scope"
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: Root
+    children:
+      - SubTree:
+          _id: 2
+          name: GreetAndReport
+          reference: GreetingSubTree
+      - Success:
+          _id: 3
+          name: Done
+
+SubTrees:
+  GreetingSubTree:
+    Sequence:
+      _id: 4
+      name: GreetingSubTree
+      children:
+        - Action:
+            _id: 5
+            name: PrintGreeting
+            parameters:
+              message: ${greetings}
+        - Action:
+            _id: 6
+            name: ReportCompletion
+# Demonstration YAML: combines patrol planning and enemy engagement subtrees
+# while sharing structured Position / Enemy data through the blackboard.
+
+Blackboard:
+  # Reusable bt::Position entries
+  patrol_route:
+    waypoints:
+      - { x: 0.0, y: 0.0, z: 0.0 }
+      - { x: 5.0, y: 0.0, z: 1.0 }
+      - { x: 5.0, y: 5.0, z: 1.0 }
+      - { x: 0.0, y: 5.0, z: 0.0 }
+
+  extraction_point:
+    x: -3.0
+    y: 8.0
+    z: 0.0
+
+  # Enemy contact structure identical to bt::Enemy
+  enemy_contact:
+    name: "Intruder-17"
+    health: 50
+    position:
+      x: 2.0
+      y: 1.0
+      z: 0.5
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: PatrolAndEngage
+    children:
+      - SubTree:
+          _id: 2
+          name: PatrolRoute
+          reference: PatrolRoute
+      - SubTree:
+          _id: 3
+          name: EngageEnemy
+          reference: EngageEnemy
+      - Action:
+          _id: 4
+          name: ExtractTeam
+          parameters:
+            destination: ${extraction_point}
+
+SubTrees:
+  PatrolRoute:
+    Sequence:
+      _id: 5
+      name: PatrolRoute
+      children:
+        - Action:
+            _id: 6
+            name: LoadRoute
+            parameters:
+              route: ${patrol_route}
+        - Action:
+            _id: 7
+            name: FollowWaypoints
+            parameters:
+              path: ${patrol_route}
+
+  EngageEnemy:
+    Selector:
+      _id: 8
+      name: EngageEnemy
+      children:
+        - Action:
+            _id: 9
+            name: AttemptNonLethal
+            parameters:
+              contact: ${enemy_contact}
+        - Action:
+            _id: 10
+            name: NeutralizeThreat
+            parameters:
+              target: ${enemy_contact}
+# Demonstration YAML: shows different node statuses with Selectors
+# Run with Oakular in Visualizer mode to see green/yellow/red/gray nodes
+
+Blackboard:
+  attempt_count: 0
+  max_attempts: 3
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: MainLoop
+    children:
+      # This selector will try each child until one succeeds
+      - Selector:
+          _id: 2
+          name: TryDifferentApproaches
+          children:
+            # First approach: will fail (red)
+            - Sequence:
+                _id: 3
+                name: ApproachA_WillFail
+                children:
+                  - Action:
+                      _id: 4
+                      name: CheckConditionA
+                  - Action:
+                      _id: 5
+                      name: ExecuteA
+            # Second approach: will succeed after delay (yellow then green)
+            - Sequence:
+                _id: 6
+                name: ApproachB_WillSucceed
+                children:
+                  - Wait:
+                      _id: 7
+                      name: ThinkingDelay
+                      milliseconds: 500
+                  - Action:
+                      _id: 8
+                      name: ExecuteB
+
+      # Parallel: multiple children running simultaneously
+      - Parallel:
+          _id: 9
+          name: ParallelTasks
+          success_threshold: 2
+          children:
+            - Wait:
+                _id: 10
+                name: Task1_Quick
+                milliseconds: 200
+            - Wait:
+                _id: 11
+                name: Task2_Medium
+                milliseconds: 400
+            - Wait:
+                _id: 12
+                name: Task3_Slow
+                milliseconds: 800
+
+      # Repeat with different outcomes
+      - Repeat:
+          _id: 13
+          name: RepeatThreeTimes
+          times: 3
+          child:
+            - Selector:
+                _id: 14
+                name: RandomOutcome
+                children:
+                  - Action:
+                      _id: 15
+                      name: TryAction
+                  - Success:
+                      _id: 16
+                      name: FallbackSuccess
+# SubTree Port Remapping Example
+# Demonstrates how to pass data between parent tree and subtrees using port remapping.
+# Equivalent to BehaviorTree.CPP SubTree port mapping.
+
+Blackboard:
+  move_goal: "1;2;3"
+
+BehaviorTree:
+  Sequence:
+    _id: 1
+    name: MainTree
+    children:
+      - SubTree:
+          _id: 2
+          name: MoveRobot
+          reference: MoveRobot
+          parameters:
+            target: ${move_goal}      # Remap: port "target" -> parent key "move_goal"
+            result: ${move_result}    # Remap: port "result" -> parent key "move_result"
+      - Action:
+          _id: 3
+          name: SaySomething
+          parameters:
+            message: ${move_result}
+
+SubTrees:
+  MoveRobot:
+    Selector:
+      _id: 4
+      name: MoveRobotSelector
+      children:
+        - Sequence:
+            _id: 5
+            name: TryMove
+            children:
+              - Action:
+                  _id: 6
+                  name: MoveBase
+                  parameters:
+                    goal: ${target}   # Reads from child blackboard (remapped from parent)
+              - SetBlackboard:
+                  _id: 7
+                  key: result
+                  value: "goal reached"
+        - ForceFailure:
+            _id: 8
+            child:
+              - SetBlackboard:
+                  _id: 9
+                  key: result
+                  value: "error"
