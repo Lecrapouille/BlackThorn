@@ -73,8 +73,26 @@ SRC_FILES += $(IMGUIFILEDIALOG_DIR)/ImGuiFileDialog.cpp
 
 ###################################################
 # Set Libraries. The window and OpenGL context belong to this application.
+# The web build uses the GLFW and WebGL 2 that Emscripten ships, and embeds
+# the example trees where File > Open starts.
 #
-PKG_LIBS += glfw3 glew gl
+ifeq ($(OS),Emscripten)
+    ifdef EXAEQUOS
+        LINKER_FLAGS += -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3
+        PKG_LIBS += exa-wayland --static glfw
+    else
+        LINKER_FLAGS += -s USE_GLFW=3 -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3
+        LINKER_FLAGS += --shell-file $(abspath $(CURRENT_DIR)/shell.html)
+        LINKER_FLAGS += --preload-file $(abspath $(P)/doc/examples)@doc/examples
+        LINKER_FLAGS += --exclude-file '*.cpp' --exclude-file '*.hpp'
+        LINKER_FLAGS += --exclude-file '*.md' --exclude-file '*Makefile'
+        LINKER_FLAGS += -s FORCE_FILESYSTEM=1 -s ASYNCIFY -s ALLOW_MEMORY_GROWTH=1
+        LINKER_FLAGS += -s GL_ENABLE_GET_PROC_ADDRESS
+    endif
+    USER_CXXFLAGS += -Wno-unknown-warning-option
+else
+    PKG_LIBS += glfw3 glew gl
+endif
 
 ###############################################################################
 # Sharable information between all Makefiles

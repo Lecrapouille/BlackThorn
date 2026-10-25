@@ -49,6 +49,8 @@ After the build, `build/` holds:
 | `build/Example-*` | one program per folder of `doc/examples/` |
 | the static archives of `bt::` and `oakular::` | to link in your own project ([chapter 7](07-Oakular.md#-5-embed-oakular-in-your-application)) |
 
+The CI also publishes Oakular as a web page: [Oakular.html](https://lecrapouille.github.io/BlackThorn/Oakular.html). File > Open starts in `doc/examples`. The live visualizer stays on the desktop.
+
 Unit tests, for developers:
 
 ```bash

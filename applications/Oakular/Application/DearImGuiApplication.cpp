@@ -14,6 +14,11 @@
 
 #include "DearImGuiApplication.hpp"
 
+#if defined(__EMSCRIPTEN__) && !defined(EXAEQUOS)
+#    include <emscripten.h>
+#    include <emscripten/html5.h>
+#endif
+
 namespace oakular {
 
 // ----------------------------------------------------------------------------
@@ -65,7 +70,11 @@ bool DearImGuiApplication::setup()
     setupStyle();
 
     // Initialize backends
+#if defined(__EMSCRIPTEN__)
+    const char* glsl_version = "#version 300 es";
+#else
     const char* glsl_version = "#version 330";
+#endif
     if (!ImGui_ImplGlfw_InitForOpenGL(m_window, true))
     {
         return false;
@@ -76,6 +85,25 @@ bool DearImGuiApplication::setup()
         ImGui_ImplGlfw_Shutdown();
         return false;
     }
+
+#if defined(__EMSCRIPTEN__) && !defined(EXAEQUOS)
+    // The window fills the page. Emscripten writes the size of the window
+    // in the style of the canvas, so the canvas cannot follow the page by CSS.
+    ImGui_ImplGlfw_InstallEmscriptenCallbacks(m_window, "#canvas");
+    emscripten_set_resize_callback(
+        EMSCRIPTEN_EVENT_TARGET_WINDOW,
+        m_window,
+        false,
+        [](int /*event_type*/, EmscriptenUiEvent const* event, void* window) -> EM_BOOL {
+            glfwSetWindowSize(static_cast<GLFWwindow*>(window),
+                              event->windowInnerWidth,
+                              event->windowInnerHeight);
+            return EM_TRUE;
+        });
+    int const page_width = EM_ASM_INT({ return window.innerWidth; });
+    int const page_height = EM_ASM_INT({ return window.innerHeight; });
+    glfwSetWindowSize(m_window, page_width, page_height);
+#endif
 
     m_initialized = true;
     return true;

@@ -13,3 +13,14 @@ BLACKTHORN_WITH_NETWORK ?= 1
 # OAKULAR_WITH_SERVER: compile oakular::Server, the TCP server feeding the
 # visualizer mode of the editor.
 OAKULAR_WITH_SERVER ?= 1
+
+# The web build has no TCP socket to a program on the machine: the editor
+# still opens and edits trees. The live visualizer stays a desktop feature.
+ifdef EMSCRIPTEN
+BLACKTHORN_WITH_NETWORK := 0
+OAKULAR_WITH_SERVER := 0
+endif
+ifdef EXAEQUOS
+BLACKTHORN_WITH_NETWORK := 0
+OAKULAR_WITH_SERVER := 0
+endif

@@ -7,6 +7,21 @@ if [ -d "$RYML_DIR" ]; then
         (cd "$RYML_DIR" && git submodule update --init --recursive)
     fi
 
+    # The web build must not overwrite the desktop archive.
+    if [ "${3:-}" = "Emscripten" ] || [ -n "${EMSCRIPTEN:-}" ]; then
+        emcmake cmake -S "$RYML_DIR" -B "$RYML_DIR/build-wasm" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DRYML_BUILD_SHARED_LIBS=OFF \
+            -DRYML_BUILD_TESTS=OFF \
+            -DRYML_BUILD_BENCHMARKS=OFF \
+            -DRYML_BUILD_API=OFF
+        cmake --build "$RYML_DIR/build-wasm" --target ryml -j"${NPROC:-$(nproc)}"
+        echo "Built external/$RYML_DIR/build-wasm/libryml.a"
+        # BehaviorTree.CPP is only linked by the benchmarks, which stay native.
+        exit 0
+    fi
+
     cmake -S "$RYML_DIR" -B "$RYML_DIR/build" \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \

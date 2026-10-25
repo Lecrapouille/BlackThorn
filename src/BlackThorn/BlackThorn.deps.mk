@@ -6,7 +6,14 @@
 ###############################################################################
 
 RYML_DIR ?= $(THIRD_PARTIES_DIR)/rapidyaml
-THIRD_PARTIES_LIBS += $(RYML_DIR)/build/libryml.a
+# A native archive and a WebAssembly one cannot share a folder: emmake would
+# otherwise link the desktop libryml.a into the page.
+ifeq ($(OS),Emscripten)
+RYML_LIB := $(RYML_DIR)/build-wasm/libryml.a
+else
+RYML_LIB := $(RYML_DIR)/build/libryml.a
+endif
+THIRD_PARTIES_LIBS += $(RYML_LIB)
 
 # Only Yaml.cpp includes rapidyaml: the public headers merely forward declare
 # it. Passed as -isystem so the vendored headers stop reporting warnings, hence

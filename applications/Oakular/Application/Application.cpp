@@ -15,10 +15,12 @@
 #include "Application.hpp"
 #include "DearImGuiApplication.hpp"
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
 #include <chrono>
 #include <cstdio>
+
+#if defined(__EMSCRIPTEN__) && !defined(EXAEQUOS)
+#    include <emscripten.h>
+#endif
 
 namespace oakular {
 
@@ -166,11 +168,20 @@ bool Application::initializeGLFW()
         return false;
     }
 
+#if defined(__EMSCRIPTEN__)
+    // WebGL 2 (OpenGL ES 3), for the web version and ExaequOS.
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+#    if defined(GLFW_SCALE_TO_MONITOR) && !defined(EXAEQUOS)
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+#    endif
+#else
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 4);
+#endif
 
     return true;
 }
@@ -197,6 +208,9 @@ bool Application::createWindow()
 // ----------------------------------------------------------------------------
 bool Application::initializeGlew()
 {
+#if defined(__EMSCRIPTEN__)
+    return true;
+#else
     glewExperimental = GL_TRUE;
     GLenum err = glewInit();
 
@@ -227,6 +241,7 @@ bool Application::initializeGlew()
     }
 
     return true;
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -261,6 +276,12 @@ bool Application::run()
 
         onUpdate(delta_time);
         draw();
+
+#if defined(__EMSCRIPTEN__) && !defined(EXAEQUOS)
+        // Give the hand back to the browser until the next frame (needs
+        // -s ASYNCIFY): it draws the canvas and gives the events.
+        emscripten_sleep(0);
+#endif
     }
 
     teardown();

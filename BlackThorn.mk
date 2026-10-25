@@ -91,7 +91,11 @@ BLACKTHORN_SOURCES += $(shell find $(BLACKTHORN_DIR)/src/BlackThorn/Network -nam
 endif
 
 # rapidyaml ships as a CMake project: point at the archive it produces.
+ifeq ($(OS),Emscripten)
+BLACKTHORN_STATIC_DEPS := $(RYML_DIR)/build-wasm/libryml.a
+else
 BLACKTHORN_STATIC_DEPS := $(RYML_DIR)/build/libryml.a
+endif
 
 ###############################################################################
 # Layer 2: the graphical editor. Headers are reached as "Oakular/Editor.hpp",

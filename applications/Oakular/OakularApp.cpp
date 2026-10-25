@@ -16,6 +16,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 
 #include "OakularApp.hpp"
+#include "Browser.hpp"
 
 #include <ImGuiFileDialog.h>
 
@@ -107,7 +108,12 @@ void OakularApp::onDrawMainPanel()
 void OakularApp::openFileDialog(Editor::FileDialog const p_dialog) const
 {
     IGFD::FileDialogConfig config;
+#if defined(__EMSCRIPTEN__) && !defined(EXAEQUOS)
+    // The trees of the documentation are preloaded at this path.
+    config.path = "doc/examples";
+#else
     config.path = ".";
+#endif
     config.countSelectionMax = 1;
 
     if (p_dialog == Editor::FileDialog::Load)
@@ -127,7 +133,19 @@ void OakularApp::openFileDialog(Editor::FileDialog const p_dialog) const
 // ----------------------------------------------------------------------------
 void OakularApp::showFileDialogs()
 {
-    if (ImGuiFileDialog::Instance()->Display(c_load_dialog_key))
+    auto present = [](char const* key) {
+        ImGuiViewport const* viewport = ImGui::GetMainViewport();
+        ImVec2 const area = viewport->WorkSize;
+        ImGui::SetNextWindowPos(
+            viewport->GetWorkCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(
+            ImVec2(area.x * 0.7f, area.y * 0.7f), ImGuiCond_FirstUseEver);
+        ImVec2 const min_size(area.x * 0.4f, area.y * 0.4f);
+        return ImGuiFileDialog::Instance()->Display(
+            key, ImGuiWindowFlags_NoCollapse, min_size);
+    };
+
+    if (present(c_load_dialog_key))
     {
         if (ImGuiFileDialog::Instance()->IsOk())
         {
@@ -138,13 +156,18 @@ void OakularApp::showFileDialogs()
         ImGuiFileDialog::Instance()->Close();
     }
 
-    if (ImGuiFileDialog::Instance()->Display(c_save_dialog_key))
+    if (present(c_save_dialog_key))
     {
         bool saved = false;
         if (ImGuiFileDialog::Instance()->IsOk())
         {
-            saved = m_editor.saveToYaml(
-                ImGuiFileDialog::Instance()->GetFilePathName());
+            std::string const path =
+                ImGuiFileDialog::Instance()->GetFilePathName();
+            saved = m_editor.saveToYaml(path);
+            if (saved)
+            {
+                download(path);
+            }
         }
 
         ImGuiFileDialog::Instance()->Close();

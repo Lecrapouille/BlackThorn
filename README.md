@@ -6,6 +6,9 @@
 
 > ⚠️ The API is still evolving. Expect breaking changes while the library matures.
 
+> **🌐 Try the online version instantly:**
+> 👉 [Click here to launch Oakular in your browser!](https://lecrapouille.github.io/BlackThorn/Oakular.html)
+
 ---
 
 ## 🤔 What is it for?
@@ -121,6 +124,8 @@ make -j"$(nproc)"                  # library, Oakular, examples, benchmarks
 ./build/Oakular                    # the editor; Mode → Visualizer to watch a tree
 ./build/Example-Patrol             # a tree with subtrees, shown live in Oakular
 ```
+
+A web version, built with Emscripten by the CI: [Oakular.html](https://lecrapouille.github.io/BlackThorn/Oakular.html). File > Open starts in the example trees. A save is downloaded by the browser. The live visualizer needs a program on your machine, so it stays on the desktop. The same sources also build for [ExaequOS](https://www.exaequos.com).
 
 Use BlackThorn in your own project with [BlackThorn.mk](BlackThorn.mk): [doc/07-Oakular.md](doc/07-Oakular.md#-5-embed-oakular-in-your-application).
 
