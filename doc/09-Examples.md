@@ -1,6 +1,6 @@
 # 🌟 9. Examples
 
-Every folder of `doc/examples/` is a small program that you can copy to start your own. Each one holds a `Makefile`, a C++ file and, most of the time, a YAML tree. `make` builds them all into `build/Example-<Name>`; run them from the root of the repository, because they open their YAML file with a path such as `doc/examples/Patrol/Patrol.yaml`.
+Every folder of `doc/examples/` is a small program that you can copy to start your own. Each one holds a C++ file and, most of the time, a YAML tree. `make` builds them all into `build/linux-gcc-release/bin/Example-<Name>`; run them from the root of the repository, because they open their YAML file with a path such as `doc/examples/Patrol/Patrol.yaml`.
 
 | Example | Shows | Visualizer |
 |---------|-------|------------|
@@ -11,13 +11,13 @@ Every folder of `doc/examples/` is a small program that you can copy to start yo
 | [SubTreeRemapping](#-subtreeremapping) | inputs and outputs of a subtree | no |
 | [Embedded](#-embedded) | the Oakular editor inside a host window | — |
 
-For the examples marked "yes", start `./build/Oakular`, choose **Mode → Visualizer**, then run the example ([chapter 7](07-Oakular.md)).
+For the examples marked "yes", start `./build/linux-gcc-release/bin/Oakular`, choose **Mode → Visualizer**, then run the example ([chapter 7](07-Oakular.md)).
 
 ---
 
 ## 📦 Nodes
 
-📁 `doc/examples/Nodes/` · ▶️ `./build/Example-Nodes <family>`, with `<family>` one of `leaf`, `sequence`, `selector`, `parallel`, `decorator`.
+📁 `doc/examples/Nodes/` · ▶️ `./build/linux-gcc-release/bin/Example-Nodes <family>`, with `<family>` one of `leaf`, `sequence`, `selector`, `parallel`, `decorator`.
 
 | File | Nodes |
 |------|-------|
@@ -34,7 +34,7 @@ Read them next to [chapter 4](04-Nodes.md).
 
 ## 👮 Patrol
 
-📁 `doc/examples/Patrol/` · ▶️ `./build/Example-Patrol`
+📁 `doc/examples/Patrol/` · ▶️ `./build/linux-gcc-release/bin/Example-Patrol`
 
 A guard follows a route, meets an intruder, tries to talk, then acts, and leaves. Shows:
 
@@ -47,7 +47,7 @@ A guard follows a route, meets an intruder, tries to talk, then acts, and leaves
 
 ## 🎮 GameState
 
-📁 `doc/examples/GameState/` · ▶️ `./build/Example-GameState`
+📁 `doc/examples/GameState/` · ▶️ `./build/linux-gcc-release/bin/Example-GameState`
 
 A game state with a score, a time and a list of enemies, each with a position. Shows:
 
@@ -59,7 +59,7 @@ A game state with a score, a time and a list of enemies, each with a position. S
 
 ## 🚥 StatusDemo
 
-📁 `doc/examples/StatusDemo/` · ▶️ `./build/Example-StatusDemo`
+📁 `doc/examples/StatusDemo/` · ▶️ `./build/linux-gcc-release/bin/Example-StatusDemo`
 
 Actions that succeed, fail or run at random. Made to see every color of Oakular change: green, yellow, red and gray.
 
@@ -67,7 +67,7 @@ Actions that succeed, fail or run at random. Made to see every color of Oakular 
 
 ## 🔁 SubTreeRemapping
 
-📁 `doc/examples/SubTreeRemapping/` · ▶️ `./build/Example-SubTreeRemapping`
+📁 `doc/examples/SubTreeRemapping/` · ▶️ `./build/linux-gcc-release/bin/Example-SubTreeRemapping`
 
 The main tree gives `move_goal` to a subtree as `target` (an input), and gets `result` back as `move_result` (an output), then prints it. The YAML file is the reference of [chapter 6 §4](06-Blackboard.md#-4-scopes-subtrees-have-their-own-blackboard).
 
@@ -75,7 +75,7 @@ The main tree gives `move_goal` to a subtree as `target` (an input), and gets `r
 
 ## 🧩 Embedded
 
-📁 `doc/examples/Embedded/` · ▶️ `./build/Example-Embedded`
+📁 `doc/examples/Embedded/` · ▶️ `./build/linux-gcc-release/bin/Example-Embedded`
 
 The Oakular editor inside a host application, as a robot simulator would do it. Shows:
 
@@ -85,7 +85,7 @@ The Oakular editor inside a host application, as a robot simulator would do it. 
 - 🤖 domain nodes added to the palette with `registerNodeType`;
 - 📡 the `onFileDialogRequested` and `onQuitRequested` signals.
 
-Unlike the others, its `Makefile` uses [BlackThorn.mk](../BlackThorn.mk), exactly as a project outside this repository would ([chapter 7 §5](07-Oakular.md#-5-embed-oakular-in-your-application)).
+It links the library `oakular`, as a project outside this repository would ([chapter 7 §5](07-Oakular.md#-5-embed-oakular-in-your-application)).
 
 ---
 

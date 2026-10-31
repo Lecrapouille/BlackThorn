@@ -10,7 +10,7 @@ Oakular is the graphical layer of BlackThorn. It offers two modes:
 `oakular::Editor` is a pure Dear ImGui component. It guarantees three things, and they are what makes it embeddable in any host:
 
 1. It never creates a window, an OpenGL context or an ImGui context, and never calls GLFW. The host owns the frame.
-2. It compiles no third-party source into its archive. It consumes the Dear ImGui headers only, at a path the host imposes through `IMGUI_DIR`, so that a single copy of ImGui ends up in the final binary.
+2. It compiles no third-party source into its archive. It consumes the Dear ImGui headers only, from the target `imgui` the host declares (or the one of `external/external.mk`), so that a single copy of ImGui ends up in the final binary.
 3. It exposes no symbol in the global namespace: everything lives in `oakular`, and the engine in `bt`.
 
 Anything the editor cannot do on its own — browsing the file system, closing the window — it asks for through a signal.

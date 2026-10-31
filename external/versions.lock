@@ -1,0 +1,12 @@
+# Commits of the third parties of BlackThorn, written by MyMakefile:
+# commit this file. 'make update-externals' moves them to the last commit of
+# their VERSION.
+
+BehaviorTree.CPP.LOCKED_REF := 4.9.0
+BehaviorTree.CPP.LOCKED := 3ff6a32ba0497a08519c77a1436e3b81eff1bcd6
+ImGuiFileDialog.LOCKED_REF := HEAD
+ImGuiFileDialog.LOCKED := d0e97b2adc3d3452d72c750c7305dc0291acd052
+imgui.LOCKED_REF := docking
+imgui.LOCKED := 83f668625ad45364de71d385aeb6a5dd04bee02e
+rapidyaml.LOCKED_REF := v0.15.2
+rapidyaml.LOCKED := 85bfe56e32b1cfe715aa1c39885b1b10761e7482

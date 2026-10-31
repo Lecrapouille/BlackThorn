@@ -35,18 +35,17 @@ You do not want SFML at all? Build with `make BLACKTHORN_WITH_NETWORK=0 OAKULAR_
 ```bash
 git clone https://github.com/Lecrapouille/BlackThorn --recurse-submodules
 cd BlackThorn
-make download-external-libs   # once: Dear ImGui, ImGuiFileDialog, rapidyaml, ...
-make -j"$(nproc)"             # the libraries, Oakular, the examples, the benchmarks
+make                          # the libraries, Oakular, the examples
 ```
 
-`--recurse-submodules` fetches `.makefile`, the build system. Without it, `make` has no rules.
+`--recurse-submodules` fetches `.makefile`, the build system ([MyMakefile](https://github.com/Lecrapouille/MyMakefile)). Without it, `make` has no rules. The first `make` fetches the third parties (Dear ImGui, ImGuiFileDialog, rapidyaml), at the commits of `external/versions.lock`, and uses all the cores. `make benchmark` also builds BehaviorTree.CPP and compares both.
 
-After the build, `build/` holds:
+After the build, `build/linux-gcc-release/` holds:
 
 | Path | What it is |
 |------|------------|
-| `build/Oakular` | the editor and live visualizer |
-| `build/Example-*` | one program per folder of `doc/examples/` |
+| `bin/Oakular` | the editor and live visualizer |
+| `bin/Example-*` | one program per folder of `doc/examples/` |
 | the static archives of `bt::` and `oakular::` | to link in your own project ([chapter 7](07-Oakular.md#-5-embed-oakular-in-your-application)) |
 
 The CI also publishes Oakular as a web page: [Oakular.html](https://lecrapouille.github.io/BlackThorn/Oakular.html). File > Open starts in `doc/examples`. The live visualizer stays on the desktop.
@@ -54,7 +53,7 @@ The CI also publishes Oakular as a web page: [Oakular.html](https://lecrapouille
 Unit tests, for developers:
 
 ```bash
-make tests -j"$(nproc)"
+make check
 ```
 
 ---
@@ -64,21 +63,21 @@ make tests -j"$(nproc)"
 Run them from the root of the repository: they read their YAML file with a path such as `doc/examples/Patrol/Patrol.yaml`.
 
 ```bash
-./build/Example-Nodes sequence    # one node family: leaf, sequence, selector, parallel, decorator
-./build/Example-Patrol            # subtrees and ports, sent to the visualizer
-./build/Example-GameState         # nested blackboard values
-./build/Example-StatusDemo        # random successes and failures, to watch in Oakular
-./build/Example-SubTreeRemapping  # inputs and outputs of a subtree
-./build/Example-Embedded          # Oakular inside a host window
+./build/linux-gcc-release/bin/Example-Nodes sequence    # one node family: leaf, sequence, selector, parallel, decorator
+./build/linux-gcc-release/bin/Example-Patrol            # subtrees and ports, sent to the visualizer
+./build/linux-gcc-release/bin/Example-GameState         # nested blackboard values
+./build/linux-gcc-release/bin/Example-StatusDemo        # random successes and failures, to watch in Oakular
+./build/linux-gcc-release/bin/Example-SubTreeRemapping  # inputs and outputs of a subtree
+./build/linux-gcc-release/bin/Example-Embedded          # Oakular inside a host window
 ```
 
 [Chapter 9](09-Examples.md) explains what each one shows.
 
 ### 🔭 Watch a tree live
 
-1. Start the editor: `./build/Oakular`.
-2. In the menu, choose **Mode → Visualizer**. Oakular waits for a program on TCP port 8888 (another port: `./build/Oakular --port 9090`, and the same port in `connect`).
-3. In another terminal, run `./build/Example-Patrol`. It connects, sends its tree, then the status of each node after every tick. The nodes turn green, yellow and red as the tree runs.
+1. Start the editor: `./build/linux-gcc-release/bin/Oakular`.
+2. In the menu, choose **Mode → Visualizer**. Oakular waits for a program on TCP port 8888 (another port: `./build/linux-gcc-release/bin/Oakular --port 9090`, and the same port in `connect`).
+3. In another terminal, run `./build/linux-gcc-release/bin/Example-Patrol`. It connects, sends its tree, then the status of each node after every tick. The nodes turn green, yellow and red as the tree runs.
 
 ---
 
@@ -165,17 +164,16 @@ Three steps, always the same:
 
 ### Step 3 — run it
 
-Put `door.yaml` and `main.cpp` in a new folder `first-tree/` of your clone. The quickest build compiles the BlackThorn sources with your file (no network, so no SFML), and links the rapidyaml archive that `make` built:
+Put `door.yaml` and `main.cpp` in a new folder `first-tree/` of your clone. The quickest build links the library that `make` built (rapidyaml is in it), with the flags of its pkg-config file:
 
 ```bash
-g++ -std=c++17 first-tree/main.cpp \
-    $(find src/BlackThorn -name '*.cpp' -not -path '*/Network/*') \
-    -I src -isystem external/rapidyaml/src -isystem external/rapidyaml/ext/c4core/src \
-    external/rapidyaml/build/libryml.a -o first-tree/door
+export PKG_CONFIG_PATH=$PWD/build/linux-gcc-release/lib/pkgconfig
+g++ -std=c++17 first-tree/main.cpp $(pkg-config --cflags --libs blackthorn) \
+    -Wl,-rpath,$PWD/build/linux-gcc-release/lib -o first-tree/door
 cd first-tree && ./door
 ```
 
-For a real project, use [BlackThorn.mk](../BlackThorn.mk) instead ([chapter 7](07-Oakular.md#-5-embed-oakular-in-your-application) shows both ways).
+For a real project built by MyMakefile, read [BlackThorn.mk](../BlackThorn.mk) instead ([chapter 7](07-Oakular.md#-5-embed-oakular-in-your-application)).
 
 The real output:
 

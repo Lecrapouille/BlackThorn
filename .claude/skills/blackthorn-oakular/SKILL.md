@@ -11,8 +11,8 @@ description: Change Oakular, the BlackThorn editor and live visualizer (src/Oaku
 
 1. never creates a window, an OpenGL context or an ImGui context, never calls
    GLFW (only `applications/Oakular` and `doc/examples/Embedded` do);
-2. compiles no third-party source: ImGui headers only, from the host
-   `IMGUI_DIR`, so the final binary has one ImGui;
+2. compiles no third-party source: ImGui headers only, from the target
+   `imgui` of the host, so the final binary has one ImGui;
 3. exports nothing in the global namespace (`oakular::`, `bt::`).
 
 What it cannot do, it asks through a signal: `onFileDialogRequested`,
@@ -21,9 +21,9 @@ The visualizer server is injected: `editor.attachServer(...)`.
 Host frame order: `update(dt)` outside ImGui draw calls; `draw(title)` (or
 `drawEditorWindow` / `drawBlackboardPanel` / `drawBehaviorTree`) between
 `NewFrame` and `Render`; `drawMenuBar()` inside the host menu bar.
-RobotIK embeds it in its simulator: keep `BlackThorn.mk` variables stable
-(`OAKULAR_SOURCES`, `OAKULAR_INCLUDES`, `OAKULAR_DEFINES`, `OAKULAR_CXXFLAGS`,
-`OAKULAR_ARCHIVES`).
+RobotIK embeds it in its simulator by reading `BlackThorn.mk` with MyMakefile
+3: keep the names of the targets `blackthorn` and `oakular`, and of the
+options `BLACKTHORN_WITH_NETWORK`, `OAKULAR_WITH_SERVER`.
 
 ## Files
 
@@ -55,5 +55,5 @@ both sides together and doc/07-Oakular.md §4.
 - User-facing behavior changes go to `src/Oakular/README.md` (editor API,
   shortcuts) and doc/07-Oakular.md (modes, protocol, embedding).
 
-Try it: `./build/Oakular`; `./build/Example-Embedded`; Visualizer mode +
-`./build/Example-StatusDemo`.
+Try it: `./build/linux-gcc-release/bin/Oakular`; `./build/linux-gcc-release/bin/Example-Embedded`; Visualizer mode +
+`./build/linux-gcc-release/bin/Example-StatusDemo`.

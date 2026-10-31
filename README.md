@@ -118,16 +118,15 @@ That is all. Your first complete tree, compiled and run step by step: [doc/02-Ge
 # Fedora: sudo dnf install SFML-devel glfw-devel glew-devel
 git clone https://github.com/Lecrapouille/BlackThorn --recurse-submodules
 cd BlackThorn
-make download-external-libs
-make -j"$(nproc)"                  # library, Oakular, examples, benchmarks
+make                               # library, Oakular, examples
 
-./build/Oakular                    # the editor; Mode → Visualizer to watch a tree
-./build/Example-Patrol             # a tree with subtrees, shown live in Oakular
+./build/linux-gcc-release/bin/Oakular                    # the editor; Mode → Visualizer to watch a tree
+./build/linux-gcc-release/bin/Example-Patrol             # a tree with subtrees, shown live in Oakular
 ```
 
 A web version, built with Emscripten by the CI: [Oakular.html](https://lecrapouille.github.io/BlackThorn/Oakular.html). File > Open starts in the example trees. A save is downloaded by the browser. The live visualizer needs a program on your machine, so it stays on the desktop. The same sources also build for [ExaequOS](https://www.exaequos.com).
 
-Use BlackThorn in your own project with [BlackThorn.mk](BlackThorn.mk): [doc/07-Oakular.md](doc/07-Oakular.md#-5-embed-oakular-in-your-application).
+Use BlackThorn in your own project with [BlackThorn.mk](BlackThorn.mk) and [MyMakefile](https://github.com/Lecrapouille/MyMakefile): [doc/07-Oakular.md](doc/07-Oakular.md#-5-embed-oakular-in-your-application).
 
 ---
 

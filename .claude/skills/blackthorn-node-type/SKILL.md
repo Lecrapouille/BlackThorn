@@ -44,4 +44,4 @@ checklist. RobotIK (`../../src/Robotik`) compiles these sources too.
 - Keep the exporter and the builder symmetrical: what one writes, the other
   reads (Oakular saves through the same format).
 
-Build and check: `make -j"$(nproc)" && make tests -j"$(nproc)"`.
+Build and check: `make && make check`.

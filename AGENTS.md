@@ -30,19 +30,19 @@ src/BlackThorn/   the engine (bt::)
   Visitors/       ConstBehaviorTreeVisitor, BehaviorTreeVisitor
 src/Oakular/      Editor, EditorWidgets, TreeRenderer, Server (OAKULAR_WITH_SERVER=1)
 applications/Oakular/  standalone app (GLFW window owned here, not in src/Oakular)
-doc/examples/<Name>/   one program each -> build/Example-<Name>; run from repo root
+doc/examples/<Name>/   one program each -> build/linux-gcc-release/bin/Example-<Name>; run from repo root
 tests/            GoogleTest, mirrors src/ (Nodes/, Builder/, Blackboard/, Core/)
 benchmarks/       comparison with BehaviorTree.CPP (make benchmark)
-BlackThorn.mk     how external projects (RobotIK) compile or link both layers
+BlackThorn.mk     declares both libraries; external projects (RobotIK) read it with MyMakefile 3
 external/         third parties from external/manifest (do not edit)
 ```
 
 ## Commands
 
 ```bash
-make download-external-libs      # once
-make -j"$(nproc)"                # libs, Oakular, examples, benchmarks
-make tests -j"$(nproc)"          # unit tests
+make                             # libs, Oakular, examples
+make check                       # unit tests
+make benchmark                   # with BehaviorTree.CPP
 make BLACKTHORN_WITH_NETWORK=0 OAKULAR_WITH_SERVER=0   # no SFML
 ```
 
@@ -65,8 +65,8 @@ make BLACKTHORN_WITH_NETWORK=0 OAKULAR_WITH_SERVER=0   # no SFML
 - `oakular::Editor` never creates a window, a GL context or an ImGui context,
   never compiles ImGui sources, never calls GLFW. Ask the host with a signal.
 - Network code stays behind `BLACKTHORN_HAS_NETWORK` / `OAKULAR_HAS_SERVER`.
-- RobotIK consumes this repository as `external/BlackThorn` through
-  `BlackThorn.mk`: do not break its variables.
+- RobotIK reads `BlackThorn.mk` with MyMakefile 3 (`BlackThorn.MAKEFILES`):
+  keep the names of the targets `blackthorn`, `oakular` and of the options.
 
 ## Style
 

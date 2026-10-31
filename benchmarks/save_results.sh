@@ -10,7 +10,7 @@
 # self-contained and simply overwritten on each run.
 
 P="$(cd "$(dirname "$0")/.." && pwd)"
-BIN="$P/build/BlackThorn-Benchmark"
+BIN="${BIN:-$P/build/linux-gcc-release/bin/BlackThorn-Benchmark}"
 OUT="$P/benchmarks/results"
 REPORT="$OUT/report.html"
 

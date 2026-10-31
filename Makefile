@@ -7,89 +7,22 @@
 
 ## Behavior Tree: A behavior tree library.
 
-###############################################################################
-# Location of the project directory and Makefiles
-#
-P := .
-M := $(P)/.makefile
+PROJECT_NAME := BlackThorn
+PROJECT_VERSION := 0.1.0
+COMPILATION_MODE ?= release
+CXX_STANDARD := c++17
 
 ###############################################################################
-# Project definition
+# The libraries (BlackThorn.mk, also read by the projects embedding them),
+# their third parties, the editor, the tests and the examples. The
+# benchmarks build BehaviorTree.CPP: they are declared only for
+# 'make benchmark' and 'make benchmark-save'.
 #
-include $(P)/Makefile.common
-TARGET_NAME := $(PROJECT_NAME)
-TARGET_DESCRIPTION := Library for Behavior Tree
-ORCHESTRATOR_MODE := 1
+SUBMAKEFILES := BlackThorn.mk external/external.mk applications/Oakular/Oakular.mk \
+    tests/tests.mk doc/examples/examples.mk
+ifneq ($(filter benchmark benchmark-save BlackThorn-Benchmark,$(MAKECMDGOALS)),)
+    SUBMAKEFILES += benchmarks/benchmarks.mk
+endif
 
-include $(M)/project/Makefile
-
-###############################################################################
-# Internal libs to compile in the correct order: the graphical layer links
-# against the logical one.
-#
-LIB_BLACKTHORN := $(call internal-lib,blackthorn)
-LIB_OAKULAR := $(call internal-lib,oakular)
-INTERNAL_LIBS := $(LIB_BLACKTHORN) $(LIB_OAKULAR)
-PATH_SRC_BLACKTHORN := $(P)/src/BlackThorn
-PATH_SRC_OAKULAR := $(P)/src/Oakular
-PATH_APP_OAKULAR := $(P)/applications/Oakular
-DIRS_WITH_MAKEFILE := $(PATH_SRC_BLACKTHORN) $(PATH_SRC_OAKULAR)
-$(PATH_SRC_OAKULAR): $(PATH_SRC_BLACKTHORN)
-
-###############################################################################
-# Generic Makefile rules
-#
-include $(M)/rules/Makefile
-
-###############################################################################
-# Extra rules: compile applications, examples and benchmarks
-#
-APPLICATIONS = $(PATH_APP_OAKULAR)/.
-EXAMPLES = $(sort $(dir $(wildcard $(P)/doc/examples/*/.)))
-BENCHMARKS = $(P)/benchmarks/.
-
-###############################################################################
-# Rules: compile applications
-#
-.PHONY: applications
-applications: $(DIRS_WITH_MAKEFILE)
-	@$(call print-from,"Compiling applications",$(PROJECT_NAME),$(APPLICATIONS))
-	@for i in $(APPLICATIONS);     \
-	do                             \
-		$(MAKE) -C $$i all;        \
-	done;
-
-###############################################################################
-# Rules: compile examples
-#
-.PHONY: examples
-examples: $(DIRS_WITH_MAKEFILE)
-	@$(call print-from,"Compiling examples",$(PROJECT_NAME),$(EXAMPLES))
-	@for i in $(EXAMPLES);     \
-	do                          \
-		$(MAKE) -C $$i all;     \
-	done;
-
-###############################################################################
-# Rules: compile benchmarks
-#
-.PHONY: benchmarks
-benchmarks: $(DIRS_WITH_MAKEFILE)
-	@$(call print-from,"Compiling benchmarks",$(PROJECT_NAME),$(BENCHMARKS))
-	@$(MAKE) -C $(P)/benchmarks all
-
-###############################################################################
-# Rules: run benchmark
-#
-.PHONY: benchmark
-benchmark: benchmarks
-	@$(P)/build/$(PROJECT_NAME)-Benchmark
-
-###############################################################################
-# Rules: save benchmark results
-#
-.PHONY: benchmark-save
-benchmark-save: benchmarks
-	@$(P)/benchmarks/save_results.sh
-
-post-build:: applications examples benchmarks
+M ?= .makefile
+include $(M)/MyMakefile.mk

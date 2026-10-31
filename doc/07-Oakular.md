@@ -15,7 +15,7 @@ The full API of the editor class (`oakular::Editor`), its keyboard shortcuts and
 | ✏️ **Creation** | Draw a tree with the mouse, edit its nodes, ports and blackboard, load and save the YAML file of [chapter 3](03-YAML-Format.md). |
 | 👁️ **Visualizer** | Show, in real time, a tree that runs in **another program**. Each node takes the color of its status. |
 
-Start it with `./build/Oakular`, and switch with the **Mode** menu.
+Start it with `./build/linux-gcc-release/bin/Oakular`, and switch with the **Mode** menu.
 
 ---
 
@@ -73,7 +73,7 @@ In your program, create a client, connect it, and give it to the tree. Then ever
 
 ## 🔌 4. The protocol
 
-Text messages over TCP, port **8888** by default. Change it on both sides: `VisualizerClient::connect(host, port)` in your program, and `./build/Oakular --port N` (or `oakular::Server(port)` in your own host).
+Text messages over TCP, port **8888** by default. Change it on both sides: `VisualizerClient::connect(host, port)` in your program, and `./build/linux-gcc-release/bin/Oakular --port N` (or `oakular::Server(port)` in your own host).
 
 **The tree**, sent once after the connection:
 
@@ -127,41 +127,24 @@ What the editor cannot do alone, it asks through **signals** your host connects 
 
 ### What the host must provide
 
-- **Dear ImGui**, compiled exactly once in the final binary (`imgui.cpp`, `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`, `misc/cpp/imgui_stdlib.cpp`, and your backends). Oakular only uses the headers: point `IMGUI_DIR` at your own clone to get a single copy.
+- **Dear ImGui**, compiled exactly once in the final binary (`imgui.cpp`, `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`, `misc/cpp/imgui_stdlib.cpp`, and your backends): the target `imgui` of [external/external.mk](../external/external.mk), or yours.
 - **A file browser**, if you want load and save.
 - **A window and an ImGui context**, created before the first `draw()`.
 
 ### Use BlackThorn in your project
 
-Define `BLACKTHORN_DIR`, then include [BlackThorn.mk](../BlackThorn.mk). It gives the sources, includes and flags of both layers:
+A project built by [MyMakefile](https://github.com/Lecrapouille/MyMakefile) 3 reads [BlackThorn.mk](../BlackThorn.mk), which declares the two libraries, `blackthorn` (with rapidyaml in it) and `oakular`, and their third parties:
 
 ```make
-BLACKTHORN_DIR := $(P)/external/BlackThorn
-IMGUI_DIR := $(P)/external/imgui      # reuse the ImGui clone of your project
-include $(BLACKTHORN_DIR)/BlackThorn.mk
+TARGETS += BlackThorn myapp
+BlackThorn.GIT := https://github.com/Lecrapouille/BlackThorn.git
+BlackThorn.MAKEFILES := BlackThorn.mk external/external.mk
+myapp.DEPENDS := oakular          # or blackthorn alone, without the editor
 ```
 
-**Either compile the sources** with yours (what `doc/examples/Embedded` does):
+MyMakefile fetches BlackThorn, then rapidyaml and Dear ImGui at the commits of its `external/versions.lock`, and compiles the libraries with the flags of your project. `oakular` uses the headers of Dear ImGui only: your program links the target `imgui`, yours if your project declares one, so ImGui is compiled once. `BLACKTHORN_WITH_NETWORK` and `OAKULAR_WITH_SERVER` (§6) are read there too.
 
-```make
-INCLUDES += $(BLACKTHORN_INCLUDES) $(OAKULAR_INCLUDES)
-VPATH += $(BLACKTHORN_VPATH) $(OAKULAR_VPATH)
-SRC_FILES += $(BLACKTHORN_SOURCES) $(OAKULAR_SOURCES)
-DEFINES += $(BLACKTHORN_DEFINES) $(OAKULAR_DEFINES)
-PKG_LIBS += $(BLACKTHORN_PKG_LIBS) $(OAKULAR_PKG_LIBS)
-USER_CXXFLAGS += $(BLACKTHORN_CXXFLAGS) $(OAKULAR_CXXFLAGS)
-```
-
-**Or link the archives**, after `make -C $(BLACKTHORN_DIR)`:
-
-```make
-INCLUDES += $(BLACKTHORN_INCLUDES) $(OAKULAR_INCLUDES)
-DEFINES += $(BLACKTHORN_DEFINES) $(OAKULAR_DEFINES)
-NOT_PKG_LIBS += $(OAKULAR_ARCHIVES) $(BLACKTHORN_ARCHIVES)
-PKG_LIBS += $(BLACKTHORN_PKG_LIBS) $(OAKULAR_PKG_LIBS)
-```
-
-Drop the `OAKULAR_*` variables to take the engine alone, without the editor.
+`doc/examples/Embedded` links `oakular` the same way, from inside this repository.
 
 ---
 

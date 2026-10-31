@@ -28,9 +28,7 @@ jobs:
           submodules: true
       - name: Compile Oakular
         run: |
-          make download-external-libs
-          emmake make compile-external-libs
-          emmake make -C applications/Oakular -j`nproc --all`
+          emmake make Oakular
       - name: Deploy
         run: |
           git config --global user.name 'GitHub CI'
@@ -43,7 +41,7 @@ jobs:
             git checkout --orphan gh-pages
             git rm -rf . >/dev/null 2>&1 || true
           fi
-          cp build/Oakular.* .
+          cp build/emscripten-release/bin/Oakular.* .
           touch .nojekyll
           git add .nojekyll Oakular.*
           if git diff --cached --quiet; then
@@ -81,10 +79,10 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends cmake
           chown "$HOST_UID:$HOST_GID" /opt/emscripten-exa/cache
-          exec python3 -c 'import os; os.environ["HOME"]="/tmp"; os.setgid(int(os.environ["HOST_GID"])); os.setuid(int(os.environ["HOST_UID"])); os.execvp("bash", ["bash", "-c", "make download-external-libs && make compile-external-libs && make -C applications/Oakular -j$(nproc)"])'
+          exec python3 -c 'import os; os.environ["HOME"]="/tmp"; os.setgid(int(os.environ["HOST_GID"])); os.setuid(int(os.environ["HOST_UID"])); os.execvp("bash", ["bash", "-c", "make Oakular"])'
           EOF
       - name: Keep the ExaequOS build
         uses: actions/upload-artifact@v4
         with:
           name: Oakular-exaequos
-          path: build/Oakular.*
+          path: build/exaequos-release/bin/Oakular.*
